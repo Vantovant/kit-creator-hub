@@ -1,0 +1,439 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  User,
+  Mail,
+  Bell,
+  Shield,
+  Palette,
+  Globe,
+  CreditCard,
+  Moon,
+  Sun,
+  Save,
+  Camera,
+} from "lucide-react";
+
+export default function SettingsPage() {
+  const [theme, setTheme] = useState<"light" | "dark">("light");
+
+  useEffect(() => {
+    const savedTheme = localStorage.getItem("kit-theme") as "light" | "dark" | null;
+    if (savedTheme) {
+      setTheme(savedTheme);
+      document.documentElement.classList.toggle("dark", savedTheme === "dark");
+    }
+  }, []);
+
+  const toggleTheme = () => {
+    const newTheme = theme === "light" ? "dark" : "light";
+    setTheme(newTheme);
+    localStorage.setItem("kit-theme", newTheme);
+    document.documentElement.classList.toggle("dark", newTheme === "dark");
+  };
+  const [notifications, setNotifications] = useState({
+    emailDigest: true,
+    newSubscriber: true,
+    weeklyReport: true,
+    productUpdates: false,
+    marketingEmails: false,
+  });
+
+  const [profile, setProfile] = useState({
+    name: "John Doe",
+    email: "john@example.com",
+    company: "Acme Inc",
+    website: "https://example.com",
+    timezone: "America/New_York",
+  });
+
+  return (
+    <div className="min-h-screen">
+      <DashboardHeader
+        title="Settings"
+        subtitle="Manage your account and preferences"
+      />
+
+      <main className="p-6">
+        <div className="max-w-4xl mx-auto">
+          <Tabs defaultValue="profile" className="space-y-6">
+            <TabsList className="bg-white dark:bg-gray-800 p-1 gap-1">
+              <TabsTrigger value="profile" className="gap-2">
+                <User className="w-4 h-4" />
+                Profile
+              </TabsTrigger>
+              <TabsTrigger value="notifications" className="gap-2">
+                <Bell className="w-4 h-4" />
+                Notifications
+              </TabsTrigger>
+              <TabsTrigger value="appearance" className="gap-2">
+                <Palette className="w-4 h-4" />
+                Appearance
+              </TabsTrigger>
+              <TabsTrigger value="email" className="gap-2">
+                <Mail className="w-4 h-4" />
+                Email Settings
+              </TabsTrigger>
+            </TabsList>
+
+            {/* Profile Tab */}
+            <TabsContent value="profile" className="space-y-6">
+              <Card className="bg-white dark:bg-gray-800">
+                <CardHeader>
+                  <CardTitle className="text-lg dark:text-gray-100">Profile Information</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  {/* Avatar */}
+                  <div className="flex items-center gap-6">
+                    <div className="relative">
+                      <div className="w-20 h-20 rounded-full bg-[#5CC5DE] flex items-center justify-center text-white text-2xl font-bold">
+                        JD
+                      </div>
+                      <button
+                        type="button"
+                        className="absolute bottom-0 right-0 p-1.5 bg-white dark:bg-gray-700 rounded-full shadow-lg border border-gray-200 dark:border-gray-600"
+                      >
+                        <Camera className="w-4 h-4 text-gray-600 dark:text-gray-300" />
+                      </button>
+                    </div>
+                    <div>
+                      <h3 className="font-medium dark:text-gray-100">{profile.name}</h3>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">{profile.email}</p>
+                    </div>
+                  </div>
+
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label className="dark:text-gray-200">Full Name</Label>
+                      <Input
+                        value={profile.name}
+                        onChange={(e) => setProfile({ ...profile, name: e.target.value })}
+                        className="dark:bg-gray-700 dark:border-gray-600"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="dark:text-gray-200">Email Address</Label>
+                      <Input
+                        type="email"
+                        value={profile.email}
+                        onChange={(e) => setProfile({ ...profile, email: e.target.value })}
+                        className="dark:bg-gray-700 dark:border-gray-600"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="dark:text-gray-200">Company</Label>
+                      <Input
+                        value={profile.company}
+                        onChange={(e) => setProfile({ ...profile, company: e.target.value })}
+                        className="dark:bg-gray-700 dark:border-gray-600"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="dark:text-gray-200">Website</Label>
+                      <Input
+                        value={profile.website}
+                        onChange={(e) => setProfile({ ...profile, website: e.target.value })}
+                        className="dark:bg-gray-700 dark:border-gray-600"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="dark:text-gray-200">Timezone</Label>
+                    <select
+                      value={profile.timezone}
+                      onChange={(e) => setProfile({ ...profile, timezone: e.target.value })}
+                      className="w-full h-10 px-3 rounded-md border border-input bg-background dark:bg-gray-700 dark:border-gray-600"
+                    >
+                      <option value="America/New_York">Eastern Time (ET)</option>
+                      <option value="America/Chicago">Central Time (CT)</option>
+                      <option value="America/Denver">Mountain Time (MT)</option>
+                      <option value="America/Los_Angeles">Pacific Time (PT)</option>
+                      <option value="Europe/London">GMT (London)</option>
+                      <option value="Europe/Paris">CET (Paris)</option>
+                    </select>
+                  </div>
+
+                  <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
+                    <button
+                      type="button"
+                      className="flex items-center gap-2 px-4 py-2 bg-[#5CC5DE] hover:bg-[#4AB5CE] text-black font-medium rounded-lg transition-colors"
+                    >
+                      <Save className="w-4 h-4" />
+                      Save Changes
+                    </button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-white dark:bg-gray-800">
+                <CardHeader>
+                  <CardTitle className="text-lg dark:text-gray-100">Security</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-medium dark:text-gray-100">Password</p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                        Last changed 3 months ago
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className="px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                    >
+                      Change Password
+                    </button>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-medium dark:text-gray-100">Two-Factor Authentication</p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                        Add an extra layer of security
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className="px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                    >
+                      Enable 2FA
+                    </button>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            {/* Notifications Tab */}
+            <TabsContent value="notifications" className="space-y-6">
+              <Card className="bg-white dark:bg-gray-800">
+                <CardHeader>
+                  <CardTitle className="text-lg dark:text-gray-100">Email Notifications</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-medium dark:text-gray-100">Daily Email Digest</p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                        Receive a daily summary of your account activity
+                      </p>
+                    </div>
+                    <Switch
+                      checked={notifications.emailDigest}
+                      onCheckedChange={(checked) =>
+                        setNotifications({ ...notifications, emailDigest: checked })
+                      }
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-medium dark:text-gray-100">New Subscriber Alerts</p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                        Get notified when someone subscribes
+                      </p>
+                    </div>
+                    <Switch
+                      checked={notifications.newSubscriber}
+                      onCheckedChange={(checked) =>
+                        setNotifications({ ...notifications, newSubscriber: checked })
+                      }
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-medium dark:text-gray-100">Weekly Performance Report</p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                        Receive weekly analytics summary
+                      </p>
+                    </div>
+                    <Switch
+                      checked={notifications.weeklyReport}
+                      onCheckedChange={(checked) =>
+                        setNotifications({ ...notifications, weeklyReport: checked })
+                      }
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-medium dark:text-gray-100">Product Updates</p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                        Learn about new features and improvements
+                      </p>
+                    </div>
+                    <Switch
+                      checked={notifications.productUpdates}
+                      onCheckedChange={(checked) =>
+                        setNotifications({ ...notifications, productUpdates: checked })
+                      }
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-medium dark:text-gray-100">Marketing Emails</p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                        Tips and resources to grow your audience
+                      </p>
+                    </div>
+                    <Switch
+                      checked={notifications.marketingEmails}
+                      onCheckedChange={(checked) =>
+                        setNotifications({ ...notifications, marketingEmails: checked })
+                      }
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            {/* Appearance Tab */}
+            <TabsContent value="appearance" className="space-y-6">
+              <Card className="bg-white dark:bg-gray-800">
+                <CardHeader>
+                  <CardTitle className="text-lg dark:text-gray-100">Theme</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      {theme === "dark" ? (
+                        <Moon className="w-5 h-5 text-[#5CC5DE]" />
+                      ) : (
+                        <Sun className="w-5 h-5 text-amber-500" />
+                      )}
+                      <div>
+                        <p className="font-medium dark:text-gray-100">Dark Mode</p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                          Switch between light and dark themes
+                        </p>
+                      </div>
+                    </div>
+                    <Switch checked={theme === "dark"} onCheckedChange={toggleTheme} />
+                  </div>
+
+                  <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
+                    <p className="font-medium mb-4 dark:text-gray-100">Preview</p>
+                    <div className="grid grid-cols-2 gap-4">
+                      <button
+                        type="button"
+                        onClick={() => toggleTheme()}
+                        className={`p-4 rounded-xl border-2 transition-colors ${
+                          theme === "light"
+                            ? "border-[#5CC5DE] bg-white"
+                            : "border-gray-200 dark:border-gray-600 bg-white"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 mb-3">
+                          <Sun className="w-4 h-4 text-amber-500" />
+                          <span className="text-sm font-medium text-gray-900">Light</span>
+                        </div>
+                        <div className="space-y-2">
+                          <div className="h-2 bg-gray-200 rounded w-full" />
+                          <div className="h-2 bg-gray-200 rounded w-3/4" />
+                          <div className="h-2 bg-gray-200 rounded w-1/2" />
+                        </div>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => toggleTheme()}
+                        className={`p-4 rounded-xl border-2 transition-colors ${
+                          theme === "dark"
+                            ? "border-[#5CC5DE] bg-gray-800"
+                            : "border-gray-200 bg-gray-800"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 mb-3">
+                          <Moon className="w-4 h-4 text-[#5CC5DE]" />
+                          <span className="text-sm font-medium text-white">Dark</span>
+                        </div>
+                        <div className="space-y-2">
+                          <div className="h-2 bg-gray-600 rounded w-full" />
+                          <div className="h-2 bg-gray-600 rounded w-3/4" />
+                          <div className="h-2 bg-gray-600 rounded w-1/2" />
+                        </div>
+                      </button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            {/* Email Settings Tab */}
+            <TabsContent value="email" className="space-y-6">
+              <Card className="bg-white dark:bg-gray-800">
+                <CardHeader>
+                  <CardTitle className="text-lg dark:text-gray-100">Default Sender Info</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label className="dark:text-gray-200">From Name</Label>
+                      <Input
+                        defaultValue="John Doe"
+                        className="dark:bg-gray-700 dark:border-gray-600"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="dark:text-gray-200">Reply-to Email</Label>
+                      <Input
+                        type="email"
+                        defaultValue="john@example.com"
+                        className="dark:bg-gray-700 dark:border-gray-600"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="dark:text-gray-200">Email Footer</Label>
+                    <textarea
+                      defaultValue="You're receiving this email because you signed up for my newsletter."
+                      className="w-full min-h-[100px] px-3 py-2 rounded-md border border-input bg-background dark:bg-gray-700 dark:border-gray-600 resize-none"
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-white dark:bg-gray-800">
+                <CardHeader>
+                  <CardTitle className="text-lg dark:text-gray-100">Email Preferences</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-medium dark:text-gray-100">Track Opens</p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                        Track when subscribers open your emails
+                      </p>
+                    </div>
+                    <Switch defaultChecked />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-medium dark:text-gray-100">Track Clicks</p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                        Track when subscribers click links
+                      </p>
+                    </div>
+                    <Switch defaultChecked />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-medium dark:text-gray-100">Include Unsubscribe Link</p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                        Automatically add unsubscribe link to emails
+                      </p>
+                    </div>
+                    <Switch defaultChecked />
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
+        </div>
+      </main>
+    </div>
+  );
+}

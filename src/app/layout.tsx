@@ -3,11 +3,11 @@ import "./globals.css";
 import ClientBody from "./ClientBody";
 
 export const metadata: Metadata = {
-  title: "Kit: Automated Email Marketing & Newsletter Platform",
+  title: "Vanto Zazi Mail",
   description:
-    "Kit is the creator-first email marketing and newsletter platform. Grow your audience, automate campaigns, and sell without burnout.",
+    "Vanto Zazi Mail is a creator-first email marketing platform built for clarity, automation, and ownership.",
   icons: {
-    icon: "https://ext.same-assets.com/6076700/3306272592.ico",
+    icon: "/favicon.ico",
   },
 };
 

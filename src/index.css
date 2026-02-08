@@ -26,11 +26,13 @@
   --ring: 187 65% 60%;
   --radius: 0.625rem;
 
-  /* Kit specific colors */
-  --kit-cyan: #5CC5DE;
-  --kit-cyan-hover: #4AB5CE;
-  --kit-cream: #F5F5F0;
-  --kit-dark: #1a1a1a;
+  --sidebar-background: 0 0% 10%;
+  --sidebar-foreground: 0 0% 100%;
+  --sidebar-primary: 187 65% 60%;
+  --sidebar-primary-foreground: 0 0% 5%;
+  --sidebar-accent: 0 0% 15%;
+  --sidebar-accent-foreground: 0 0% 98%;
+  --sidebar-border: 0 0% 18%;
 }
 
 .dark {
@@ -80,25 +82,20 @@
   }
 }
 
-/* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 8px;
 }
-
 ::-webkit-scrollbar-track {
   background: #f1f1f1;
 }
-
 ::-webkit-scrollbar-thumb {
   background: #c1c1c1;
   border-radius: 4px;
 }
-
 ::-webkit-scrollbar-thumb:hover {
   background: #a1a1a1;
 }
 
-/* Smooth scrolling */
 html {
   scroll-behavior: smooth;
 }

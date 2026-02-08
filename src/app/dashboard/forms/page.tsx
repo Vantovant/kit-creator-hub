@@ -1,4 +1,4 @@
-"use client";
+// Forms page
 
 import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
 import { Card, CardContent } from "@/components/ui/card";

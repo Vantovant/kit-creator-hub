@@ -1,5 +1,3 @@
-"use client";
-
 import { createContext, useContext, useEffect, useState } from "react";
 
 type Theme = "light" | "dark";
@@ -18,7 +16,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     setMounted(true);
-    const savedTheme = localStorage.getItem("kit-theme") as Theme;
+    const savedTheme = localStorage.getItem("vanto-theme") as Theme;
     if (savedTheme) {
       setThemeState(savedTheme);
       document.documentElement.classList.toggle("dark", savedTheme === "dark");
@@ -27,7 +25,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   const setTheme = (newTheme: Theme) => {
     setThemeState(newTheme);
-    localStorage.setItem("kit-theme", newTheme);
+    localStorage.setItem("vanto-theme", newTheme);
     document.documentElement.classList.toggle("dark", newTheme === "dark");
   };
 
@@ -36,9 +34,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     setTheme(newTheme);
   };
 
-  if (!mounted) {
-    return <>{children}</>;
-  }
+  if (!mounted) return <>{children}</>;
 
   return (
     <ThemeContext.Provider value={{ theme, toggleTheme, setTheme }}>

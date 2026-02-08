@@ -1,4 +1,4 @@
-"use client";
+// New broadcast page
 
 import { useState } from "react";
 import { DashboardHeader } from "@/components/dashboard/DashboardHeader";

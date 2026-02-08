@@ -1,4 +1,4 @@
-"use client";
+// Settings page
 
 import { useState, useEffect } from "react";
 import { DashboardHeader } from "@/components/dashboard/DashboardHeader";

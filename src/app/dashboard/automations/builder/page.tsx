@@ -1,5 +1,3 @@
-"use client";
-
 import { useState } from "react";
 import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
 import { Card, CardContent } from "@/components/ui/card";
@@ -34,7 +32,7 @@ interface WorkflowNode {
   config: {
     name: string;
     description?: string;
-    icon: React.ComponentType<{ className?: string }>;
+    icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>;
     color: string;
   };
 }

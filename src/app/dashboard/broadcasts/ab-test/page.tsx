@@ -1,10 +1,12 @@
-// A/B test page
-
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import {
   FlaskConical,
@@ -14,10 +16,10 @@ import {
   Clock,
   Trophy,
   ArrowRight,
-  Sparkles,
   BarChart3,
   Send,
   Save,
+  Loader2,
 } from "lucide-react";
 
 interface Variant {
@@ -27,6 +29,8 @@ interface Variant {
 }
 
 export default function ABTestPage() {
+  const { user } = useAuth();
+  const navigate = useNavigate();
   const [variants, setVariants] = useState<Variant[]>([
     { id: "A", subject: "", previewText: "" },
     { id: "B", subject: "", previewText: "" },
@@ -36,6 +40,12 @@ export default function ABTestPage() {
     winningMetric: "opens",
     duration: 4,
   });
+  const [content, setContent] = useState("");
+  const [fromName, setFromName] = useState("Vanto Zazi");
+  const [saving, setSaving] = useState(false);
+  const [starting, setStarting] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
 
   const addVariant = () => {
     const nextLetter = String.fromCharCode(65 + variants.length);
@@ -57,8 +67,99 @@ export default function ABTestPage() {
   const testPercentPerVariant = Math.floor(testSettings.testSize / variants.length);
   const winnerPercent = 100 - testSettings.testSize;
 
+  const saveDraft = async () => {
+    if (!user) return;
+    if (variants.some((v) => !v.subject.trim())) {
+      setError("All variants need a subject line");
+      return;
+    }
+    setSaving(true);
+    setError("");
+
+    const { error: insertError } = await supabase.from("ab_tests").insert({
+      user_id: user.id,
+      variants: variants as any,
+      test_size_percent: testSettings.testSize,
+      winning_metric: testSettings.winningMetric,
+      duration_hours: testSettings.duration,
+      status: "draft",
+    });
+
+    if (insertError) {
+      setError("Failed to save: " + insertError.message);
+    } else {
+      setMessage("A/B test saved as draft!");
+      setTimeout(() => navigate("/dashboard/broadcasts"), 1500);
+    }
+    setSaving(false);
+  };
+
+  const startTest = async () => {
+    if (!user) return;
+    if (variants.some((v) => !v.subject.trim())) {
+      setError("All variants need a subject line");
+      return;
+    }
+    if (!content.trim()) {
+      setError("Email content is required");
+      return;
+    }
+    if (!confirm("Start the A/B test? This will send emails to a subset of your subscribers.")) return;
+
+    setStarting(true);
+    setError("");
+
+    // First create the A/B test record
+    const { data: testData, error: insertError } = await supabase
+      .from("ab_tests")
+      .insert({
+        user_id: user.id,
+        variants: variants as any,
+        test_size_percent: testSettings.testSize,
+        winning_metric: testSettings.winningMetric,
+        duration_hours: testSettings.duration,
+        status: "draft",
+      })
+      .select("id")
+      .single();
+
+    if (insertError || !testData) {
+      setError("Failed to create test: " + (insertError?.message || "Unknown error"));
+      setStarting(false);
+      return;
+    }
+
+    // Call edge function to start the test
+    const { data: { session } } = await supabase.auth.getSession();
+    const res = await fetch(
+      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/run-ab-test`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session?.access_token}`,
+        },
+        body: JSON.stringify({
+          action: "start",
+          ab_test_id: testData.id,
+          broadcast_content: content,
+          from_name: fromName,
+        }),
+      }
+    );
+
+    const result = await res.json();
+    if (!res.ok) {
+      setError(result.error || "Failed to start test");
+    } else {
+      setMessage("A/B test started! Results will be tracked automatically.");
+      setTimeout(() => navigate("/dashboard/broadcasts"), 2000);
+    }
+    setStarting(false);
+  };
+
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="min-h-screen">
       <DashboardHeader
         title="A/B Test"
         subtitle="Test different subject lines to optimize open rates"
@@ -66,21 +167,21 @@ export default function ABTestPage() {
 
       <main className="p-6">
         <div className="max-w-4xl mx-auto space-y-6">
-          {/* Header info */}
-          <Card className="bg-gradient-to-r from-[#5CC5DE]/10 to-[#7BC47F]/10 border-[#5CC5DE]/30 dark:bg-gray-800">
+          {error && <p className="text-sm text-destructive">{error}</p>}
+          {message && <p className="text-sm text-primary">{message}</p>}
+
+          {/* Info card */}
+          <Card className="bg-primary/5 border-primary/20">
             <CardContent className="p-6">
               <div className="flex items-start gap-4">
-                <div className="p-3 bg-[#5CC5DE]/20 rounded-xl">
-                  <FlaskConical className="w-6 h-6 text-[#5CC5DE]" />
+                <div className="p-3 bg-primary/10 rounded-xl">
+                  <FlaskConical className="w-6 h-6 text-primary" />
                 </div>
                 <div>
-                  <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1">
-                    How A/B Testing Works
-                  </h2>
-                  <p className="text-gray-600 dark:text-gray-300 text-sm">
+                  <h2 className="text-lg font-semibold text-foreground mb-1">How A/B Testing Works</h2>
+                  <p className="text-muted-foreground text-sm">
                     Create multiple subject line variants. We'll send each variant to a portion of your
-                    audience, measure the results, and automatically send the winning version to
-                    everyone else.
+                    audience, measure the results, and determine the winning version.
                   </p>
                 </div>
               </div>
@@ -88,139 +189,119 @@ export default function ABTestPage() {
           </Card>
 
           {/* Variants */}
-          <Card className="bg-white dark:bg-gray-800">
+          <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
-                <CardTitle className="text-lg dark:text-gray-100">Subject Line Variants</CardTitle>
+                <CardTitle className="text-lg">Subject Line Variants</CardTitle>
                 {variants.length < 5 && (
-                  <button
-                    type="button"
-                    onClick={addVariant}
-                    className="flex items-center gap-2 text-sm text-[#5CC5DE] hover:underline"
-                  >
-                    <Plus className="w-4 h-4" />
-                    Add Variant
+                  <button type="button" onClick={addVariant} className="flex items-center gap-2 text-sm text-primary hover:underline">
+                    <Plus className="w-4 h-4" /> Add Variant
                   </button>
                 )}
               </div>
             </CardHeader>
             <CardContent className="space-y-6">
               {variants.map((variant, index) => (
-                <div
-                  key={variant.id}
-                  className="p-4 border border-gray-200 dark:border-gray-700 rounded-xl space-y-4"
-                >
+                <div key={variant.id} className="p-4 border border-border rounded-xl space-y-4">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-[#5CC5DE] flex items-center justify-center text-black font-bold">
+                      <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-bold">
                         {variant.id}
                       </div>
-                      <span className="font-medium dark:text-gray-100">Variant {variant.id}</span>
-                      {index === 0 && (
-                        <Badge variant="outline" className="text-xs">Control</Badge>
-                      )}
+                      <span className="font-medium text-foreground">Variant {variant.id}</span>
+                      {index === 0 && <Badge variant="outline" className="text-xs">Control</Badge>}
                     </div>
                     {variants.length > 2 && (
-                      <button
-                        type="button"
-                        onClick={() => removeVariant(variant.id)}
-                        className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-                      >
+                      <button type="button" onClick={() => removeVariant(variant.id)} className="p-2 text-muted-foreground hover:text-destructive rounded-lg transition-colors">
                         <Trash2 className="w-4 h-4" />
                       </button>
                     )}
                   </div>
-
                   <div className="space-y-3">
                     <div>
-                      <Label className="text-sm dark:text-gray-200">Subject Line</Label>
+                      <Label className="text-sm">Subject Line</Label>
                       <Input
                         value={variant.subject}
                         onChange={(e) => updateVariant(variant.id, "subject", e.target.value)}
-                        placeholder={`Enter subject line for variant ${variant.id}...`}
-                        className="mt-1 dark:bg-gray-700 dark:border-gray-600"
+                        placeholder={`Subject line for variant ${variant.id}...`}
+                        className="mt-1"
                       />
-                      <p className="text-xs text-gray-400 mt-1">
-                        {variant.subject.length}/60 characters
-                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">{variant.subject.length}/60 characters</p>
                     </div>
                     <div>
-                      <Label className="text-sm dark:text-gray-200">Preview Text (optional)</Label>
+                      <Label className="text-sm">Preview Text (optional)</Label>
                       <Input
                         value={variant.previewText}
                         onChange={(e) => updateVariant(variant.id, "previewText", e.target.value)}
                         placeholder="Preview text shown after subject..."
-                        className="mt-1 dark:bg-gray-700 dark:border-gray-600"
+                        className="mt-1"
                       />
                     </div>
                   </div>
                 </div>
               ))}
+            </CardContent>
+          </Card>
 
-              {/* AI suggestion */}
-              <button
-                type="button"
-                className="w-full flex items-center justify-center gap-2 p-4 border border-dashed border-gray-300 dark:border-gray-600 rounded-xl text-gray-500 dark:text-gray-400 hover:border-[#5CC5DE] hover:text-[#5CC5DE] transition-colors"
-              >
-                <Sparkles className="w-5 h-5" />
-                Generate AI Subject Line Suggestions
-              </button>
+          {/* Email content */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Email Content</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label>From Name</Label>
+                <Input value={fromName} onChange={(e) => setFromName(e.target.value)} className="mt-1" />
+              </div>
+              <div>
+                <Label>Content (HTML, shared across all variants)</Label>
+                <Textarea
+                  value={content}
+                  onChange={(e) => setContent(e.target.value)}
+                  placeholder={`<h1>Hello {{first_name}}!</h1>\n<p>Your email content here...</p>`}
+                  className="mt-1 min-h-[200px] font-mono text-sm"
+                />
+              </div>
             </CardContent>
           </Card>
 
           {/* Test settings */}
-          <Card className="bg-white dark:bg-gray-800">
+          <Card>
             <CardHeader>
-              <CardTitle className="text-lg dark:text-gray-100">Test Settings</CardTitle>
+              <CardTitle className="text-lg">Test Settings</CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
-              {/* Test size */}
               <div>
-                <Label className="dark:text-gray-200">Test Sample Size</Label>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
-                  Percentage of subscribers who will receive test variants
-                </p>
+                <Label>Test Sample Size</Label>
+                <p className="text-sm text-muted-foreground mb-3">Percentage of subscribers who will receive test variants</p>
                 <div className="flex items-center gap-4">
                   <input
                     type="range"
-                    min="10"
-                    max="50"
-                    step="5"
+                    min="10" max="50" step="5"
                     value={testSettings.testSize}
                     onChange={(e) => setTestSettings({ ...testSettings, testSize: Number(e.target.value) })}
-                    className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-[#5CC5DE]"
+                    className="flex-1 h-2 bg-muted rounded-lg appearance-none cursor-pointer accent-primary"
                   />
-                  <span className="w-16 text-center font-medium dark:text-gray-100">
-                    {testSettings.testSize}%
-                  </span>
+                  <span className="w-16 text-center font-medium text-foreground">{testSettings.testSize}%</span>
                 </div>
-
-                {/* Visual breakdown */}
                 <div className="mt-4 flex items-center gap-2">
-                  {variants.map((variant) => (
-                    <div
-                      key={variant.id}
-                      className="flex-1 text-center p-2 bg-[#5CC5DE]/10 rounded-lg"
-                    >
-                      <p className="text-xs text-gray-500 dark:text-gray-400">Variant {variant.id}</p>
-                      <p className="font-semibold text-[#5CC5DE]">{testPercentPerVariant}%</p>
+                  {variants.map((v) => (
+                    <div key={v.id} className="flex-1 text-center p-2 bg-primary/10 rounded-lg">
+                      <p className="text-xs text-muted-foreground">Variant {v.id}</p>
+                      <p className="font-semibold text-primary">{testPercentPerVariant}%</p>
                     </div>
                   ))}
-                  <ArrowRight className="w-4 h-4 text-gray-400" />
-                  <div className="flex-1 text-center p-2 bg-green-100 dark:bg-green-900/20 rounded-lg">
-                    <p className="text-xs text-gray-500 dark:text-gray-400">Winner</p>
+                  <ArrowRight className="w-4 h-4 text-muted-foreground" />
+                  <div className="flex-1 text-center p-2 bg-green-500/10 rounded-lg">
+                    <p className="text-xs text-muted-foreground">Winner</p>
                     <p className="font-semibold text-green-600">{winnerPercent}%</p>
                   </div>
                 </div>
               </div>
 
-              {/* Winning metric */}
               <div>
-                <Label className="dark:text-gray-200">Winning Metric</Label>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
-                  How we determine the winning variant
-                </p>
-                <div className="flex gap-3">
+                <Label>Winning Metric</Label>
+                <div className="flex gap-3 mt-3">
                   {[
                     { id: "opens", label: "Open Rate", icon: BarChart3 },
                     { id: "clicks", label: "Click Rate", icon: Trophy },
@@ -231,16 +312,12 @@ export default function ABTestPage() {
                       onClick={() => setTestSettings({ ...testSettings, winningMetric: metric.id })}
                       className={`flex-1 flex items-center justify-center gap-2 p-4 rounded-xl border-2 transition-colors ${
                         testSettings.winningMetric === metric.id
-                          ? "border-[#5CC5DE] bg-[#5CC5DE]/5"
-                          : "border-gray-200 dark:border-gray-700 hover:border-gray-300"
+                          ? "border-primary bg-primary/5"
+                          : "border-border hover:border-muted-foreground/30"
                       }`}
                     >
-                      <metric.icon className={`w-5 h-5 ${
-                        testSettings.winningMetric === metric.id ? "text-[#5CC5DE]" : "text-gray-400"
-                      }`} />
-                      <span className={`font-medium ${
-                        testSettings.winningMetric === metric.id ? "text-[#5CC5DE]" : "text-gray-600 dark:text-gray-300"
-                      }`}>
+                      <metric.icon className={`w-5 h-5 ${testSettings.winningMetric === metric.id ? "text-primary" : "text-muted-foreground"}`} />
+                      <span className={`font-medium ${testSettings.winningMetric === metric.id ? "text-primary" : "text-muted-foreground"}`}>
                         {metric.label}
                       </span>
                     </button>
@@ -248,13 +325,9 @@ export default function ABTestPage() {
                 </div>
               </div>
 
-              {/* Test duration */}
               <div>
-                <Label className="dark:text-gray-200">Test Duration</Label>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
-                  How long to wait before declaring a winner
-                </p>
-                <div className="flex gap-2">
+                <Label>Test Duration</Label>
+                <div className="flex gap-2 mt-3">
                   {[2, 4, 8, 12, 24].map((hours) => (
                     <button
                       key={hours}
@@ -262,8 +335,8 @@ export default function ABTestPage() {
                       onClick={() => setTestSettings({ ...testSettings, duration: hours })}
                       className={`px-4 py-2 rounded-lg font-medium transition-colors ${
                         testSettings.duration === hours
-                          ? "bg-[#5CC5DE] text-black"
-                          : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-muted text-muted-foreground hover:bg-muted/80"
                       }`}
                     >
                       {hours}h
@@ -274,20 +347,20 @@ export default function ABTestPage() {
             </CardContent>
           </Card>
 
-          {/* Summary */}
-          <Card className="bg-white dark:bg-gray-800">
+          {/* Actions */}
+          <Card>
             <CardContent className="p-6">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between flex-wrap gap-4">
                 <div className="flex items-center gap-6">
-                  <div className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
+                  <div className="flex items-center gap-2 text-muted-foreground">
                     <Users className="w-5 h-5" />
                     <span>{variants.length} variants</span>
                   </div>
-                  <div className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
+                  <div className="flex items-center gap-2 text-muted-foreground">
                     <Clock className="w-5 h-5" />
-                    <span>{testSettings.duration}h test duration</span>
+                    <span>{testSettings.duration}h duration</span>
                   </div>
-                  <div className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
+                  <div className="flex items-center gap-2 text-muted-foreground">
                     <BarChart3 className="w-5 h-5" />
                     <span>Winner by {testSettings.winningMetric}</span>
                   </div>
@@ -295,16 +368,20 @@ export default function ABTestPage() {
                 <div className="flex gap-3">
                   <button
                     type="button"
-                    className="flex items-center gap-2 px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                    onClick={saveDraft}
+                    disabled={saving}
+                    className="flex items-center gap-2 px-4 py-2 border border-border rounded-lg hover:bg-muted transition-colors disabled:opacity-50"
                   >
-                    <Save className="w-4 h-4" />
+                    {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                     Save Draft
                   </button>
                   <button
                     type="button"
-                    className="flex items-center gap-2 px-6 py-2 bg-[#5CC5DE] hover:bg-[#4AB5CE] text-black font-medium rounded-lg transition-colors"
+                    onClick={startTest}
+                    disabled={starting}
+                    className="flex items-center gap-2 px-6 py-2 bg-primary hover:bg-primary/90 text-primary-foreground font-medium rounded-lg transition-colors disabled:opacity-50"
                   >
-                    <Send className="w-4 h-4" />
+                    {starting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                     Start A/B Test
                   </button>
                 </div>

@@ -1,16 +1,29 @@
-// Templates page
-
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Search,
   Plus,
-  Star,
-  Download,
-  Eye,
   Copy,
   MoreHorizontal,
   Sparkles,
@@ -20,13 +33,21 @@ import {
   BookOpen,
   ShoppingCart,
   Calendar,
+  Pencil,
+  Trash2,
 } from "lucide-react";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+
+interface Template {
+  id: string;
+  name: string;
+  category: string;
+  description: string | null;
+  content: string;
+  subject: string;
+  preview_gradient: string | null;
+  is_premium: boolean;
+  created_at: string;
+}
 
 const categories = [
   { id: "all", label: "All Templates", icon: Sparkles },
@@ -38,138 +59,108 @@ const categories = [
   { id: "event", label: "Event", icon: Calendar },
 ];
 
-const templates = [
-  {
-    id: 1,
-    name: "Minimal Newsletter",
-    category: "newsletter",
-    description: "Clean, simple newsletter layout with focus on content",
-    preview: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-    downloads: 2341,
-    isNew: true,
-    isPremium: false,
-  },
-  {
-    id: 2,
-    name: "Product Launch",
-    category: "announcement",
-    description: "Bold announcement template for new product releases",
-    preview: "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)",
-    downloads: 1892,
-    isNew: false,
-    isPremium: false,
-  },
-  {
-    id: 3,
-    name: "Welcome Series",
-    category: "welcome",
-    description: "Warm welcome email for new subscribers",
-    preview: "linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)",
-    downloads: 3421,
-    isNew: false,
-    isPremium: false,
-  },
-  {
-    id: 4,
-    name: "Weekly Digest",
-    category: "newsletter",
-    description: "Organized layout for weekly content roundups",
-    preview: "linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)",
-    downloads: 1567,
-    isNew: true,
-    isPremium: false,
-  },
-  {
-    id: 5,
-    name: "Flash Sale",
-    category: "promotional",
-    description: "High-impact promotional template with countdown",
-    preview: "linear-gradient(135deg, #fa709a 0%, #fee140 100%)",
-    downloads: 2108,
-    isNew: false,
-    isPremium: true,
-  },
-  {
-    id: 6,
-    name: "Course Lesson",
-    category: "educational",
-    description: "Structured template for online course content",
-    preview: "linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)",
-    downloads: 987,
-    isNew: false,
-    isPremium: false,
-  },
-  {
-    id: 7,
-    name: "Event Invitation",
-    category: "event",
-    description: "Elegant invitation for webinars and events",
-    preview: "linear-gradient(135deg, #d299c2 0%, #fef9d7 100%)",
-    downloads: 1234,
-    isNew: false,
-    isPremium: true,
-  },
-  {
-    id: 8,
-    name: "Personal Update",
-    category: "newsletter",
-    description: "Casual, personal letter-style template",
-    preview: "linear-gradient(135deg, #89f7fe 0%, #66a6ff 100%)",
-    downloads: 1876,
-    isNew: false,
-    isPremium: false,
-  },
-  {
-    id: 9,
-    name: "Black Friday",
-    category: "promotional",
-    description: "Dark theme promotional for sales events",
-    preview: "linear-gradient(135deg, #434343 0%, #000000 100%)",
-    downloads: 3210,
-    isNew: false,
-    isPremium: false,
-  },
-  {
-    id: 10,
-    name: "Thank You",
-    category: "welcome",
-    description: "Appreciation email for customers and subscribers",
-    preview: "linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%)",
-    downloads: 1654,
-    isNew: true,
-    isPremium: false,
-  },
-  {
-    id: 11,
-    name: "Case Study",
-    category: "educational",
-    description: "Professional template for sharing success stories",
-    preview: "linear-gradient(135deg, #a1c4fd 0%, #c2e9fb 100%)",
-    downloads: 876,
-    isNew: false,
-    isPremium: true,
-  },
-  {
-    id: 12,
-    name: "Webinar Reminder",
-    category: "event",
-    description: "Reminder email with clear CTA for events",
-    preview: "linear-gradient(135deg, #f6d365 0%, #fda085 100%)",
-    downloads: 1432,
-    isNew: false,
-    isPremium: false,
-  },
+const GRADIENTS = [
+  "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+  "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)",
+  "linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)",
+  "linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)",
+  "linear-gradient(135deg, #fa709a 0%, #fee140 100%)",
+  "linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)",
+  "linear-gradient(135deg, #d299c2 0%, #fef9d7 100%)",
+  "linear-gradient(135deg, #89f7fe 0%, #66a6ff 100%)",
 ];
 
 export default function TemplatesPage() {
+  const { user } = useAuth();
+  const [templates, setTemplates] = useState<Template[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState("all");
-  const [previewTemplate, setPreviewTemplate] = useState<number | null>(null);
 
-  const filteredTemplates = templates.filter((template) => {
-    const matchesSearch = template.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      template.description.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCategory = activeCategory === "all" || template.category === activeCategory;
+  // Dialog
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editing, setEditing] = useState<Template | null>(null);
+  const [name, setName] = useState("");
+  const [category, setCategory] = useState("newsletter");
+  const [description, setDescription] = useState("");
+  const [subject, setSubject] = useState("");
+  const [content, setContent] = useState("");
+
+  const fetchTemplates = useCallback(async () => {
+    const { data } = await supabase
+      .from("email_templates")
+      .select("*")
+      .order("created_at", { ascending: false });
+    if (data) setTemplates(data as Template[]);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    fetchTemplates();
+  }, [fetchTemplates]);
+
+  const openNew = () => {
+    setEditing(null);
+    setName("");
+    setCategory("newsletter");
+    setDescription("");
+    setSubject("");
+    setContent("");
+    setDialogOpen(true);
+  };
+
+  const openEdit = (t: Template) => {
+    setEditing(t);
+    setName(t.name);
+    setCategory(t.category);
+    setDescription(t.description || "");
+    setSubject(t.subject);
+    setContent(t.content);
+    setDialogOpen(true);
+  };
+
+  const save = async () => {
+    if (!name.trim() || !user) return;
+    const gradient = GRADIENTS[Math.floor(Math.random() * GRADIENTS.length)];
+
+    if (editing) {
+      await supabase.from("email_templates").update({
+        name: name.trim(),
+        category,
+        description: description.trim() || null,
+        subject: subject.trim(),
+        content,
+      }).eq("id", editing.id);
+    } else {
+      await supabase.from("email_templates").insert({
+        name: name.trim(),
+        category,
+        description: description.trim() || null,
+        subject: subject.trim(),
+        content,
+        preview_gradient: gradient,
+        user_id: user.id,
+      });
+    }
+    setDialogOpen(false);
+    fetchTemplates();
+  };
+
+  const deleteTemplate = async (id: string) => {
+    if (!confirm("Delete this template?")) return;
+    await supabase.from("email_templates").delete().eq("id", id);
+    fetchTemplates();
+  };
+
+  const useTemplate = (t: Template) => {
+    // Navigate to new broadcast with template content pre-filled via URL
+    window.location.href = `/dashboard/broadcasts/new?template_subject=${encodeURIComponent(t.subject)}&template_content=${encodeURIComponent(t.content)}`;
+  };
+
+  const filtered = templates.filter((t) => {
+    const matchesSearch = t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (t.description || "").toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesCategory = activeCategory === "all" || t.category === activeCategory;
     return matchesSearch && matchesCategory;
   });
 
@@ -177,151 +168,163 @@ export default function TemplatesPage() {
     <div className="min-h-screen">
       <DashboardHeader
         title="Email Templates"
-        subtitle="Choose from our library of professionally designed templates"
+        subtitle="Create and manage reusable email templates"
       />
 
       <main className="p-6">
         <div className="max-w-7xl mx-auto">
-          {/* Search and filters */}
           <div className="flex flex-col sm:flex-row gap-4 mb-6">
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
                 type="search"
                 placeholder="Search templates..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 dark:bg-gray-800 dark:border-gray-700"
+                className="pl-10"
               />
             </div>
             <button
               type="button"
-              className="flex items-center gap-2 px-4 py-2 bg-[#5CC5DE] hover:bg-[#4AB5CE] text-black font-medium rounded-lg transition-colors"
+              onClick={openNew}
+              className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground font-medium rounded-lg transition-colors"
             >
               <Plus className="w-4 h-4" />
               Create Template
             </button>
           </div>
 
-          {/* Categories */}
           <div className="flex gap-2 mb-8 overflow-x-auto pb-2">
-            {categories.map((category) => (
+            {categories.map((cat) => (
               <button
-                key={category.id}
+                key={cat.id}
                 type="button"
-                onClick={() => setActiveCategory(category.id)}
+                onClick={() => setActiveCategory(cat.id)}
                 className={`flex items-center gap-2 px-4 py-2 rounded-full whitespace-nowrap transition-colors ${
-                  activeCategory === category.id
-                    ? "bg-[#5CC5DE] text-black"
-                    : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
+                  activeCategory === cat.id
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-muted text-muted-foreground hover:bg-muted/80"
                 }`}
               >
-                <category.icon className="w-4 h-4" />
-                {category.label}
+                <cat.icon className="w-4 h-4" />
+                {cat.label}
               </button>
             ))}
           </div>
 
-          {/* Templates grid */}
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {filteredTemplates.map((template) => (
-              <Card
-                key={template.id}
-                className="group bg-white dark:bg-gray-800 overflow-hidden hover:shadow-lg transition-all"
-              >
-                {/* Preview */}
-                <div
-                  className="h-48 relative"
-                  style={{ background: template.preview }}
-                >
-                  {/* Badges */}
-                  <div className="absolute top-3 left-3 flex gap-2">
-                    {template.isNew && (
-                      <Badge className="bg-green-500 text-white">New</Badge>
-                    )}
-                    {template.isPremium && (
-                      <Badge className="bg-amber-500 text-white">
-                        <Star className="w-3 h-3 mr-1" />
-                        Premium
-                      </Badge>
-                    )}
-                  </div>
-
-                  {/* Hover actions */}
-                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setPreviewTemplate(template.id)}
-                      className="p-3 bg-white rounded-full hover:scale-110 transition-transform"
-                    >
-                      <Eye className="w-5 h-5 text-gray-700" />
-                    </button>
-                    <button
-                      type="button"
-                      className="p-3 bg-[#5CC5DE] rounded-full hover:scale-110 transition-transform"
-                    >
-                      <Copy className="w-5 h-5 text-black" />
-                    </button>
-                  </div>
-                </div>
-
-                <CardContent className="p-4">
-                  <div className="flex items-start justify-between mb-2">
-                    <h3 className="font-semibold text-gray-900 dark:text-gray-100">
-                      {template.name}
-                    </h3>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <button type="button" className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded">
-                          <MoreHorizontal className="w-4 h-4 text-gray-400" />
-                        </button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem>
-                          <Eye className="w-4 h-4 mr-2" />
-                          Preview
-                        </DropdownMenuItem>
-                        <DropdownMenuItem>
-                          <Copy className="w-4 h-4 mr-2" />
-                          Use Template
-                        </DropdownMenuItem>
-                        <DropdownMenuItem>
-                          <Download className="w-4 h-4 mr-2" />
-                          Download
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                  <p className="text-sm text-gray-500 dark:text-gray-400 mb-3 line-clamp-2">
-                    {template.description}
-                  </p>
-                  <div className="flex items-center justify-between">
-                    <Badge variant="outline" className="text-xs capitalize">
-                      {template.category}
-                    </Badge>
-                    <span className="text-xs text-gray-400 flex items-center gap-1">
-                      <Download className="w-3 h-3" />
-                      {template.downloads.toLocaleString()}
-                    </span>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-
-          {filteredTemplates.length === 0 && (
+          {loading ? (
+            <p className="text-center text-muted-foreground py-12">Loading…</p>
+          ) : filtered.length === 0 ? (
             <div className="text-center py-12">
-              <Mail className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
-                No templates found
+              <Mail className="w-12 h-12 text-muted-foreground/30 mx-auto mb-4" />
+              <h3 className="text-lg font-semibold text-foreground mb-2">
+                {templates.length === 0 ? "No templates yet" : "No templates found"}
               </h3>
-              <p className="text-gray-500 dark:text-gray-400">
-                Try adjusting your search or filter criteria
+              <p className="text-muted-foreground">
+                {templates.length === 0
+                  ? "Create your first template to get started."
+                  : "Try adjusting your search or filter criteria."}
               </p>
+            </div>
+          ) : (
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {filtered.map((template) => (
+                <Card key={template.id} className="group overflow-hidden hover:shadow-lg transition-all">
+                  <div
+                    className="h-48 relative"
+                    style={{ background: template.preview_gradient || GRADIENTS[0] }}
+                  >
+                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => useTemplate(template)}
+                        className="p-3 bg-primary rounded-full hover:scale-110 transition-transform"
+                      >
+                        <Copy className="w-5 h-5 text-primary-foreground" />
+                      </button>
+                    </div>
+                  </div>
+                  <CardContent className="p-4">
+                    <div className="flex items-start justify-between mb-2">
+                      <h3 className="font-semibold text-foreground">{template.name}</h3>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button type="button" className="p-1 hover:bg-muted rounded">
+                            <MoreHorizontal className="w-4 h-4 text-muted-foreground" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => useTemplate(template)}>
+                            <Copy className="w-4 h-4 mr-2" /> Use Template
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => openEdit(template)}>
+                            <Pencil className="w-4 h-4 mr-2" /> Edit
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => deleteTemplate(template.id)} className="text-destructive">
+                            <Trash2 className="w-4 h-4 mr-2" /> Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                    <p className="text-sm text-muted-foreground mb-3 line-clamp-2">{template.description}</p>
+                    <Badge variant="outline" className="text-xs capitalize">{template.category}</Badge>
+                  </CardContent>
+                </Card>
+              ))}
             </div>
           )}
         </div>
       </main>
+
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{editing ? "Edit Template" : "New Template"}</DialogTitle>
+            <DialogDescription>{editing ? "Update your template." : "Create a reusable email template."}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Name</Label>
+              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Weekly Newsletter" />
+            </div>
+            <div className="space-y-2">
+              <Label>Category</Label>
+              <select
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg border border-border bg-background text-foreground text-sm"
+              >
+                {categories.filter((c) => c.id !== "all").map((c) => (
+                  <option key={c.id} value={c.id}>{c.label}</option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-2">
+              <Label>Description</Label>
+              <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What's this template for?" />
+            </div>
+            <div className="space-y-2">
+              <Label>Subject Line</Label>
+              <Input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Email subject line" />
+            </div>
+            <div className="space-y-2">
+              <Label>Content (HTML)</Label>
+              <Textarea
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                placeholder="<h1>Hello {{first_name}}!</h1>"
+                className="min-h-[150px] font-mono text-sm"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <button type="button" onClick={() => setDialogOpen(false)} className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Cancel</button>
+            <button type="button" onClick={save} disabled={!name.trim()} className="px-4 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 transition-colors">
+              {editing ? "Save" : "Create"}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

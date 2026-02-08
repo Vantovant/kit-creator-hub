@@ -16,6 +16,7 @@ serve(async (req: Request) => {
   try {
     const { email, first_name, source } = await req.json();
 
+    // Server-side validation
     if (!email || typeof email !== "string") {
       return new Response(JSON.stringify({ error: "Email is required" }), {
         status: 400,
@@ -23,18 +24,43 @@ serve(async (req: Request) => {
       });
     }
 
+    const trimmedEmail = email.trim().toLowerCase();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(trimmedEmail) || trimmedEmail.length > 255) {
+      return new Response(JSON.stringify({ error: "Invalid email format" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const sanitizedName = first_name
+      ? String(first_name).trim().slice(0, 100).replace(/[<>]/g, "")
+      : null;
+
+    const allowedSources = ["welcome_form"];
+    const sanitizedSource = allowedSources.includes(source) ? source : "welcome_form";
+
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
     const { error: dbError } = await supabase.from("prospects").upsert(
-      { email, first_name: first_name || null, source: source || "welcome_form" },
+      { email: trimmedEmail, first_name: sanitizedName, source: sanitizedSource },
       { onConflict: "email" }
     );
 
     if (dbError) {
       console.error("DB error:", dbError);
-      throw new Error(dbError.message);
+      if (dbError.code === "23505") {
+        return new Response(JSON.stringify({ error: "Email already registered" }), {
+          status: 409,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({ error: "Failed to save subscription" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     // Get unsubscribe token for the email link
@@ -80,7 +106,7 @@ serve(async (req: Request) => {
     });
   } catch (err: any) {
     console.error("save-prospect error:", err);
-    return new Response(JSON.stringify({ error: err.message }), {
+    return new Response(JSON.stringify({ error: "An error occurred. Please try again." }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

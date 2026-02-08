@@ -32,7 +32,7 @@ const bottomNav = [
   { name: "Help", href: "/dashboard/help", icon: HelpCircle },
 ];
 
-export function Sidebar() {
+export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
@@ -68,6 +68,7 @@ export function Sidebar() {
             <Link
               key={item.name}
               to={item.href}
+              onClick={onNavigate}
               className={cn(
                 "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
                 isActive

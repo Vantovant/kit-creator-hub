@@ -14,6 +14,45 @@ export type Database = {
   }
   public: {
     Tables: {
+      automations: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          status: string
+          trigger_config: Json
+          trigger_type: string
+          updated_at: string
+          user_id: string
+          workflow: Json
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          status?: string
+          trigger_config?: Json
+          trigger_type?: string
+          updated_at?: string
+          user_id: string
+          workflow?: Json
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          status?: string
+          trigger_config?: Json
+          trigger_type?: string
+          updated_at?: string
+          user_id?: string
+          workflow?: Json
+        }
+        Relationships: []
+      }
       broadcasts: {
         Row: {
           content: string
@@ -67,6 +106,41 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      email_events: {
+        Row: {
+          broadcast_id: string | null
+          created_at: string
+          email: string
+          event_type: string
+          id: string
+          metadata: Json | null
+        }
+        Insert: {
+          broadcast_id?: string | null
+          created_at?: string
+          email: string
+          event_type: string
+          id?: string
+          metadata?: Json | null
+        }
+        Update: {
+          broadcast_id?: string | null
+          created_at?: string
+          email?: string
+          event_type?: string
+          id?: string
+          metadata?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_events_broadcast_id_fkey"
+            columns: ["broadcast_id"]
+            isOneToOne: false
+            referencedRelation: "broadcasts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {

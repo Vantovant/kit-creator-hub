@@ -43,7 +43,7 @@ serve(async (req: Request) => {
       try {
         const resend = new Resend(resendKey);
         await resend.emails.send({
-          from: "Vanto Zazi <onboarding@resend.dev>",
+          from: "Vanto Zazi <vanto@onlinecourseformlm.com>",
           to: [email],
           subject: "Welcome to Vanto Zazi Mail!",
           html: `

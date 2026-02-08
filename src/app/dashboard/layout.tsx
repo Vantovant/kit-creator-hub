@@ -1,33 +1,23 @@
-"use client";
-
 import { useState } from "react";
+import { Outlet } from "react-router-dom";
 import { Sidebar } from "@/components/dashboard/Sidebar";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 
-export default function DashboardLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function DashboardLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Desktop sidebar */}
+    <div className="min-h-screen bg-muted/30">
       <div className="hidden lg:block">
         <Sidebar />
       </div>
-
-      {/* Mobile sidebar */}
       <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
         <SheetContent side="left" className="p-0 w-64">
           <Sidebar />
         </SheetContent>
       </Sheet>
-
-      {/* Main content */}
       <div className="lg:pl-64">
-        {children}
+        <Outlet />
       </div>
     </div>
   );

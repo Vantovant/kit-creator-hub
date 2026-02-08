@@ -1,4 +1,4 @@
-"use client";
+// Segments page
 
 import { useState } from "react";
 import { DashboardHeader } from "@/components/dashboard/DashboardHeader";

@@ -1,4 +1,4 @@
-"use client";
+// Templates page
 
 import { useState } from "react";
 import { DashboardHeader } from "@/components/dashboard/DashboardHeader";

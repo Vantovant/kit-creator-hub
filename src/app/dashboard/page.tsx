@@ -1,4 +1,4 @@
-"use client";
+// Dashboard page
 
 import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";

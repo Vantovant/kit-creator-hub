@@ -1,4 +1,4 @@
-"use client";
+// A/B test page
 
 import { useState } from "react";
 import { DashboardHeader } from "@/components/dashboard/DashboardHeader";

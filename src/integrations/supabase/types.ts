@@ -203,8 +203,10 @@ export type Database = {
         Row: {
           created_at: string
           email: string
+          engagement_score: number
           first_name: string | null
           id: string
+          last_activity_at: string | null
           source: string | null
           unsubscribe_token: string | null
           unsubscribed: boolean
@@ -212,8 +214,10 @@ export type Database = {
         Insert: {
           created_at?: string
           email: string
+          engagement_score?: number
           first_name?: string | null
           id?: string
+          last_activity_at?: string | null
           source?: string | null
           unsubscribe_token?: string | null
           unsubscribed?: boolean
@@ -221,8 +225,10 @@ export type Database = {
         Update: {
           created_at?: string
           email?: string
+          engagement_score?: number
           first_name?: string | null
           id?: string
+          last_activity_at?: string | null
           source?: string | null
           unsubscribe_token?: string | null
           unsubscribed?: boolean
@@ -313,6 +319,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      recalculate_engagement_scores: { Args: never; Returns: undefined }
     }
     Enums: {
       app_role: "admin" | "user"

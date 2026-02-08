@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -6,13 +6,23 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
   Eye,
   Send,
   Save,
   Users,
-  X,
   Loader2,
   ArrowLeft,
+  Undo2,
+  Redo2,
+  Clock,
 } from "lucide-react";
 
 interface BroadcastEditorProps {
@@ -21,10 +31,33 @@ interface BroadcastEditorProps {
   onSaved: () => void;
 }
 
+function useUndoRedo(initial: string) {
+  const [history, setHistory] = useState([initial]);
+  const [index, setIndex] = useState(0);
+
+  const value = history[index];
+
+  const setValue = useCallback(
+    (next: string) => {
+      setHistory((prev) => [...prev.slice(0, index + 1), next]);
+      setIndex((i) => i + 1);
+    },
+    [index]
+  );
+
+  const undo = useCallback(() => setIndex((i) => Math.max(0, i - 1)), []);
+  const redo = useCallback(
+    () => setIndex((i) => Math.min(history.length - 1, i + 1)),
+    [history.length]
+  );
+
+  return { value, setValue, undo, redo, canUndo: index > 0, canRedo: index < history.length - 1 };
+}
+
 export function BroadcastEditor({ initialData, editId, onSaved }: BroadcastEditorProps) {
   const [subject, setSubject] = useState(initialData?.subject || "");
   const [previewText, setPreviewText] = useState(initialData?.preview_text || "");
-  const [emailContent, setEmailContent] = useState(initialData?.content || "");
+  const content = useUndoRedo(initialData?.content || "");
   const [fromName, setFromName] = useState(initialData?.from_name || "Vanto Zazi");
   const [replyTo, setReplyTo] = useState(initialData?.reply_to || "vanto@onlinecourseformlm.com");
   const [showPreview, setShowPreview] = useState(false);
@@ -33,29 +66,34 @@ export function BroadcastEditor({ initialData, editId, onSaved }: BroadcastEdito
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
-  const saveDraft = async () => {
-    if (!subject.trim()) {
-      setError("Subject is required");
-      return;
-    }
-    setSaving(true);
-    setError("");
+  // Schedule dialog
+  const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [scheduleDate, setScheduleDate] = useState("");
+  const [scheduleTime, setScheduleTime] = useState("");
+  const [scheduling, setScheduling] = useState(false);
 
+  const getPayload = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       setError("You must be logged in");
-      setSaving(false);
-      return;
+      return null;
     }
-
-    const payload = {
+    return {
       subject: subject.trim(),
       preview_text: previewText.trim(),
-      content: emailContent,
+      content: content.value,
       from_name: fromName.trim(),
       reply_to: replyTo.trim(),
       user_id: user.id,
     };
+  };
+
+  const saveDraft = async () => {
+    if (!subject.trim()) { setError("Subject is required"); return; }
+    setSaving(true);
+    setError("");
+    const payload = await getPayload();
+    if (!payload) { setSaving(false); return; }
 
     let result;
     if (editId) {
@@ -74,55 +112,53 @@ export function BroadcastEditor({ initialData, editId, onSaved }: BroadcastEdito
     setSaving(false);
   };
 
+  const scheduleBroadcast = async () => {
+    if (!subject.trim()) { setError("Subject is required"); return; }
+    if (!scheduleDate || !scheduleTime) { setError("Pick a date and time"); return; }
+    setScheduling(true);
+    setError("");
+    const payload = await getPayload();
+    if (!payload) { setScheduling(false); return; }
+
+    const scheduledAt = new Date(`${scheduleDate}T${scheduleTime}`).toISOString();
+
+    let result;
+    if (editId) {
+      result = await supabase.from("broadcasts").update({ ...payload, status: "scheduled", scheduled_at: scheduledAt }).eq("id", editId);
+    } else {
+      result = await supabase.from("broadcasts").insert({ ...payload, status: "scheduled", scheduled_at: scheduledAt });
+    }
+
+    if (result.error) {
+      setError("Failed to schedule: " + result.error.message);
+    } else {
+      setMessage("Broadcast scheduled!");
+      setScheduleOpen(false);
+      setTimeout(() => onSaved(), 1500);
+    }
+    setScheduling(false);
+  };
+
   const sendNow = async () => {
-    if (!subject.trim()) {
-      setError("Subject is required");
-      return;
-    }
-    if (!emailContent.trim()) {
-      setError("Email content is required");
-      return;
-    }
+    if (!subject.trim()) { setError("Subject is required"); return; }
+    if (!content.value.trim()) { setError("Email content is required"); return; }
     if (!confirm("Send this broadcast to all active subscribers?")) return;
 
     setSending(true);
     setError("");
-
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      setError("You must be logged in");
-      setSending(false);
-      return;
-    }
-
-    // Save or create broadcast first
-    const payload = {
-      subject: subject.trim(),
-      preview_text: previewText.trim(),
-      content: emailContent,
-      from_name: fromName.trim(),
-      reply_to: replyTo.trim(),
-      user_id: user.id,
-    };
+    const payload = await getPayload();
+    if (!payload) { setSending(false); return; }
 
     let broadcastId = editId;
     if (editId) {
       await supabase.from("broadcasts").update(payload).eq("id", editId);
     } else {
       const { data, error: insertError } = await supabase
-        .from("broadcasts")
-        .insert(payload)
-        .select("id")
-        .single();
-      if (insertError || !data) {
-        setError("Failed to save broadcast");
-        setSending(false);
-        return;
-      }
+        .from("broadcasts").insert(payload).select("id").single();
+      if (insertError || !data) { setError("Failed to save broadcast"); setSending(false); return; }
       broadcastId = data.id;
     }
 
-    // Call edge function to send
     const { data: { session } } = await supabase.auth.getSession();
     const res = await fetch(
       `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-broadcast`,
@@ -148,20 +184,41 @@ export function BroadcastEditor({ initialData, editId, onSaved }: BroadcastEdito
 
   return (
     <div className="max-w-4xl mx-auto space-y-4">
-      {/* Action bar */}
-      <div className="flex items-center justify-between">
-        <a
-          href="/dashboard/broadcasts"
-          className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Back
-        </a>
-        <div className="flex items-center gap-3">
+      {/* Top toolbar */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex items-center gap-2">
+          <a
+            href="/dashboard/broadcasts"
+            className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors mr-2"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Back
+          </a>
+          <button
+            type="button"
+            onClick={content.undo}
+            disabled={!content.canUndo}
+            className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-30"
+            title="Undo"
+          >
+            <Undo2 className="w-4 h-4" />
+          </button>
+          <button
+            type="button"
+            onClick={content.redo}
+            disabled={!content.canRedo}
+            className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-30"
+            title="Redo"
+          >
+            <Redo2 className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="flex items-center gap-2 flex-wrap">
           <button
             type="button"
             onClick={() => setShowPreview(!showPreview)}
-            className="flex items-center gap-2 px-4 py-2 border border-border rounded-lg hover:bg-muted transition-colors text-foreground"
+            className="flex items-center gap-2 px-4 py-2 border border-border rounded-lg hover:bg-muted transition-colors text-foreground text-sm font-medium"
           >
             <Eye className="w-4 h-4" />
             Preview
@@ -170,16 +227,24 @@ export function BroadcastEditor({ initialData, editId, onSaved }: BroadcastEdito
             type="button"
             onClick={saveDraft}
             disabled={saving}
-            className="flex items-center gap-2 px-4 py-2 border border-border rounded-lg hover:bg-muted transition-colors text-foreground disabled:opacity-50"
+            className="flex items-center gap-2 px-4 py-2 border border-border rounded-lg hover:bg-muted transition-colors text-foreground text-sm font-medium disabled:opacity-50"
           >
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
             Save Draft
           </button>
           <button
             type="button"
+            onClick={() => setScheduleOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 border border-border rounded-lg hover:bg-muted transition-colors text-foreground text-sm font-medium"
+          >
+            <Clock className="w-4 h-4" />
+            Schedule
+          </button>
+          <button
+            type="button"
             onClick={sendNow}
             disabled={sending}
-            className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground font-medium rounded-lg transition-colors disabled:opacity-50"
+            className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground font-medium rounded-lg transition-colors disabled:opacity-50 text-sm"
           >
             {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
             Send Now
@@ -200,7 +265,7 @@ export function BroadcastEditor({ initialData, editId, onSaved }: BroadcastEdito
               <div
                 className="prose dark:prose-invert max-w-none"
                 dangerouslySetInnerHTML={{
-                  __html: emailContent || "<p class='text-muted-foreground'>No content yet</p>",
+                  __html: content.value || "<p class='text-muted-foreground'>No content yet</p>",
                 }}
               />
               <hr className="my-4 border-border" />
@@ -212,7 +277,6 @@ export function BroadcastEditor({ initialData, editId, onSaved }: BroadcastEdito
         </Card>
       ) : (
         <>
-          {/* Recipients */}
           <Card className="bg-card">
             <CardContent className="p-4">
               <div className="flex items-center gap-4">
@@ -227,71 +291,81 @@ export function BroadcastEditor({ initialData, editId, onSaved }: BroadcastEdito
             </CardContent>
           </Card>
 
-          {/* Subject */}
           <Card className="bg-card">
             <CardContent className="p-4 space-y-4">
               <div className="flex items-center gap-4">
                 <Label className="text-sm font-medium w-20">Subject:</Label>
-                <Input
-                  value={subject}
-                  onChange={(e) => setSubject(e.target.value)}
-                  placeholder="Write a compelling subject line..."
-                  className="flex-1"
-                />
+                <Input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Write a compelling subject line..." className="flex-1" />
               </div>
               <div className="flex items-center gap-4">
                 <Label className="text-sm font-medium w-20">Preview:</Label>
-                <Input
-                  value={previewText}
-                  onChange={(e) => setPreviewText(e.target.value)}
-                  placeholder="Preview text shown in inbox..."
-                  className="flex-1"
-                />
+                <Input value={previewText} onChange={(e) => setPreviewText(e.target.value)} placeholder="Preview text shown in inbox..." className="flex-1" />
               </div>
             </CardContent>
           </Card>
 
-          {/* Content */}
           <Card className="bg-card">
             <CardContent className="p-4">
               <Label className="text-sm font-medium mb-2 block">
                 Email Content (HTML supported, use {"{{first_name}}"} for personalization)
               </Label>
               <Textarea
-                value={emailContent}
-                onChange={(e) => setEmailContent(e.target.value)}
+                value={content.value}
+                onChange={(e) => content.setValue(e.target.value)}
                 placeholder={`<h1>Hello {{first_name}}!</h1>\n<p>Your email content here...</p>`}
                 className="min-h-[300px] font-mono text-sm"
               />
             </CardContent>
           </Card>
 
-          {/* Settings */}
           <Card className="bg-card">
             <CardContent className="p-4">
               <h3 className="font-medium mb-4">Email Settings</h3>
               <div className="grid sm:grid-cols-2 gap-4">
                 <div>
                   <Label className="text-sm text-muted-foreground">From Name</Label>
-                  <Input
-                    value={fromName}
-                    onChange={(e) => setFromName(e.target.value)}
-                    className="mt-1"
-                  />
+                  <Input value={fromName} onChange={(e) => setFromName(e.target.value)} className="mt-1" />
                 </div>
                 <div>
                   <Label className="text-sm text-muted-foreground">Reply-to Email</Label>
-                  <Input
-                    value={replyTo}
-                    onChange={(e) => setReplyTo(e.target.value)}
-                    className="mt-1"
-                  />
+                  <Input value={replyTo} onChange={(e) => setReplyTo(e.target.value)} className="mt-1" />
                 </div>
               </div>
             </CardContent>
           </Card>
         </>
       )}
+
+      {/* Schedule Dialog */}
+      <Dialog open={scheduleOpen} onOpenChange={setScheduleOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Schedule Broadcast</DialogTitle>
+            <DialogDescription>Pick a date and time to send this broadcast.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="sched-date">Date</Label>
+              <Input id="sched-date" type="date" value={scheduleDate} onChange={(e) => setScheduleDate(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="sched-time">Time</Label>
+              <Input id="sched-time" type="time" value={scheduleTime} onChange={(e) => setScheduleTime(e.target.value)} />
+            </div>
+          </div>
+          <DialogFooter>
+            <button type="button" onClick={() => setScheduleOpen(false)} className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Cancel</button>
+            <button
+              type="button"
+              onClick={scheduleBroadcast}
+              disabled={scheduling || !scheduleDate || !scheduleTime}
+              className="px-4 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 transition-colors"
+            >
+              {scheduling ? "Scheduling…" : "Schedule"}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

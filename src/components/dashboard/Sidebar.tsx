@@ -1,4 +1,4 @@
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
   Users,
@@ -10,8 +10,10 @@ import {
   HelpCircle,
   ChevronDown,
   Plus,
+  LogOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/hooks/useAuth";
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -32,7 +34,14 @@ const bottomNav = [
 
 export function Sidebar() {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { user, signOut } = useAuth();
   const pathname = location.pathname;
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate("/auth");
+  };
 
   return (
     <aside className="fixed left-0 top-0 z-40 h-screen w-64 bg-sidebar text-sidebar-foreground flex flex-col">
@@ -86,19 +95,23 @@ export function Sidebar() {
         ))}
       </div>
 
-      <div className="p-4 border-t border-sidebar-border">
+      <div className="p-4 border-t border-sidebar-border space-y-2">
+        <div className="flex items-center gap-3 p-2">
+          <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-medium text-sm">
+            {user?.email?.[0]?.toUpperCase() || "U"}
+          </div>
+          <div className="flex-1 text-left min-w-0">
+            <p className="text-sm font-medium truncate">{user?.user_metadata?.display_name || "User"}</p>
+            <p className="text-xs text-sidebar-foreground/50 truncate">{user?.email}</p>
+          </div>
+        </div>
         <button
           type="button"
-          className="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-sidebar-accent/50 transition-colors"
+          onClick={handleSignOut}
+          className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium opacity-70 hover:opacity-100 hover:bg-sidebar-accent/50 transition-colors"
         >
-          <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-medium text-sm">
-            VZ
-          </div>
-          <div className="flex-1 text-left">
-            <p className="text-sm font-medium">Vanto Zazi</p>
-            <p className="text-xs text-sidebar-foreground/50">admin@vantozazi.com</p>
-          </div>
-          <ChevronDown className="w-4 h-4 text-sidebar-foreground/40" />
+          <LogOut className="w-4 h-4" />
+          Sign out
         </button>
       </div>
     </aside>

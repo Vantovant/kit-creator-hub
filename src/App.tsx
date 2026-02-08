@@ -15,14 +15,19 @@ import IntegrationsPage from "@/app/dashboard/integrations/page";
 import AnalyticsPage from "@/app/dashboard/analytics/page";
 import SettingsPage from "@/app/dashboard/settings/page";
 import WelcomeForm from "@/pages/WelcomeForm";
+import AuthPage from "@/pages/AuthPage";
+import UnsubscribePage from "@/pages/UnsubscribePage";
+import { ProtectedRoute } from "@/components/dashboard/ProtectedRoute";
 
 function App() {
   return (
     <ThemeProvider>
       <Routes>
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
+        <Route path="/auth" element={<AuthPage />} />
         <Route path="/forms/welcome" element={<WelcomeForm />} />
-        <Route path="/dashboard" element={<DashboardLayout />}>
+        <Route path="/unsubscribe" element={<UnsubscribePage />} />
+        <Route path="/dashboard" element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
           <Route index element={<DashboardPage />} />
           <Route path="subscribers" element={<SubscribersPage />} />
           <Route path="broadcasts" element={<BroadcastsPage />} />

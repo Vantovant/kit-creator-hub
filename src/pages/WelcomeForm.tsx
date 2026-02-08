@@ -2,7 +2,8 @@ import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Mail, CheckCircle, Loader2 } from "lucide-react";
+import { CheckCircle, Loader2 } from "lucide-react";
+import logo from "@/assets/logo.jpg";
 
 export default function WelcomeForm() {
   const [firstName, setFirstName] = useState("");
@@ -57,8 +58,8 @@ export default function WelcomeForm() {
     <div className="min-h-screen flex items-center justify-center bg-background px-4">
       <div className="max-w-md w-full space-y-8">
         <div className="text-center space-y-2">
-          <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
-            <Mail className="w-7 h-7 text-primary" />
+          <div className="w-14 h-14 rounded-2xl overflow-hidden mx-auto mb-4">
+            <img src={logo} alt="Vanto Zazi Mail" className="w-full h-full object-cover" />
           </div>
           <h1 className="text-3xl font-bold text-foreground font-serif">Vanto Zazi Mail</h1>
           <p className="text-muted-foreground">

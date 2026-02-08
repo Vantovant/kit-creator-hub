@@ -37,6 +37,17 @@ serve(async (req: Request) => {
       throw new Error(dbError.message);
     }
 
+    // Get unsubscribe token for the email link
+    const { data: prospect } = await supabase
+      .from("prospects")
+      .select("unsubscribe_token")
+      .eq("email", email)
+      .single();
+
+    const unsubscribeToken = prospect?.unsubscribe_token || "";
+    const appUrl = Deno.env.get("APP_URL") || "https://kit-clone-dashboard.lovable.app";
+    const unsubscribeUrl = `${appUrl}/unsubscribe?token=${unsubscribeToken}`;
+
     // Send welcome email via Resend
     const resendKey = Deno.env.get("RESEND_API_KEY");
     if (resendKey) {
@@ -51,6 +62,10 @@ serve(async (req: Request) => {
             <p>Thanks for joining the Vanto Zazi Mail list.</p>
             <p>Insights, tools, and clarity — designed to help you build without burnout.</p>
             <p>Stay tuned!</p>
+            <hr style="margin: 24px 0; border: none; border-top: 1px solid #eee;" />
+            <p style="font-size: 12px; color: #999;">
+              <a href="${unsubscribeUrl}" style="color: #999;">Unsubscribe</a>
+            </p>
           `,
         });
         console.log("Welcome email sent to:", email);

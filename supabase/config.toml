@@ -2,3 +2,6 @@ project_id = "wwuenmmocxtwwgylngui"
 
 [functions.save-prospect]
 verify_jwt = false
+
+[functions.send-broadcast]
+verify_jwt = false

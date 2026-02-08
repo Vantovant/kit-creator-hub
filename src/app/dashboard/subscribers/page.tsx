@@ -20,7 +20,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { ImportExportModal } from "@/components/dashboard/ImportExportModal";
-import { Search, Download, Upload, Users, Tag, X, Plus, Flame } from "lucide-react";
+import { Search, Download, Upload, Users, Tag, X, Plus, Flame, ChevronLeft, ChevronRight } from "lucide-react";
 
 interface Prospect {
   id: string;
@@ -38,12 +38,16 @@ interface TagItem {
   color: string;
 }
 
+const PAGE_SIZE = 25;
+
 export default function SubscribersPage() {
   const [prospects, setProspects] = useState<Prospect[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [importExportOpen, setImportExportOpen] = useState(false);
   const [importExportMode, setImportExportMode] = useState<"import" | "export">("import");
+  const [page, setPage] = useState(0);
+  const [totalCount, setTotalCount] = useState(0);
 
   // Tag management
   const [allTags, setAllTags] = useState<TagItem[]>([]);
@@ -51,15 +55,26 @@ export default function SubscribersPage() {
   const [tagDialogOpen, setTagDialogOpen] = useState(false);
   const [selectedProspect, setSelectedProspect] = useState<Prospect | null>(null);
 
-  const fetchProspects = async () => {
+  const fetchProspects = useCallback(async () => {
     setLoading(true);
-    const { data } = await supabase
+    const from = page * PAGE_SIZE;
+    const to = from + PAGE_SIZE - 1;
+
+    let query = supabase
       .from("prospects")
-      .select("*")
-      .order("created_at", { ascending: false });
+      .select("*", { count: "exact" })
+      .order("created_at", { ascending: false })
+      .range(from, to);
+
+    if (searchQuery.trim()) {
+      query = query.or(`first_name.ilike.%${searchQuery}%,email.ilike.%${searchQuery}%`);
+    }
+
+    const { data, count } = await query;
     setProspects(data || []);
+    setTotalCount(count || 0);
     setLoading(false);
-  };
+  }, [page, searchQuery]);
 
   const fetchTags = useCallback(async () => {
     const { data } = await supabase.from("tags").select("id, name, color");
@@ -80,9 +95,17 @@ export default function SubscribersPage() {
 
   useEffect(() => {
     fetchProspects();
+  }, [fetchProspects]);
+
+  useEffect(() => {
     fetchTags();
     fetchProspectTags();
   }, [fetchTags, fetchProspectTags]);
+
+  // Reset page when search changes
+  useEffect(() => {
+    setPage(0);
+  }, [searchQuery]);
 
   const addTagToProspect = async (prospectId: string, tagId: string) => {
     await supabase.from("prospect_tags").insert({ prospect_id: prospectId, tag_id: tagId });
@@ -104,12 +127,6 @@ export default function SubscribersPage() {
     return allTags.filter((t) => !tagIds.includes(t.id));
   };
 
-  const filtered = prospects.filter(
-    (p) =>
-      (p.first_name || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.email.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
   const formatDate = (d: string) =>
     new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 
@@ -120,6 +137,8 @@ export default function SubscribersPage() {
     if (score <= -3) return { label: "Cold", color: "text-muted-foreground", bg: "bg-muted" };
     return { label: "New", color: "text-muted-foreground", bg: "bg-muted" };
   };
+
+  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
 
   return (
     <div className="min-h-screen">
@@ -134,7 +153,7 @@ export default function SubscribersPage() {
           <Card>
             <CardContent className="p-4">
               <p className="text-2xl font-bold text-foreground">
-                {loading ? "…" : prospects.length.toLocaleString()}
+                {loading ? "…" : totalCount.toLocaleString()}
               </p>
               <p className="text-sm text-muted-foreground">Total Subscribers</p>
             </CardContent>
@@ -142,7 +161,7 @@ export default function SubscribersPage() {
           <Card>
             <CardContent className="p-4">
               <p className="text-2xl font-bold text-primary">
-                {loading ? "…" : prospects.length.toLocaleString()}
+                {loading ? "…" : totalCount.toLocaleString()}
               </p>
               <p className="text-sm text-muted-foreground">Active</p>
             </CardContent>
@@ -181,104 +200,128 @@ export default function SubscribersPage() {
           </div>
         </div>
 
-        {/* Table or empty state */}
+        {/* Table */}
         <Card>
           <CardContent className="p-0">
             {loading ? (
               <p className="text-center text-muted-foreground py-12">Loading…</p>
-            ) : filtered.length === 0 ? (
+            ) : prospects.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 text-center">
                 <Users className="w-12 h-12 text-muted-foreground/40 mb-4" />
                 <h3 className="font-semibold text-foreground mb-2">
                   {searchQuery ? "No results found" : "No subscribers yet"}
                 </h3>
                 <p className="text-muted-foreground">
-                  {searchQuery
-                    ? "Try adjusting your search."
-                    : "Share your welcome form to start growing your list."}
+                  {searchQuery ? "Try adjusting your search." : "Share your welcome form to start growing your list."}
                 </p>
               </div>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Subscriber</TableHead>
-                    <TableHead>Engagement</TableHead>
-                    <TableHead>Tags</TableHead>
-                    <TableHead>Source</TableHead>
-                    <TableHead>Subscribed</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filtered.map((p) => (
-                    <TableRow key={p.id}>
-                      <TableCell>
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary font-medium text-sm">
-                            {p.first_name ? p.first_name[0].toUpperCase() : p.email[0].toUpperCase()}
-                          </div>
-                          <div>
-                            <p className="font-medium text-foreground">
-                              {p.first_name || "—"}
-                            </p>
-                            <p className="text-sm text-muted-foreground">{p.email}</p>
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        {(() => {
-                          const eng = getEngagementLabel(p.engagement_score);
-                          return (
-                            <div className="flex items-center gap-1.5">
-                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${eng.bg} ${eng.color}`}>
-                                <Flame className="w-3 h-3" />
-                                {eng.label}
-                              </span>
-                              <span className="text-xs text-muted-foreground">{p.engagement_score}</span>
-                            </div>
-                          );
-                        })()}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1 flex-wrap">
-                          {getTagsForProspect(p.id).map((tag) => (
-                            <Badge
-                              key={tag.id}
-                              variant="secondary"
-                              className="text-xs gap-1 pr-1"
-                              style={{ backgroundColor: `${tag.color}20`, color: tag.color }}
-                            >
-                              {tag.name}
-                              <button
-                                type="button"
-                                onClick={(e) => { e.stopPropagation(); removeTagFromProspect(p.id, tag.id); }}
-                                className="ml-0.5 hover:opacity-70"
-                              >
-                                <X className="w-3 h-3" />
-                              </button>
-                            </Badge>
-                          ))}
-                          <button
-                            type="button"
-                            onClick={() => { setSelectedProspect(p); setTagDialogOpen(true); }}
-                            className="w-6 h-6 rounded-full border border-dashed border-muted-foreground/40 flex items-center justify-center hover:border-primary hover:text-primary transition-colors"
-                          >
-                            <Plus className="w-3 h-3" />
-                          </button>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="text-xs">
-                          {p.source || "unknown"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {formatDate(p.created_at)}
-                      </TableCell>
+              <>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Subscriber</TableHead>
+                      <TableHead>Engagement</TableHead>
+                      <TableHead>Tags</TableHead>
+                      <TableHead>Source</TableHead>
+                      <TableHead>Subscribed</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {prospects.map((p) => (
+                      <TableRow key={p.id}>
+                        <TableCell>
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary font-medium text-sm">
+                              {p.first_name ? p.first_name[0].toUpperCase() : p.email[0].toUpperCase()}
+                            </div>
+                            <div>
+                              <p className="font-medium text-foreground">{p.first_name || "—"}</p>
+                              <p className="text-sm text-muted-foreground">{p.email}</p>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          {(() => {
+                            const eng = getEngagementLabel(p.engagement_score);
+                            return (
+                              <div className="flex items-center gap-1.5">
+                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${eng.bg} ${eng.color}`}>
+                                  <Flame className="w-3 h-3" />
+                                  {eng.label}
+                                </span>
+                                <span className="text-xs text-muted-foreground">{p.engagement_score}</span>
+                              </div>
+                            );
+                          })()}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1 flex-wrap">
+                            {getTagsForProspect(p.id).map((tag) => (
+                              <Badge
+                                key={tag.id}
+                                variant="secondary"
+                                className="text-xs gap-1 pr-1"
+                                style={{ backgroundColor: `${tag.color}20`, color: tag.color }}
+                              >
+                                {tag.name}
+                                <button
+                                  type="button"
+                                  onClick={(e) => { e.stopPropagation(); removeTagFromProspect(p.id, tag.id); }}
+                                  className="ml-0.5 hover:opacity-70"
+                                >
+                                  <X className="w-3 h-3" />
+                                </button>
+                              </Badge>
+                            ))}
+                            <button
+                              type="button"
+                              onClick={() => { setSelectedProspect(p); setTagDialogOpen(true); }}
+                              className="w-6 h-6 rounded-full border border-dashed border-muted-foreground/40 flex items-center justify-center hover:border-primary hover:text-primary transition-colors"
+                            >
+                              <Plus className="w-3 h-3" />
+                            </button>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="text-xs">{p.source || "unknown"}</Badge>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">{formatDate(p.created_at)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+
+                {/* Pagination */}
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-between px-4 py-3 border-t border-border">
+                    <p className="text-sm text-muted-foreground">
+                      Showing {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, totalCount)} of {totalCount}
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setPage((p) => Math.max(0, p - 1))}
+                        disabled={page === 0}
+                        className="p-2 rounded-lg border border-border hover:bg-muted transition-colors disabled:opacity-30"
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                      </button>
+                      <span className="text-sm text-muted-foreground">
+                        Page {page + 1} of {totalPages}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                        disabled={page >= totalPages - 1}
+                        className="p-2 rounded-lg border border-border hover:bg-muted transition-colors disabled:opacity-30"
+                      >
+                        <ChevronRight className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </CardContent>
         </Card>
@@ -303,7 +346,6 @@ export default function SubscribersPage() {
             </DialogHeader>
             {selectedProspect && (
               <div className="space-y-4">
-                {/* Current tags */}
                 {getTagsForProspect(selectedProspect.id).length > 0 && (
                   <div>
                     <p className="text-sm font-medium text-muted-foreground mb-2">Current tags</p>
@@ -328,7 +370,6 @@ export default function SubscribersPage() {
                     </div>
                   </div>
                 )}
-                {/* Available tags */}
                 {getAvailableTags(selectedProspect.id).length > 0 ? (
                   <div>
                     <p className="text-sm font-medium text-muted-foreground mb-2">Add a tag</p>

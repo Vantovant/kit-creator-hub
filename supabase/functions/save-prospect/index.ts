@@ -114,6 +114,20 @@ serve(async (req: Request) => {
       }
     }
 
+    // Trigger 'subscribe' automations
+    try {
+      await fetch(`${supabaseUrl}/functions/v1/execute-automation`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          trigger_type: "subscribe",
+          trigger_data: { email: trimmedEmail, first_name: sanitizedName },
+        }),
+      });
+    } catch (triggerErr) {
+      console.error("Automation trigger error (non-fatal):", triggerErr);
+    }
+
     return new Response(JSON.stringify({ success: true }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },

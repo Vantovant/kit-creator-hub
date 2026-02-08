@@ -14,6 +14,65 @@ export type Database = {
   }
   public: {
     Tables: {
+      ab_tests: {
+        Row: {
+          broadcast_id: string | null
+          completed_at: string | null
+          created_at: string
+          duration_hours: number
+          id: string
+          results: Json | null
+          started_at: string | null
+          status: string
+          test_size_percent: number
+          updated_at: string
+          user_id: string
+          variants: Json
+          winner_variant: string | null
+          winning_metric: string
+        }
+        Insert: {
+          broadcast_id?: string | null
+          completed_at?: string | null
+          created_at?: string
+          duration_hours?: number
+          id?: string
+          results?: Json | null
+          started_at?: string | null
+          status?: string
+          test_size_percent?: number
+          updated_at?: string
+          user_id: string
+          variants?: Json
+          winner_variant?: string | null
+          winning_metric?: string
+        }
+        Update: {
+          broadcast_id?: string | null
+          completed_at?: string | null
+          created_at?: string
+          duration_hours?: number
+          id?: string
+          results?: Json | null
+          started_at?: string | null
+          status?: string
+          test_size_percent?: number
+          updated_at?: string
+          user_id?: string
+          variants?: Json
+          winner_variant?: string | null
+          winning_metric?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ab_tests_broadcast_id_fkey"
+            columns: ["broadcast_id"]
+            isOneToOne: false
+            referencedRelation: "broadcasts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       automations: {
         Row: {
           created_at: string
@@ -141,6 +200,48 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      email_templates: {
+        Row: {
+          category: string
+          content: string
+          created_at: string
+          description: string | null
+          id: string
+          is_premium: boolean
+          name: string
+          preview_gradient: string | null
+          subject: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          category?: string
+          content?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_premium?: boolean
+          name: string
+          preview_gradient?: string | null
+          subject?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          category?: string
+          content?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_premium?: boolean
+          name?: string
+          preview_gradient?: string | null
+          subject?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       profiles: {
         Row: {
@@ -312,6 +413,26 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_segment_prospects: {
+        Args: { segment_filters: Json }
+        Returns: {
+          created_at: string
+          email: string
+          engagement_score: number
+          first_name: string | null
+          id: string
+          last_activity_at: string | null
+          source: string | null
+          unsubscribe_token: string | null
+          unsubscribed: boolean
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "prospects"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

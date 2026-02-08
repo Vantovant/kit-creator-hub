@@ -89,6 +89,42 @@ export type Database = {
         }
         Relationships: []
       }
+      prospect_tags: {
+        Row: {
+          created_at: string
+          id: string
+          prospect_id: string
+          tag_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          prospect_id: string
+          tag_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          prospect_id?: string
+          tag_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "prospect_tags_prospect_id_fkey"
+            columns: ["prospect_id"]
+            isOneToOne: false
+            referencedRelation: "prospects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "prospect_tags_tag_id_fkey"
+            columns: ["tag_id"]
+            isOneToOne: false
+            referencedRelation: "tags"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       prospects: {
         Row: {
           created_at: string
@@ -116,6 +152,60 @@ export type Database = {
           source?: string | null
           unsubscribe_token?: string | null
           unsubscribed?: boolean
+        }
+        Relationships: []
+      }
+      segments: {
+        Row: {
+          created_at: string
+          description: string | null
+          filters: Json
+          id: string
+          name: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          filters?: Json
+          id?: string
+          name: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          filters?: Json
+          id?: string
+          name?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      tags: {
+        Row: {
+          color: string
+          created_at: string
+          id: string
+          name: string
+          user_id: string
+        }
+        Insert: {
+          color?: string
+          created_at?: string
+          id?: string
+          name: string
+          user_id: string
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          id?: string
+          name?: string
+          user_id?: string
         }
         Relationships: []
       }

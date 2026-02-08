@@ -14,6 +14,60 @@ export type Database = {
   }
   public: {
     Tables: {
+      broadcasts: {
+        Row: {
+          content: string
+          created_at: string
+          from_name: string
+          id: string
+          preview_text: string | null
+          reply_to: string
+          scheduled_at: string | null
+          sent_at: string | null
+          status: string
+          subject: string
+          total_failed: number | null
+          total_recipients: number | null
+          total_sent: number | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          content?: string
+          created_at?: string
+          from_name?: string
+          id?: string
+          preview_text?: string | null
+          reply_to?: string
+          scheduled_at?: string | null
+          sent_at?: string | null
+          status?: string
+          subject: string
+          total_failed?: number | null
+          total_recipients?: number | null
+          total_sent?: number | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          from_name?: string
+          id?: string
+          preview_text?: string | null
+          reply_to?: string
+          scheduled_at?: string | null
+          sent_at?: string | null
+          status?: string
+          subject?: string
+          total_failed?: number | null
+          total_recipients?: number | null
+          total_sent?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string

@@ -1,1 +1,4 @@
 project_id = "wwuenmmocxtwwgylngui"
+
+[functions.save-prospect]
+verify_jwt = false

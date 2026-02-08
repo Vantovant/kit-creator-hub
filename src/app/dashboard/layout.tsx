@@ -1,24 +1,28 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { Outlet } from "react-router-dom";
 import { Sidebar } from "@/components/dashboard/Sidebar";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { SidebarProvider } from "@/components/dashboard/SidebarContext";
 
 export default function DashboardLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const toggleSidebar = useCallback(() => setSidebarOpen(true), []);
 
   return (
-    <div className="min-h-screen bg-muted/30">
-      <div className="hidden lg:block">
-        <Sidebar />
-      </div>
-      <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
-        <SheetContent side="left" className="p-0 w-64">
+    <SidebarProvider value={toggleSidebar}>
+      <div className="min-h-screen bg-muted/30">
+        <div className="hidden lg:block">
           <Sidebar />
-        </SheetContent>
-      </Sheet>
-      <div className="lg:pl-64">
-        <Outlet />
+        </div>
+        <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
+          <SheetContent side="left" className="p-0 w-64">
+            <Sidebar onNavigate={() => setSidebarOpen(false)} />
+          </SheetContent>
+        </Sheet>
+        <div className="lg:pl-64">
+          <Outlet />
+        </div>
       </div>
-    </div>
+    </SidebarProvider>
   );
 }

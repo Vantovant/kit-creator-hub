@@ -1,14 +1,15 @@
 import { useState, useEffect } from "react";
 import { Bell, Search, Menu, Moon, Sun } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { useSidebarToggle } from "@/components/dashboard/SidebarContext";
 
 interface DashboardHeaderProps {
   title: string;
   subtitle?: string;
-  onMenuClick?: () => void;
 }
 
-export function DashboardHeader({ title, subtitle, onMenuClick }: DashboardHeaderProps) {
+export function DashboardHeader({ title, subtitle }: DashboardHeaderProps) {
+  const toggleSidebar = useSidebarToggle();
   const [theme, setTheme] = useState<"light" | "dark">("light");
 
   useEffect(() => {
@@ -33,7 +34,7 @@ export function DashboardHeader({ title, subtitle, onMenuClick }: DashboardHeade
         <div className="flex items-center gap-4">
           <button
             type="button"
-            onClick={onMenuClick}
+            onClick={toggleSidebar ?? undefined}
             className="lg:hidden p-2 -ml-2 text-muted-foreground hover:text-foreground"
           >
             <Menu className="w-5 h-5" />

@@ -14,16 +14,19 @@ export default function UnsubscribePage() {
     if (!token) return;
 
     async function unsubscribe() {
-      const { error } = await supabase
-        .from("prospects")
-        .update({ unsubscribed: true })
-        .eq("unsubscribe_token", token!);
-
-      if (error) {
-        console.error("Unsubscribe error:", error);
+      try {
+        const res = await supabase.functions.invoke("unsubscribe", {
+          body: { token },
+        });
+        if (res.error) {
+          console.error("Unsubscribe error:", res.error);
+          setStatus("error");
+        } else {
+          setStatus("success");
+        }
+      } catch (err) {
+        console.error("Unsubscribe error:", err);
         setStatus("error");
-      } else {
-        setStatus("success");
       }
     }
 

@@ -1,0 +1,1 @@
+DROP POLICY IF EXISTS "Anyone can unsubscribe via token" ON public.prospects;

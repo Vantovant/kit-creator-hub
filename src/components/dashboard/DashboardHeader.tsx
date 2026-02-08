@@ -70,7 +70,6 @@ export function DashboardHeader({ title, subtitle }: DashboardHeaderProps) {
                 className="relative p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors"
               >
                 <Bell className="w-5 h-5" />
-                <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-destructive rounded-full" />
               </button>
             </Popover.Trigger>
             <Popover.Portal>

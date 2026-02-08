@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
-import { Bell, Search, Menu, Moon, Sun } from "lucide-react";
+import { Bell, Search, Menu, Moon, Sun, UserPlus, Mail, AlertCircle } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useSidebarToggle } from "@/components/dashboard/SidebarContext";
+import * as Popover from "@radix-ui/react-popover";
 
 interface DashboardHeaderProps {
   title: string;
@@ -61,13 +62,34 @@ export function DashboardHeader({ title, subtitle }: DashboardHeaderProps) {
           >
             {theme === "dark" ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
           </button>
-          <button
-            type="button"
-            className="relative p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors"
-          >
-            <Bell className="w-5 h-5" />
-            <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-destructive rounded-full" />
-          </button>
+
+          <Popover.Root>
+            <Popover.Trigger asChild>
+              <button
+                type="button"
+                className="relative p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors"
+              >
+                <Bell className="w-5 h-5" />
+                <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-destructive rounded-full" />
+              </button>
+            </Popover.Trigger>
+            <Popover.Portal>
+              <Popover.Content
+                align="end"
+                sideOffset={8}
+                className="z-50 w-80 rounded-lg border border-border bg-card text-card-foreground shadow-lg animate-in fade-in-0 zoom-in-95"
+              >
+                <div className="px-4 py-3 border-b border-border">
+                  <h3 className="text-sm font-semibold font-sans">Notifications</h3>
+                </div>
+                <div className="py-6 flex flex-col items-center text-center gap-2">
+                  <Bell className="w-8 h-8 text-muted-foreground/40" />
+                  <p className="text-sm text-muted-foreground">No new notifications</p>
+                  <p className="text-xs text-muted-foreground/60">You're all caught up!</p>
+                </div>
+              </Popover.Content>
+            </Popover.Portal>
+          </Popover.Root>
         </div>
       </div>
     </header>

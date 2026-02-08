@@ -207,11 +207,14 @@ export default function SegmentsPage() {
               {loading ? (
                 <Card><CardContent className="p-12 text-center text-muted-foreground">Loading…</CardContent></Card>
               ) : segments.length === 0 ? (
-                <Card>
+                <Card className="cursor-pointer hover:border-primary/50 transition-colors" onClick={openNewSegment}>
                   <CardContent className="p-12 text-center">
-                    <Filter className="w-12 h-12 text-muted-foreground/40 mx-auto mb-4" />
+                    <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
+                      <Plus className="w-6 h-6 text-primary" />
+                    </div>
                     <h3 className="font-semibold text-foreground mb-2">No segments yet</h3>
-                    <p className="text-muted-foreground">Create segments to target specific groups of subscribers.</p>
+                    <p className="text-muted-foreground mb-4">Create segments to target specific groups of subscribers.</p>
+                    <span className="text-sm font-medium text-primary">+ Create your first segment</span>
                   </CardContent>
                 </Card>
               ) : (
@@ -248,11 +251,14 @@ export default function SegmentsPage() {
               {loading ? (
                 <Card><CardContent className="p-12 text-center text-muted-foreground">Loading…</CardContent></Card>
               ) : tags.length === 0 ? (
-                <Card>
+                <Card className="cursor-pointer hover:border-primary/50 transition-colors" onClick={openNewTag}>
                   <CardContent className="p-12 text-center">
-                    <Tag className="w-12 h-12 text-muted-foreground/40 mx-auto mb-4" />
+                    <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
+                      <Plus className="w-6 h-6 text-primary" />
+                    </div>
                     <h3 className="font-semibold text-foreground mb-2">No tags yet</h3>
-                    <p className="text-muted-foreground">Create tags to organize and categorize your subscribers.</p>
+                    <p className="text-muted-foreground mb-4">Create tags to organize and categorize your subscribers.</p>
+                    <span className="text-sm font-medium text-primary">+ Create your first tag</span>
                   </CardContent>
                 </Card>
               ) : (

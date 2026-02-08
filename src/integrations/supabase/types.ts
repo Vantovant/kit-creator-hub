@@ -14,6 +14,27 @@ export type Database = {
   }
   public: {
     Tables: {
+      profiles: {
+        Row: {
+          created_at: string
+          display_name: string | null
+          id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       prospects: {
         Row: {
           created_at: string
@@ -21,6 +42,8 @@ export type Database = {
           first_name: string | null
           id: string
           source: string | null
+          unsubscribe_token: string | null
+          unsubscribed: boolean
         }
         Insert: {
           created_at?: string
@@ -28,6 +51,8 @@ export type Database = {
           first_name?: string | null
           id?: string
           source?: string | null
+          unsubscribe_token?: string | null
+          unsubscribed?: boolean
         }
         Update: {
           created_at?: string
@@ -35,6 +60,8 @@ export type Database = {
           first_name?: string | null
           id?: string
           source?: string | null
+          unsubscribe_token?: string | null
+          unsubscribed?: boolean
         }
         Relationships: []
       }

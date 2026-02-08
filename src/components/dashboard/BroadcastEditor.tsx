@@ -1,4 +1,5 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
+import DOMPurify from "dompurify";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -265,7 +266,13 @@ export function BroadcastEditor({ initialData, editId, onSaved }: BroadcastEdito
               <div
                 className="prose dark:prose-invert max-w-none"
                 dangerouslySetInnerHTML={{
-                  __html: content.value || "<p class='text-muted-foreground'>No content yet</p>",
+                  __html: DOMPurify.sanitize(
+                    content.value || "<p class='text-muted-foreground'>No content yet</p>",
+                    {
+                      ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'u', 'h1', 'h2', 'h3', 'h4', 'ul', 'ol', 'li', 'a', 'img', 'hr', 'span', 'div', 'table', 'tr', 'td', 'th', 'thead', 'tbody'],
+                      ALLOWED_ATTR: ['href', 'src', 'alt', 'class', 'style', 'target', 'width', 'height'],
+                    }
+                  ),
                 }}
               />
               <hr className="my-4 border-border" />

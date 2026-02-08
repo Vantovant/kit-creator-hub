@@ -35,7 +35,7 @@ export function Sidebar() {
   const pathname = location.pathname;
 
   return (
-    <aside className="fixed left-0 top-0 z-40 h-screen w-64 bg-sidebar-background text-sidebar-foreground flex flex-col">
+    <aside className="fixed left-0 top-0 z-40 h-screen w-64 bg-sidebar text-sidebar-foreground flex flex-col">
       <div className="flex items-center justify-between p-4 border-b border-sidebar-border">
         <Link to="/dashboard" className="flex items-center gap-2">
           <span className="text-2xl font-bold tracking-tight">Vanto Zazi</span>
@@ -63,7 +63,7 @@ export function Sidebar() {
                 "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
                 isActive
                   ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                  : "text-sidebar-accent-foreground/70 hover:text-sidebar-accent-foreground hover:bg-sidebar-accent/50"
+                  : "opacity-70 hover:opacity-100 hover:bg-sidebar-accent/50"
               )}
             >
               <item.icon className="w-5 h-5" />
@@ -78,7 +78,7 @@ export function Sidebar() {
           <Link
             key={item.name}
             to={item.href}
-            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent/50 transition-colors"
+            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium opacity-70 hover:opacity-100 hover:bg-sidebar-accent/50 transition-colors"
           >
             <item.icon className="w-5 h-5" />
             {item.name}

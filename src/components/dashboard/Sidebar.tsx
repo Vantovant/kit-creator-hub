@@ -13,6 +13,7 @@ import {
   LogOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import logo from "@/assets/logo.jpg";
 import { useAuth } from "@/hooks/useAuth";
 
 const navigation = [
@@ -47,6 +48,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
     <aside className="fixed left-0 top-0 z-40 h-screen w-64 bg-sidebar text-sidebar-foreground flex flex-col">
       <div className="flex items-center justify-between p-4 border-b border-sidebar-border">
         <Link to="/dashboard" className="flex items-center gap-2">
+          <img src={logo} alt="Vanto Zazi Mail" className="w-8 h-8 rounded-lg object-cover" />
           <span className="text-2xl font-bold tracking-tight">Vanto Zazi</span>
         </Link>
       </div>

@@ -20,7 +20,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { ImportExportModal } from "@/components/dashboard/ImportExportModal";
-import { Search, Download, Upload, Users, Tag, X, Plus } from "lucide-react";
+import { Search, Download, Upload, Users, Tag, X, Plus, Flame } from "lucide-react";
 
 interface Prospect {
   id: string;
@@ -28,6 +28,8 @@ interface Prospect {
   first_name: string | null;
   created_at: string;
   source: string | null;
+  engagement_score: number;
+  last_activity_at: string | null;
 }
 
 interface TagItem {
@@ -111,6 +113,14 @@ export default function SubscribersPage() {
   const formatDate = (d: string) =>
     new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 
+  const getEngagementLabel = (score: number) => {
+    if (score >= 10) return { label: "Hot", color: "text-red-500", bg: "bg-red-500/10" };
+    if (score >= 5) return { label: "Warm", color: "text-amber-500", bg: "bg-amber-500/10" };
+    if (score >= 1) return { label: "Cool", color: "text-blue-500", bg: "bg-blue-500/10" };
+    if (score <= -3) return { label: "Cold", color: "text-muted-foreground", bg: "bg-muted" };
+    return { label: "New", color: "text-muted-foreground", bg: "bg-muted" };
+  };
+
   return (
     <div className="min-h-screen">
       <DashboardHeader
@@ -193,6 +203,7 @@ export default function SubscribersPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Subscriber</TableHead>
+                    <TableHead>Engagement</TableHead>
                     <TableHead>Tags</TableHead>
                     <TableHead>Source</TableHead>
                     <TableHead>Subscribed</TableHead>
@@ -213,6 +224,20 @@ export default function SubscribersPage() {
                             <p className="text-sm text-muted-foreground">{p.email}</p>
                           </div>
                         </div>
+                      </TableCell>
+                      <TableCell>
+                        {(() => {
+                          const eng = getEngagementLabel(p.engagement_score);
+                          return (
+                            <div className="flex items-center gap-1.5">
+                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${eng.bg} ${eng.color}`}>
+                                <Flame className="w-3 h-3" />
+                                {eng.label}
+                              </span>
+                              <span className="text-xs text-muted-foreground">{p.engagement_score}</span>
+                            </div>
+                          );
+                        })()}
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1 flex-wrap">

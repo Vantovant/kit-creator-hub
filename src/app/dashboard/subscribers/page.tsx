@@ -30,15 +30,17 @@ export default function SubscribersPage() {
   const [importExportOpen, setImportExportOpen] = useState(false);
   const [importExportMode, setImportExportMode] = useState<"import" | "export">("import");
 
+  const fetchProspects = async () => {
+    setLoading(true);
+    const { data } = await supabase
+      .from("prospects")
+      .select("*")
+      .order("created_at", { ascending: false });
+    setProspects(data || []);
+    setLoading(false);
+  };
+
   useEffect(() => {
-    async function fetchProspects() {
-      const { data } = await supabase
-        .from("prospects")
-        .select("*")
-        .order("created_at", { ascending: false });
-      setProspects(data || []);
-      setLoading(false);
-    }
     fetchProspects();
   }, []);
 
@@ -172,6 +174,7 @@ export default function SubscribersPage() {
         <ImportExportModal
           isOpen={importExportOpen}
           onClose={() => setImportExportOpen(false)}
+          onImportComplete={fetchProspects}
           mode={importExportMode}
         />
       </main>

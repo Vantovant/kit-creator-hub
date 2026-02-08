@@ -7,8 +7,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Upload,
@@ -18,10 +16,13 @@ import {
   AlertCircle,
   X,
 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { parseCsv } from "@/lib/csv-parser";
 
 interface ImportExportModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onImportComplete?: () => void;
   mode: "import" | "export";
 }
 
@@ -31,11 +32,12 @@ const sampleSubscribers = [
   { email: "carol@example.com", name: "Carol Williams", tags: "Premium,Course" },
 ];
 
-export function ImportExportModal({ isOpen, onClose, mode }: ImportExportModalProps) {
+export function ImportExportModal({ isOpen, onClose, onImportComplete, mode }: ImportExportModalProps) {
   const [activeTab, setActiveTab] = useState(mode);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importStatus, setImportStatus] = useState<"idle" | "processing" | "success" | "error">("idle");
   const [importResults, setImportResults] = useState({ total: 0, added: 0, skipped: 0 });
+  const [importErrors, setImportErrors] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -43,19 +45,66 @@ export function ImportExportModal({ isOpen, onClose, mode }: ImportExportModalPr
     if (file) {
       setImportFile(file);
       setImportStatus("idle");
+      setImportErrors([]);
     }
   };
 
-  const handleImport = () => {
+  const handleImport = async () => {
     if (!importFile) return;
 
     setImportStatus("processing");
+    setImportErrors([]);
 
-    // Simulate import process
-    setTimeout(() => {
+    try {
+      const text = await importFile.text();
+      const { subscribers, errors } = parseCsv(text);
+
+      if (subscribers.length === 0) {
+        setImportStatus("error");
+        setImportErrors(errors.length ? errors : ["No valid subscribers found in file."]);
+        return;
+      }
+
+      // Insert in batches of 100
+      let added = 0;
+      let skipped = 0;
+      const batchSize = 100;
+
+      for (let i = 0; i < subscribers.length; i += batchSize) {
+        const batch = subscribers.slice(i, i + batchSize);
+        const { data, error } = await supabase
+          .from("prospects")
+          .upsert(
+            batch.map((s) => ({
+              email: s.email,
+              first_name: s.first_name || null,
+              source: s.source || "csv_import",
+            })),
+            { onConflict: "email", ignoreDuplicates: true }
+          )
+          .select("id");
+
+        if (error) {
+          console.error("Import batch error:", error);
+          skipped += batch.length;
+        } else {
+          added += data?.length || 0;
+          skipped += batch.length - (data?.length || 0);
+        }
+      }
+
+      if (errors.length > 0) {
+        setImportErrors(errors.slice(0, 10));
+      }
+
+      setImportResults({ total: subscribers.length + errors.length, added, skipped: skipped + errors.length });
       setImportStatus("success");
-      setImportResults({ total: 150, added: 142, skipped: 8 });
-    }, 2000);
+      onImportComplete?.();
+    } catch (err) {
+      console.error("Import error:", err);
+      setImportStatus("error");
+      setImportErrors(["Failed to process the file. Please check the format and try again."]);
+    }
   };
 
   const handleExport = (format: "csv" | "json") => {
@@ -122,11 +171,28 @@ export function ImportExportModal({ isOpen, onClose, mode }: ImportExportModalPr
           </TabsList>
 
           <TabsContent value="import" className="space-y-4 mt-4">
-            {importStatus === "success" ? (
+          {importStatus === "error" ? (
+              <div className="text-center py-8">
+                <AlertCircle className="w-12 h-12 text-destructive mx-auto mb-4" />
+                <h3 className="text-lg font-semibold mb-2">Import Failed</h3>
+                <div className="text-sm text-muted-foreground space-y-1 mb-4 max-h-32 overflow-y-auto">
+                  {importErrors.map((err, i) => (
+                    <p key={i}>{err}</p>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { setImportStatus("idle"); setImportErrors([]); }}
+                  className="px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground font-medium rounded-lg"
+                >
+                  Try Again
+                </button>
+              </div>
+            ) : importStatus === "success" ? (
               <div className="text-center py-8">
                 <CheckCircle2 className="w-12 h-12 text-green-500 mx-auto mb-4" />
                 <h3 className="text-lg font-semibold mb-2">Import Complete!</h3>
-                <p className="text-gray-500 mb-4">
+                <p className="text-muted-foreground mb-4">
                   Successfully imported {importResults.added} of {importResults.total} subscribers.
                 </p>
                 <div className="flex justify-center gap-4 text-sm">
@@ -137,13 +203,21 @@ export function ImportExportModal({ isOpen, onClose, mode }: ImportExportModalPr
                     {importResults.skipped} skipped (duplicates)
                   </span>
                 </div>
+                {importErrors.length > 0 && (
+                  <div className="mt-3 text-xs text-muted-foreground max-h-24 overflow-y-auto">
+                    {importErrors.map((err, i) => (
+                      <p key={i}>{err}</p>
+                    ))}
+                  </div>
+                )}
                 <button
                   type="button"
                   onClick={() => {
                     setImportStatus("idle");
                     setImportFile(null);
+                    setImportErrors([]);
                   }}
-                  className="mt-6 px-4 py-2 bg-[#5CC5DE] hover:bg-[#4AB5CE] text-black font-medium rounded-lg"
+                  className="mt-6 px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground font-medium rounded-lg"
                 >
                   Import More
                 </button>

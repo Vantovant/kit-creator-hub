@@ -121,6 +121,7 @@ export type Database = {
           preview_text: string | null
           reply_to: string
           scheduled_at: string | null
+          segment_id: string | null
           sent_at: string | null
           status: string
           subject: string
@@ -138,6 +139,7 @@ export type Database = {
           preview_text?: string | null
           reply_to?: string
           scheduled_at?: string | null
+          segment_id?: string | null
           sent_at?: string | null
           status?: string
           subject: string
@@ -155,6 +157,7 @@ export type Database = {
           preview_text?: string | null
           reply_to?: string
           scheduled_at?: string | null
+          segment_id?: string | null
           sent_at?: string | null
           status?: string
           subject?: string
@@ -164,7 +167,15 @@ export type Database = {
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "broadcasts_segment_id_fkey"
+            columns: ["segment_id"]
+            isOneToOne: false
+            referencedRelation: "segments"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       email_events: {
         Row: {

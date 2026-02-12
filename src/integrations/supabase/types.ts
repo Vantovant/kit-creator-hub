@@ -256,22 +256,31 @@ export type Database = {
       }
       profiles: {
         Row: {
+          company: string | null
           created_at: string
           display_name: string | null
           id: string
+          timezone: string | null
           user_id: string
+          website: string | null
         }
         Insert: {
+          company?: string | null
           created_at?: string
           display_name?: string | null
           id?: string
+          timezone?: string | null
           user_id: string
+          website?: string | null
         }
         Update: {
+          company?: string | null
           created_at?: string
           display_name?: string | null
           id?: string
+          timezone?: string | null
           user_id?: string
+          website?: string | null
         }
         Relationships: []
       }

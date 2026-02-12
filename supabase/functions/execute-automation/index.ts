@@ -10,30 +10,35 @@ const corsHeaders = {
 
 const APP_URL = "https://kit-clone-dashboard.lovable.app";
 
-async function executeStep(
-  step: any,
-  email: string,
-  firstName: string,
-  resend: any | null,
-  adminClient: any
-) {
-  if (step.type === "send_email" && resend) {
-    const { data: prospect } = await adminClient
-      .from("prospects")
-      .select("unsubscribe_token, unsubscribed")
-      .eq("email", email)
-      .maybeSingle();
+// Retry helper with exponential backoff for 429 errors
+async function sendWithRetry(
+  resend: any,
+  emailPayload: any,
+  maxRetries = 3
+): Promise<void> {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      await resend.emails.send(emailPayload);
+      return;
+    } catch (e: any) {
+      const is429 = e?.statusCode === 429 || e?.message?.includes("429");
+      if (is429 && attempt < maxRetries) {
+        const delay = Math.pow(2, attempt + 1) * 1000; // 2s, 4s, 8s
+        console.log(`Rate limited (429), retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
+        await new Promise((r) => setTimeout(r, delay));
+      } else {
+        throw e;
+      }
+    }
+  }
+}
 
-    // Skip if unsubscribed
-    if (prospect?.unsubscribed) return;
+// Small delay between sends to avoid bursts
+function throttle(ms = 500): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
 
-    const unsubUrl = `${APP_URL}/unsubscribe?token=${prospect?.unsubscribe_token || ""}`;
-    const personalizedContent = (step.content || "")
-      .replace(/\{\{first_name\}\}/g, firstName);
-    const personalizedSubject = (step.subject || "")
-      .replace(/\{\{first_name\}\}/g, firstName);
-
-    const signature = `
+const EMAIL_SIGNATURE = `
 <table cellpadding="0" cellspacing="0" border="0" style="font-family: Arial, Helvetica, sans-serif; max-width: 540px; margin-top: 24px; border-top: 2px solid #1a3a8a; padding-top: 16px;">
   <tr>
     <td style="vertical-align: top; padding-right: 16px;">
@@ -51,17 +56,35 @@ async function executeStep(
   </tr>
 </table>`;
 
-    try {
-      await resend.emails.send({
-        from: `${step.from_name || "Vanto Zazi"} <vanto@onlinecourseformlm.com>`,
-        to: [email],
-        subject: personalizedSubject,
-        html: `${personalizedContent}${signature}<p style="font-size: 11px; color: #999; margin-top: 16px;">You're receiving this email because you registered in APLGO.<br/><a href="${unsubUrl}" style="color:#999; text-decoration: underline;">Unsubscribe</a></p>`,
-      });
-      console.log(`Automation email sent to ${email}: ${personalizedSubject}`);
-    } catch (e) {
-      console.error(`Automation email failed for ${email}:`, e);
-    }
+async function executeStep(
+  step: any,
+  email: string,
+  firstName: string,
+  resend: any | null,
+  adminClient: any
+) {
+  if (step.type === "send_email" && resend) {
+    const { data: prospect } = await adminClient
+      .from("prospects")
+      .select("unsubscribe_token, unsubscribed")
+      .eq("email", email)
+      .maybeSingle();
+
+    if (prospect?.unsubscribed) return;
+
+    const unsubUrl = `${APP_URL}/unsubscribe?token=${prospect?.unsubscribe_token || ""}`;
+    const personalizedContent = (step.content || "")
+      .replace(/\{\{first_name\}\}/g, firstName);
+    const personalizedSubject = (step.subject || "")
+      .replace(/\{\{first_name\}\}/g, firstName);
+
+    await sendWithRetry(resend, {
+      from: `${step.from_name || "Vanto Zazi"} <vanto@onlinecourseformlm.com>`,
+      to: [email],
+      subject: personalizedSubject,
+      html: `${personalizedContent}${EMAIL_SIGNATURE}<p style="font-size: 11px; color: #999; margin-top: 16px;">You're receiving this email because you registered in APLGO.<br/><a href="${unsubUrl}" style="color:#999; text-decoration: underline;">Unsubscribe</a></p>`,
+    });
+    console.log(`Automation email sent to ${email}: ${personalizedSubject}`);
   } else if (step.type === "add_tag") {
     if (!step.tag_name) return;
 
@@ -107,7 +130,6 @@ serve(async (req: Request) => {
       });
     }
 
-    // Find active automations matching this trigger
     const { data: automations, error: autoError } = await adminClient
       .from("automations")
       .select("*")
@@ -131,7 +153,6 @@ serve(async (req: Request) => {
       const workflow = automation.workflow as any[];
       if (!workflow || workflow.length === 0) continue;
 
-      // Check trigger config filters
       if (trigger_type === "tag_added" && triggerConfig.tag_name) {
         if (trigger_data?.tag_name !== triggerConfig.tag_name) continue;
       }
@@ -144,7 +165,6 @@ serve(async (req: Request) => {
       const firstName = trigger_data?.first_name || "there";
       if (!email) continue;
 
-      // Check for duplicate — don't re-enqueue if already queued for this automation
       const { data: existing } = await adminClient
         .from("automation_queue")
         .select("id")
@@ -157,7 +177,6 @@ serve(async (req: Request) => {
         continue;
       }
 
-      // Execute immediate steps (before first wait) and queue the rest
       let cumulativeDelayHours = 0;
       let hitWait = false;
 
@@ -171,10 +190,10 @@ serve(async (req: Request) => {
         }
 
         if (!hitWait) {
-          // Execute immediately (steps before first wait)
           await executeStep(step, email, firstName, resend, adminClient);
+          // Throttle between immediate sends
+          await throttle(500);
         } else {
-          // Queue for later execution
           const sendAt = new Date(Date.now() + cumulativeDelayHours * 60 * 60 * 1000).toISOString();
           await adminClient.from("automation_queue").insert({
             automation_id: automation.id,

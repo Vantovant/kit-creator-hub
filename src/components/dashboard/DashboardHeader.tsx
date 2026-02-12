@@ -7,9 +7,12 @@ import * as Popover from "@radix-ui/react-popover";
 interface DashboardHeaderProps {
   title: string;
   subtitle?: string;
+  searchQuery?: string;
+  onSearchChange?: (query: string) => void;
+  searchPlaceholder?: string;
 }
 
-export function DashboardHeader({ title, subtitle }: DashboardHeaderProps) {
+export function DashboardHeader({ title, subtitle, searchQuery, onSearchChange, searchPlaceholder }: DashboardHeaderProps) {
   const toggleSidebar = useSidebarToggle();
   const [theme, setTheme] = useState<"light" | "dark">("light");
 
@@ -47,14 +50,28 @@ export function DashboardHeader({ title, subtitle }: DashboardHeaderProps) {
         </div>
 
         <div className="flex items-center gap-4">
-          <div className="hidden md:block relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input
-              type="search"
-              placeholder="Search..."
-              className="w-64 pl-10"
-            />
-          </div>
+          {onSearchChange ? (
+            <div className="hidden md:block relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                type="search"
+                placeholder={searchPlaceholder || "Search..."}
+                value={searchQuery || ""}
+                onChange={(e) => onSearchChange(e.target.value)}
+                className="w-64 pl-10"
+              />
+            </div>
+          ) : (
+            <div className="hidden md:block relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                type="search"
+                placeholder="Search..."
+                className="w-64 pl-10"
+                disabled
+              />
+            </div>
+          )}
           <button
             type="button"
             onClick={toggleTheme}

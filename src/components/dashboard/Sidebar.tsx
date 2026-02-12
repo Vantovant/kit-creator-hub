@@ -11,6 +11,7 @@ import {
   ChevronDown,
   Plus,
   LogOut,
+  ListOrdered,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import logo from "@/assets/logo.jpg";
@@ -21,6 +22,7 @@ const navigation = [
   { name: "Subscribers", href: "/dashboard/subscribers", icon: Users },
   { name: "Broadcasts", href: "/dashboard/broadcasts", icon: Mail },
   { name: "Automations", href: "/dashboard/automations", icon: Zap },
+  { name: "Sequences", href: "/dashboard/sequences", icon: ListOrdered },
   { name: "Forms", href: "/dashboard/forms", icon: FormInput },
   { name: "Templates", href: "/dashboard/templates", icon: Mail },
   { name: "Segments", href: "/dashboard/segments", icon: Users },

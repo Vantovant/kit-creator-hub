@@ -13,6 +13,7 @@ import TemplatesPage from "@/app/dashboard/templates/page";
 import SegmentsPage from "@/app/dashboard/segments/page";
 import IntegrationsPage from "@/app/dashboard/integrations/page";
 import AnalyticsPage from "@/app/dashboard/analytics/page";
+import SequencesPage from "@/app/dashboard/sequences/page";
 import SettingsPage from "@/app/dashboard/settings/page";
 import WelcomeForm from "@/pages/WelcomeForm";
 import AuthPage from "@/pages/AuthPage";
@@ -38,6 +39,7 @@ function App() {
           <Route path="forms" element={<FormsPage />} />
           <Route path="templates" element={<TemplatesPage />} />
           <Route path="segments" element={<SegmentsPage />} />
+          <Route path="sequences" element={<SequencesPage />} />
           <Route path="integrations" element={<IntegrationsPage />} />
           <Route path="analytics" element={<AnalyticsPage />} />
           <Route path="settings" element={<SettingsPage />} />

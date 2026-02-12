@@ -132,8 +132,51 @@ serve(async (req: Request) => {
       processed++;
     }
 
+    // --- Auto-check A/B test winners ---
+    let abChecked = 0;
+    const { data: runningTests } = await adminClient
+      .from("ab_tests")
+      .select("*")
+      .eq("status", "running");
+
+    if (runningTests && runningTests.length > 0) {
+      for (const test of runningTests) {
+        const startedAt = new Date(test.started_at).getTime();
+        const durationMs = (test.duration_hours || 4) * 60 * 60 * 1000;
+        if (Date.now() < startedAt + durationMs) continue;
+
+        // Duration elapsed — determine winner
+        const results = (test.results || {}) as Record<string, any>;
+        const metric = test.winning_metric;
+        const eventType = metric === "clicks" ? "%clicked%" : "%opened%";
+        let bestScore = -1;
+        let winner = "";
+
+        for (const [variantId, variantData] of Object.entries(results) as [string, any][]) {
+          if (!variantData.broadcast_id) continue;
+          const { count } = await adminClient
+            .from("email_events")
+            .select("*", { count: "exact", head: true })
+            .eq("broadcast_id", variantData.broadcast_id)
+            .ilike("event_type", eventType);
+
+          const rate = variantData.sent > 0 ? (count || 0) / variantData.sent : 0;
+          results[variantId] = { ...variantData, [`${metric}_count`]: count || 0, [`${metric}_rate`]: rate };
+          if (rate > bestScore) { bestScore = rate; winner = variantId; }
+        }
+
+        await adminClient.from("ab_tests").update({
+          status: "completed",
+          winner_variant: winner,
+          results,
+          completed_at: new Date().toISOString(),
+        }).eq("id", test.id);
+        abChecked++;
+      }
+    }
+
     return new Response(
-      JSON.stringify({ success: true, processed }),
+      JSON.stringify({ success: true, processed, ab_tests_checked: abChecked }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err: any) {

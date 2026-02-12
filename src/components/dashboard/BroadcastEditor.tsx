@@ -24,6 +24,7 @@ import {
   Undo2,
   Redo2,
   Clock,
+  FileText,
 } from "lucide-react";
 
 interface BroadcastEditorProps {
@@ -74,6 +75,36 @@ export function BroadcastEditor({ initialData, editId, onSaved }: BroadcastEdito
   const [scheduleDate, setScheduleDate] = useState("");
   const [scheduleTime, setScheduleTime] = useState("");
   const [scheduling, setScheduling] = useState(false);
+
+  // Save as template
+  const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
+  const [templateName, setTemplateName] = useState("");
+  const [savingTemplate, setSavingTemplate] = useState(false);
+
+  const saveAsTemplate = async () => {
+    if (!templateName.trim()) return;
+    setSavingTemplate(true);
+    const { data: { user: u } } = await supabase.auth.getUser();
+    if (!u) { setSavingTemplate(false); return; }
+    const gradients = [
+      "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+      "linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)",
+      "linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)",
+      "linear-gradient(135deg, #fa709a 0%, #fee140 100%)",
+    ];
+    await supabase.from("email_templates").insert({
+      name: templateName.trim(),
+      subject: subject.trim(),
+      content: content.value,
+      user_id: u.id,
+      preview_gradient: gradients[Math.floor(Math.random() * gradients.length)],
+    });
+    setTemplateDialogOpen(false);
+    setTemplateName("");
+    setMessage("Saved as template!");
+    setTimeout(() => setMessage(""), 3000);
+    setSavingTemplate(false);
+  };
 
   // Load segments
   useEffect(() => {
@@ -253,6 +284,14 @@ export function BroadcastEditor({ initialData, editId, onSaved }: BroadcastEdito
           </button>
           <button
             type="button"
+            onClick={() => setTemplateDialogOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 border border-border rounded-lg hover:bg-muted transition-colors text-foreground text-sm font-medium"
+          >
+            <FileText className="w-4 h-4" />
+            Save as Template
+          </button>
+          <button
+            type="button"
             onClick={sendNow}
             disabled={sending}
             className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground font-medium rounded-lg transition-colors disabled:opacity-50 text-sm"
@@ -391,6 +430,33 @@ export function BroadcastEditor({ initialData, editId, onSaved }: BroadcastEdito
               className="px-4 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 transition-colors"
             >
               {scheduling ? "Scheduling…" : "Schedule"}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Save as Template Dialog */}
+      <Dialog open={templateDialogOpen} onOpenChange={setTemplateDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Save as Template</DialogTitle>
+            <DialogDescription>Save this email as a reusable template.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Template Name</Label>
+              <Input value={templateName} onChange={(e) => setTemplateName(e.target.value)} placeholder="e.g. Weekly Newsletter" />
+            </div>
+          </div>
+          <DialogFooter>
+            <button type="button" onClick={() => setTemplateDialogOpen(false)} className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Cancel</button>
+            <button
+              type="button"
+              onClick={saveAsTemplate}
+              disabled={savingTemplate || !templateName.trim()}
+              className="px-4 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 transition-colors"
+            >
+              {savingTemplate ? "Saving…" : "Save Template"}
             </button>
           </DialogFooter>
         </DialogContent>

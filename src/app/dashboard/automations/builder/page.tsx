@@ -4,6 +4,7 @@ import type { Json } from "@/integrations/supabase/types";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
+import { REENGAGEMENT_SEQUENCE } from "@/lib/email-signature";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -337,13 +338,33 @@ export default function AutomationBuilderPage() {
             <div className="w-px h-6 bg-border" />
 
             {workflow.length === 0 ? (
-              <button
-                type="button"
-                onClick={() => addStep(null, "send_email")}
-                className="flex items-center gap-2 px-4 py-2 border-2 border-dashed border-border rounded-lg text-muted-foreground hover:border-primary hover:text-primary transition-colors text-sm"
-              >
-                <Plus className="w-4 h-4" /> Add first step
-              </button>
+              <div className="flex flex-col items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => addStep(null, "send_email")}
+                  className="flex items-center gap-2 px-4 py-2 border-2 border-dashed border-border rounded-lg text-muted-foreground hover:border-primary hover:text-primary transition-colors text-sm"
+                >
+                  <Plus className="w-4 h-4" /> Add first step
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const steps: WorkflowStep[] = REENGAGEMENT_SEQUENCE.map((s, i) => ({
+                      id: (Date.now() + i).toString(),
+                      ...s,
+                    }));
+                    setWorkflow(steps);
+                    setName("Re-engagement: Registered Not Activated");
+                    setDescription("5-email sequence for prospects who registered but never activated");
+                    setTriggerType("tag_added");
+                    setTriggerConfig({ tag_name: "Registered_not_activated" });
+                    setExpandedStep(steps[0].id);
+                  }}
+                  className="flex items-center gap-2 px-4 py-2 bg-accent/10 border border-accent/30 rounded-lg text-accent-foreground hover:bg-accent/20 transition-colors text-sm font-medium"
+                >
+                  <Zap className="w-4 h-4" /> Load Re-engagement Sequence (5 emails)
+                </button>
+              </div>
             ) : (
               workflow.map((step, idx) => {
                 const Icon = stepIcon(step.type);

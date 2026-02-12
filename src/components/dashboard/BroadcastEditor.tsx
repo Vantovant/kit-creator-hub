@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
 import DOMPurify from "dompurify";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
@@ -61,6 +61,8 @@ export function BroadcastEditor({ initialData, editId, onSaved }: BroadcastEdito
   const content = useUndoRedo(initialData?.content || "");
   const [fromName, setFromName] = useState(initialData?.from_name || "Vanto Zazi");
   const [replyTo, setReplyTo] = useState(initialData?.reply_to || "vanto@onlinecourseformlm.com");
+  const [segmentId, setSegmentId] = useState<string>(initialData?.segment_id || "");
+  const [segments, setSegments] = useState<{ id: string; name: string }[]>([]);
   const [showPreview, setShowPreview] = useState(false);
   const [saving, setSaving] = useState(false);
   const [sending, setSending] = useState(false);
@@ -72,6 +74,13 @@ export function BroadcastEditor({ initialData, editId, onSaved }: BroadcastEdito
   const [scheduleDate, setScheduleDate] = useState("");
   const [scheduleTime, setScheduleTime] = useState("");
   const [scheduling, setScheduling] = useState(false);
+
+  // Load segments
+  useEffect(() => {
+    supabase.from("segments").select("id, name").order("name").then(({ data }) => {
+      if (data) setSegments(data);
+    });
+  }, []);
 
   const getPayload = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -86,6 +95,7 @@ export function BroadcastEditor({ initialData, editId, onSaved }: BroadcastEdito
       from_name: fromName.trim(),
       reply_to: replyTo.trim(),
       user_id: user.id,
+      segment_id: segmentId || null,
     };
   };
 
@@ -289,10 +299,22 @@ export function BroadcastEditor({ initialData, editId, onSaved }: BroadcastEdito
               <div className="flex items-center gap-4">
                 <Label className="text-sm font-medium w-20">To:</Label>
                 <div className="flex-1 flex items-center gap-2">
-                  <Badge variant="secondary" className="flex items-center gap-1 bg-primary/20 text-primary">
-                    <Users className="w-3 h-3" />
-                    All Active Subscribers
-                  </Badge>
+                  <select
+                    value={segmentId}
+                    onChange={(e) => setSegmentId(e.target.value)}
+                    className="flex h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  >
+                    <option value="">All Active Subscribers</option>
+                    {segments.map((s) => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
+                  </select>
+                  {!segmentId && (
+                    <Badge variant="secondary" className="flex items-center gap-1 bg-primary/20 text-primary">
+                      <Users className="w-3 h-3" />
+                      Everyone
+                    </Badge>
+                  )}
                 </div>
               </div>
             </CardContent>

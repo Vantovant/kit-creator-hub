@@ -8,6 +8,55 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+const APP_URL = "https://kit-clone-dashboard.lovable.app";
+
+const EMAIL_SIGNATURE = `
+<table cellpadding="0" cellspacing="0" border="0" style="font-family: Arial, Helvetica, sans-serif; max-width: 540px; margin-top: 24px; border-top: 2px solid #1a3a8a; padding-top: 16px;">
+  <tr>
+    <td style="vertical-align: top; padding-right: 16px;">
+      <img src="${APP_URL}/assets/logo-mlm.jpg" alt="Online Course For MLM" width="90" height="68" style="border-radius: 6px; display: block; object-fit: cover;" />
+    </td>
+    <td style="vertical-align: top;">
+      <p style="margin: 0 0 2px 0; font-size: 16px; font-weight: bold; color: #1a1a1a;">Vanto Vanto</p>
+      <p style="margin: 0 0 2px 0; font-size: 13px; color: #1a3a8a; font-weight: 600;">Founder — Vanto Zazi</p>
+      <p style="margin: 0 0 8px 0; font-size: 12px; color: #666;">Master AI. Recruit Smart. Grow Fast.</p>
+      <table cellpadding="0" cellspacing="0" border="0">
+        <tr><td style="padding-right: 6px;"><span style="font-size: 12px; color: #666;">📧</span></td><td><a href="mailto:vanto@onlinecourseformlm.com" style="font-size: 13px; color: #333; text-decoration: none;">vanto@onlinecourseformlm.com</a></td></tr>
+        <tr><td style="padding-right: 6px; padding-top: 4px;"><span style="font-size: 12px; color: #666;">🌐</span></td><td style="padding-top: 4px;"><a href="https://onlinecourseformlm.com" style="font-size: 13px; color: #1a3a8a; text-decoration: none; font-weight: 500;">onlinecourseformlm.com</a></td></tr>
+      </table>
+    </td>
+  </tr>
+</table>`;
+
+// Retry with exponential backoff for 429 errors
+async function sendWithRetry(
+  resend: any,
+  emailPayload: any,
+  maxRetries = 3
+): Promise<boolean> {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      await resend.emails.send(emailPayload);
+      return true;
+    } catch (e: any) {
+      const is429 = e?.statusCode === 429 || e?.message?.includes("429");
+      if (is429 && attempt < maxRetries) {
+        const delay = Math.pow(2, attempt + 1) * 1000;
+        console.log(`Rate limited (429), retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
+        await new Promise((r) => setTimeout(r, delay));
+      } else {
+        throw e;
+      }
+    }
+  }
+  return false;
+}
+
+// Throttle between individual sends
+function throttle(ms = 600): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
 serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -18,7 +67,6 @@ serve(async (req: Request) => {
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
-    // Find scheduled broadcasts that are due
     const now = new Date().toISOString();
     const { data: broadcasts, error: fetchError } = await adminClient
       .from("broadcasts")
@@ -26,47 +74,40 @@ serve(async (req: Request) => {
       .eq("status", "scheduled")
       .lte("scheduled_at", now);
 
-    if (fetchError || !broadcasts || broadcasts.length === 0) {
-      return new Response(
-        JSON.stringify({ message: "No scheduled broadcasts due", processed: 0 }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
     const resendKey = Deno.env.get("RESEND_API_KEY");
-    if (!resendKey) {
-      return new Response(JSON.stringify({ error: "Email service not configured" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
 
-    const resend = new Resend(resendKey);
-    const appUrl = "https://kit-clone-dashboard.lovable.app";
     let processed = 0;
 
-    for (const broadcast of broadcasts) {
-      // Mark as sending
-      await adminClient
-        .from("broadcasts")
-        .update({ status: "sending" })
-        .eq("id", broadcast.id);
+    if (!fetchError && broadcasts && broadcasts.length > 0 && resendKey) {
+      const resend = new Resend(resendKey);
 
-      // Get active subscribers (filtered by segment if set)
-      let subscribers: any[] | null = null;
+      for (const broadcast of broadcasts) {
+        await adminClient
+          .from("broadcasts")
+          .update({ status: "sending" })
+          .eq("id", broadcast.id);
 
-      if (broadcast.segment_id) {
-        const { data: segment } = await adminClient
-          .from("segments")
-          .select("filters")
-          .eq("id", broadcast.segment_id)
-          .maybeSingle();
+        let subscribers: any[] | null = null;
 
-        if (segment?.filters) {
-          const { data } = await adminClient.rpc("get_segment_prospects", {
-            segment_filters: segment.filters,
-          }).select("email, first_name, unsubscribe_token");
-          subscribers = data;
+        if (broadcast.segment_id) {
+          const { data: segment } = await adminClient
+            .from("segments")
+            .select("filters")
+            .eq("id", broadcast.segment_id)
+            .maybeSingle();
+
+          if (segment?.filters) {
+            const { data } = await adminClient.rpc("get_segment_prospects", {
+              segment_filters: segment.filters,
+            }).select("email, first_name, unsubscribe_token");
+            subscribers = data;
+          } else {
+            const { data } = await adminClient
+              .from("prospects")
+              .select("email, first_name, unsubscribe_token")
+              .eq("unsubscribed", false);
+            subscribers = data;
+          }
         } else {
           const { data } = await adminClient
             .from("prospects")
@@ -74,65 +115,61 @@ serve(async (req: Request) => {
             .eq("unsubscribed", false);
           subscribers = data;
         }
-      } else {
-        const { data } = await adminClient
-          .from("prospects")
-          .select("email, first_name, unsubscribe_token")
-          .eq("unsubscribed", false);
-        subscribers = data;
-      }
 
-      if (!subscribers || subscribers.length === 0) {
+        if (!subscribers || subscribers.length === 0) {
+          await adminClient
+            .from("broadcasts")
+            .update({ status: "sent", sent_at: now, total_recipients: 0, total_sent: 0, total_failed: 0 })
+            .eq("id", broadcast.id);
+          processed++;
+          continue;
+        }
+
+        let sent = 0;
+        let failed = 0;
+
+        // Send in small batches of 3 with throttle between each
+        for (let i = 0; i < subscribers.length; i += 3) {
+          const batch = subscribers.slice(i, i + 3);
+          const promises = batch.map(async (sub) => {
+            try {
+              const unsubscribeUrl = `${APP_URL}/unsubscribe?token=${sub.unsubscribe_token || ""}`;
+              const personalizedContent = broadcast.content
+                .replace(/\{\{first_name\}\}/g, sub.first_name || "there");
+
+              await sendWithRetry(resend, {
+                from: `${broadcast.from_name} <vanto@onlinecourseformlm.com>`,
+                to: [sub.email],
+                subject: broadcast.subject,
+                html: `${personalizedContent}<hr style="margin:24px 0;border:none;border-top:1px solid #eee;"/><p style="font-size:12px;color:#999;"><a href="${unsubscribeUrl}" style="color:#999;">Unsubscribe</a></p>`,
+              });
+              sent++;
+            } catch (e) {
+              console.error(`Failed to send to ${sub.email}:`, e);
+              failed++;
+            }
+          });
+          await Promise.all(promises);
+          // Throttle between batches
+          if (i + 3 < subscribers.length) await throttle(1000);
+        }
+
         await adminClient
           .from("broadcasts")
-          .update({ status: "sent", sent_at: now, total_recipients: 0, total_sent: 0, total_failed: 0 })
+          .update({
+            status: "sent",
+            sent_at: new Date().toISOString(),
+            total_recipients: subscribers.length,
+            total_sent: sent,
+            total_failed: failed,
+          })
           .eq("id", broadcast.id);
+
         processed++;
-        continue;
       }
-
-      let sent = 0;
-      let failed = 0;
-
-      // Send in batches of 10
-      for (let i = 0; i < subscribers.length; i += 10) {
-        const batch = subscribers.slice(i, i + 10);
-        const promises = batch.map(async (sub) => {
-          try {
-            const unsubscribeUrl = `${appUrl}/unsubscribe?token=${sub.unsubscribe_token || ""}`;
-            const personalizedContent = broadcast.content
-              .replace(/\{\{first_name\}\}/g, sub.first_name || "there");
-
-            await resend.emails.send({
-              from: `${broadcast.from_name} <vanto@onlinecourseformlm.com>`,
-              to: [sub.email],
-              subject: broadcast.subject,
-              html: `${personalizedContent}<hr style="margin:24px 0;border:none;border-top:1px solid #eee;"/><p style="font-size:12px;color:#999;"><a href="${unsubscribeUrl}" style="color:#999;">Unsubscribe</a></p>`,
-            });
-            sent++;
-          } catch (e) {
-            console.error(`Failed to send to ${sub.email}:`, e);
-            failed++;
-          }
-        });
-        await Promise.all(promises);
-      }
-
-      await adminClient
-        .from("broadcasts")
-        .update({
-          status: "sent",
-          sent_at: new Date().toISOString(),
-          total_recipients: subscribers.length,
-          total_sent: sent,
-          total_failed: failed,
-        })
-        .eq("id", broadcast.id);
-
-      processed++;
     }
 
-    // --- Process automation queue ---
+    // --- Process automation queue (limited to 5 per run) ---
     let queueProcessed = 0;
     const { data: dueItems } = await adminClient
       .from("automation_queue")
@@ -140,14 +177,13 @@ serve(async (req: Request) => {
       .eq("status", "pending")
       .lte("send_at", now)
       .order("send_at", { ascending: true })
-      .limit(50);
+      .limit(5);
 
-    if (dueItems && dueItems.length > 0) {
-      const resendForQueue = resendKey ? new Resend(resendKey) : null;
+    if (dueItems && dueItems.length > 0 && resendKey) {
+      const resendForQueue = new Resend(resendKey);
 
       for (const item of dueItems) {
         try {
-          // Mark as processing to prevent duplicate pickup
           await adminClient
             .from("automation_queue")
             .update({ status: "processing" })
@@ -157,7 +193,7 @@ serve(async (req: Request) => {
           const email = item.email;
           const firstName = item.first_name || "there";
 
-          if (step.type === "send_email" && resendForQueue) {
+          if (step.type === "send_email") {
             const { data: prospect } = await adminClient
               .from("prospects")
               .select("unsubscribe_token, unsubscribed")
@@ -165,7 +201,6 @@ serve(async (req: Request) => {
               .maybeSingle();
 
             if (prospect?.unsubscribed) {
-              // Cancel all remaining queued steps for this subscriber + automation
               await adminClient
                 .from("automation_queue")
                 .update({ status: "cancelled", processed_at: new Date().toISOString() })
@@ -182,35 +217,17 @@ serve(async (req: Request) => {
               continue;
             }
 
-            const unsubUrl = `${appUrl}/unsubscribe?token=${prospect?.unsubscribe_token || ""}`;
+            const unsubUrl = `${APP_URL}/unsubscribe?token=${prospect?.unsubscribe_token || ""}`;
             const personalizedContent = (step.content || "")
               .replace(/\{\{first_name\}\}/g, firstName);
             const personalizedSubject = (step.subject || "")
               .replace(/\{\{first_name\}\}/g, firstName);
 
-            const signature = `
-<table cellpadding="0" cellspacing="0" border="0" style="font-family: Arial, Helvetica, sans-serif; max-width: 540px; margin-top: 24px; border-top: 2px solid #1a3a8a; padding-top: 16px;">
-  <tr>
-    <td style="vertical-align: top; padding-right: 16px;">
-      <img src="${appUrl}/assets/logo-mlm.jpg" alt="Online Course For MLM" width="90" height="68" style="border-radius: 6px; display: block; object-fit: cover;" />
-    </td>
-    <td style="vertical-align: top;">
-      <p style="margin: 0 0 2px 0; font-size: 16px; font-weight: bold; color: #1a1a1a;">Vanto Vanto</p>
-      <p style="margin: 0 0 2px 0; font-size: 13px; color: #1a3a8a; font-weight: 600;">Founder — Vanto Zazi</p>
-      <p style="margin: 0 0 8px 0; font-size: 12px; color: #666;">Master AI. Recruit Smart. Grow Fast.</p>
-      <table cellpadding="0" cellspacing="0" border="0">
-        <tr><td style="padding-right: 6px;"><span style="font-size: 12px; color: #666;">📧</span></td><td><a href="mailto:vanto@onlinecourseformlm.com" style="font-size: 13px; color: #333; text-decoration: none;">vanto@onlinecourseformlm.com</a></td></tr>
-        <tr><td style="padding-right: 6px; padding-top: 4px;"><span style="font-size: 12px; color: #666;">🌐</span></td><td style="padding-top: 4px;"><a href="https://onlinecourseformlm.com" style="font-size: 13px; color: #1a3a8a; text-decoration: none; font-weight: 500;">onlinecourseformlm.com</a></td></tr>
-      </table>
-    </td>
-  </tr>
-</table>`;
-
-            await resendForQueue.emails.send({
+            await sendWithRetry(resendForQueue, {
               from: `${step.from_name || "Vanto Zazi"} <vanto@onlinecourseformlm.com>`,
               to: [email],
               subject: personalizedSubject,
-              html: `${personalizedContent}${signature}<p style="font-size: 11px; color: #999; margin-top: 16px;">You're receiving this email because you registered in APLGO.<br/><a href="${unsubUrl}" style="color:#999; text-decoration: underline;">Unsubscribe</a></p>`,
+              html: `${personalizedContent}${EMAIL_SIGNATURE}<p style="font-size: 11px; color: #999; margin-top: 16px;">You're receiving this email because you registered in APLGO.<br/><a href="${unsubUrl}" style="color:#999; text-decoration: underline;">Unsubscribe</a></p>`,
             });
 
             console.log(`Queue: sent automation email to ${email} — ${personalizedSubject}`);
@@ -239,6 +256,8 @@ serve(async (req: Request) => {
             .eq("id", item.id);
 
           queueProcessed++;
+          // Throttle between queue items
+          await throttle(600);
         } catch (e) {
           console.error(`Queue processing failed for ${item.id}:`, e);
           await adminClient

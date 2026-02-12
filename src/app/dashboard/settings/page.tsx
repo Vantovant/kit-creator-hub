@@ -7,21 +7,23 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 import {
   User,
   Mail,
   Bell,
-  Shield,
   Palette,
-  Globe,
-  CreditCard,
   Moon,
   Sun,
   Save,
   Camera,
+  Loader2,
 } from "lucide-react";
 
 export default function SettingsPage() {
+  const { user } = useAuth();
+  const [saving, setSaving] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark">("light");
 
   useEffect(() => {
@@ -38,6 +40,7 @@ export default function SettingsPage() {
     localStorage.setItem("kit-theme", newTheme);
     document.documentElement.classList.toggle("dark", newTheme === "dark");
   };
+
   const [notifications, setNotifications] = useState({
     emailDigest: true,
     newSubscriber: true,
@@ -47,12 +50,67 @@ export default function SettingsPage() {
   });
 
   const [profile, setProfile] = useState({
-    name: "John Doe",
-    email: "john@example.com",
-    company: "Acme Inc",
-    website: "https://example.com",
-    timezone: "America/New_York",
+    name: "",
+    email: "",
+    company: "",
+    website: "",
+    timezone: "Africa/Johannesburg",
   });
+
+  // Load profile from database
+  useEffect(() => {
+    if (!user) return;
+
+    // Set email from auth user
+    setProfile((prev) => ({ ...prev, email: user.email || "" }));
+
+    async function loadProfile() {
+      const { data } = await supabase
+        .from("profiles")
+        .select("display_name, company, website, timezone")
+        .eq("user_id", user!.id)
+        .single();
+
+      if (data) {
+        setProfile((prev) => ({
+          ...prev,
+          name: data.display_name || "",
+          company: (data as any).company || "",
+          website: (data as any).website || "",
+          timezone: (data as any).timezone || "Africa/Johannesburg",
+        }));
+      }
+    }
+
+    loadProfile();
+  }, [user]);
+
+  const saveProfile = async () => {
+    if (!user) return;
+    setSaving(true);
+    try {
+      await supabase
+        .from("profiles")
+        .update({
+          display_name: profile.name,
+          company: profile.company,
+          website: profile.website,
+          timezone: profile.timezone,
+        } as any)
+        .eq("user_id", user.id);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const initials = profile.name
+    ? profile.name
+        .split(" ")
+        .map((n) => n[0])
+        .join("")
+        .toUpperCase()
+        .slice(0, 2)
+    : "U";
 
   return (
     <div className="min-h-screen">
@@ -94,7 +152,7 @@ export default function SettingsPage() {
                   <div className="flex items-center gap-6">
                     <div className="relative">
                       <div className="w-20 h-20 rounded-full bg-[#5CC5DE] flex items-center justify-center text-white text-2xl font-bold">
-                        JD
+                        {initials}
                       </div>
                       <button
                         type="button"
@@ -104,7 +162,7 @@ export default function SettingsPage() {
                       </button>
                     </div>
                     <div>
-                      <h3 className="font-medium dark:text-gray-100">{profile.name}</h3>
+                      <h3 className="font-medium dark:text-gray-100">{profile.name || "—"}</h3>
                       <p className="text-sm text-gray-500 dark:text-gray-400">{profile.email}</p>
                     </div>
                   </div>
@@ -123,8 +181,8 @@ export default function SettingsPage() {
                       <Input
                         type="email"
                         value={profile.email}
-                        onChange={(e) => setProfile({ ...profile, email: e.target.value })}
-                        className="dark:bg-gray-700 dark:border-gray-600"
+                        disabled
+                        className="dark:bg-gray-700 dark:border-gray-600 opacity-60"
                       />
                     </div>
                     <div className="space-y-2">
@@ -152,6 +210,7 @@ export default function SettingsPage() {
                       onChange={(e) => setProfile({ ...profile, timezone: e.target.value })}
                       className="w-full h-10 px-3 rounded-md border border-input bg-background dark:bg-gray-700 dark:border-gray-600"
                     >
+                      <option value="Africa/Johannesburg">South Africa (SAST)</option>
                       <option value="America/New_York">Eastern Time (ET)</option>
                       <option value="America/Chicago">Central Time (CT)</option>
                       <option value="America/Denver">Mountain Time (MT)</option>
@@ -164,10 +223,12 @@ export default function SettingsPage() {
                   <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
                     <button
                       type="button"
-                      className="flex items-center gap-2 px-4 py-2 bg-[#5CC5DE] hover:bg-[#4AB5CE] text-black font-medium rounded-lg transition-colors"
+                      onClick={saveProfile}
+                      disabled={saving}
+                      className="flex items-center gap-2 px-4 py-2 bg-[#5CC5DE] hover:bg-[#4AB5CE] text-black font-medium rounded-lg transition-colors disabled:opacity-50"
                     >
-                      <Save className="w-4 h-4" />
-                      Save Changes
+                      {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                      {saving ? "Saving…" : "Save Changes"}
                     </button>
                   </div>
                 </CardContent>
@@ -182,7 +243,7 @@ export default function SettingsPage() {
                     <div>
                       <p className="font-medium dark:text-gray-100">Password</p>
                       <p className="text-sm text-gray-500 dark:text-gray-400">
-                        Last changed 3 months ago
+                        Change your account password
                       </p>
                     </div>
                     <button
@@ -320,7 +381,7 @@ export default function SettingsPage() {
                     <div className="grid grid-cols-2 gap-4">
                       <button
                         type="button"
-                        onClick={() => toggleTheme()}
+                        onClick={() => { if (theme !== "light") toggleTheme(); }}
                         className={`p-4 rounded-xl border-2 transition-colors ${
                           theme === "light"
                             ? "border-[#5CC5DE] bg-white"
@@ -339,7 +400,7 @@ export default function SettingsPage() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => toggleTheme()}
+                        onClick={() => { if (theme !== "dark") toggleTheme(); }}
                         className={`p-4 rounded-xl border-2 transition-colors ${
                           theme === "dark"
                             ? "border-[#5CC5DE] bg-gray-800"
@@ -373,7 +434,7 @@ export default function SettingsPage() {
                     <div className="space-y-2">
                       <Label className="dark:text-gray-200">From Name</Label>
                       <Input
-                        defaultValue="John Doe"
+                        defaultValue="Vanto Zazi"
                         className="dark:bg-gray-700 dark:border-gray-600"
                       />
                     </div>
@@ -381,7 +442,7 @@ export default function SettingsPage() {
                       <Label className="dark:text-gray-200">Reply-to Email</Label>
                       <Input
                         type="email"
-                        defaultValue="john@example.com"
+                        defaultValue="vanto@onlinecourseformlm.com"
                         className="dark:bg-gray-700 dark:border-gray-600"
                       />
                     </div>
@@ -389,7 +450,7 @@ export default function SettingsPage() {
                   <div className="space-y-2">
                     <Label className="dark:text-gray-200">Email Footer</Label>
                     <textarea
-                      defaultValue="You're receiving this email because you signed up for my newsletter."
+                      defaultValue="You're receiving this email because you registered in APLGO."
                       className="w-full min-h-[100px] px-3 py-2 rounded-md border border-input bg-background dark:bg-gray-700 dark:border-gray-600 resize-none"
                     />
                   </div>

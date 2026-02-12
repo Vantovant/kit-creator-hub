@@ -145,6 +145,9 @@ export default function SubscribersPage() {
       <DashboardHeader
         title="Subscribers"
         subtitle="Manage your email list and subscriber segments"
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        searchPlaceholder="Search subscribers..."
       />
 
       <main className="p-6 space-y-6">

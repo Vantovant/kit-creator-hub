@@ -38,11 +38,12 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [growthData, setGrowthData] = useState<GrowthPoint[]>([]);
   const [emailStats, setEmailStats] = useState({ sent: 0, opens: 0, clicks: 0 });
+  const [recentBroadcasts, setRecentBroadcasts] = useState<{ id: string; subject: string; status: string; sent_at: string | null; total_sent: number | null; total_recipients: number | null; created_at: string }[]>([]);
 
   useEffect(() => {
     async function fetchData() {
       // Fetch recent prospects, total count, broadcasts stats, and email events in parallel
-      const [prospectsRes, countRes, broadcastsRes, eventsRes] = await Promise.all([
+      const [prospectsRes, countRes, broadcastsRes, eventsRes, recentBroadcastsRes] = await Promise.all([
         supabase
           .from("prospects")
           .select("*")
@@ -58,6 +59,11 @@ export default function DashboardPage() {
         supabase
           .from("email_events")
           .select("event_type"),
+        supabase
+          .from("broadcasts")
+          .select("id, subject, status, sent_at, total_sent, total_recipients, created_at")
+          .order("created_at", { ascending: false })
+          .limit(5),
       ]);
 
       setProspects(prospectsRes.data || []);
@@ -69,6 +75,7 @@ export default function DashboardPage() {
       const opens = events.filter((e) => e.event_type?.toLowerCase().includes("opened")).length;
       const clicks = events.filter((e) => e.event_type?.toLowerCase().includes("clicked")).length;
       setEmailStats({ sent: totalSent, opens, clicks });
+      setRecentBroadcasts(recentBroadcastsRes.data || []);
 
       // Build growth chart from prospect created_at dates
       const allProspects = prospectsRes.data || [];
@@ -165,11 +172,39 @@ export default function DashboardPage() {
               <CardTitle className="text-lg font-semibold">Recent Broadcasts</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="flex flex-col items-center justify-center py-8 text-center">
-                <Mail className="w-10 h-10 text-muted-foreground/30 mb-3" />
-                <p className="text-muted-foreground">No broadcasts sent yet.</p>
-                <p className="text-sm text-muted-foreground/70">Create your first broadcast to get started.</p>
-              </div>
+              {loading ? (
+                <p className="text-muted-foreground text-center py-8">Loading…</p>
+              ) : recentBroadcasts.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-8 text-center">
+                  <Mail className="w-10 h-10 text-muted-foreground/30 mb-3" />
+                  <p className="text-muted-foreground">No broadcasts yet.</p>
+                  <p className="text-sm text-muted-foreground/70">Create your first broadcast to get started.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {recentBroadcasts.map((b) => (
+                    <div key={b.id} className="flex items-center justify-between p-3 rounded-lg hover:bg-muted transition-colors">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium text-foreground truncate">{b.subject}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {b.status === "sent"
+                            ? `Sent to ${b.total_recipients || 0} · ${new Date(b.sent_at || b.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
+                            : b.status === "scheduled"
+                            ? `Scheduled`
+                            : `Draft · Created ${new Date(b.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`}
+                        </p>
+                      </div>
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                        b.status === "sent" ? "bg-green-500/10 text-green-600" :
+                        b.status === "scheduled" ? "bg-blue-500/10 text-blue-600" :
+                        "bg-muted text-muted-foreground"
+                      }`}>
+                        {b.status}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
 

@@ -20,7 +20,8 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { ImportExportModal } from "@/components/dashboard/ImportExportModal";
-import { Search, Download, Upload, Users, Tag, X, Plus, Flame, ChevronLeft, ChevronRight } from "lucide-react";
+import { Search, Download, Upload, Users, Tag, X, Plus, Flame, ChevronLeft, ChevronRight, Trash2, Loader2 } from "lucide-react";
+import { Label } from "@/components/ui/label";
 
 interface Prospect {
   id: string;
@@ -54,6 +55,15 @@ export default function SubscribersPage() {
   const [prospectTags, setProspectTags] = useState<Record<string, string[]>>({});
   const [tagDialogOpen, setTagDialogOpen] = useState(false);
   const [selectedProspect, setSelectedProspect] = useState<Prospect | null>(null);
+
+  // Edit/delete subscriber
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editProspect, setEditProspect] = useState<Prospect | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editEmail, setEditEmail] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const fetchProspects = useCallback(async () => {
     setLoading(true);
@@ -125,6 +135,38 @@ export default function SubscribersPage() {
   const getAvailableTags = (prospectId: string) => {
     const tagIds = prospectTags[prospectId] || [];
     return allTags.filter((t) => !tagIds.includes(t.id));
+  };
+
+  const openEditDialog = (p: Prospect) => {
+    setEditProspect(p);
+    setEditName(p.first_name || "");
+    setEditEmail(p.email);
+    setConfirmDelete(false);
+    setEditDialogOpen(true);
+  };
+
+  const saveEdit = async () => {
+    if (!editProspect || !editEmail.trim()) return;
+    setSaving(true);
+    await supabase
+      .from("prospects")
+      .update({ first_name: editName.trim() || null, email: editEmail.trim() })
+      .eq("id", editProspect.id);
+    setSaving(false);
+    setEditDialogOpen(false);
+    fetchProspects();
+  };
+
+  const deleteSubscriber = async () => {
+    if (!editProspect) return;
+    setDeleting(true);
+    await supabase.from("prospect_tags").delete().eq("prospect_id", editProspect.id);
+    await supabase.from("prospects").delete().eq("id", editProspect.id);
+    setDeleting(false);
+    setEditDialogOpen(false);
+    setConfirmDelete(false);
+    fetchProspects();
+    fetchProspectTags();
   };
 
   const formatDate = (d: string) =>
@@ -232,7 +274,7 @@ export default function SubscribersPage() {
                   </TableHeader>
                   <TableBody>
                     {prospects.map((p) => (
-                      <TableRow key={p.id}>
+                      <TableRow key={p.id} className="cursor-pointer hover:bg-muted/50" onClick={() => openEditDialog(p)}>
                         <TableCell>
                           <div className="flex items-center gap-3">
                             <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary font-medium text-sm">
@@ -395,6 +437,70 @@ export default function SubscribersPage() {
                 ) : (
                   <p className="text-sm text-muted-foreground">All tags already assigned.</p>
                 )}
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
+
+        {/* Edit/Delete subscriber dialog */}
+        <Dialog open={editDialogOpen} onOpenChange={(open) => { setEditDialogOpen(open); if (!open) setConfirmDelete(false); }}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Edit Subscriber</DialogTitle>
+              <DialogDescription>
+                Update subscriber details or remove them from your list.
+              </DialogDescription>
+            </DialogHeader>
+            {editProspect && (
+              <div className="space-y-4">
+                <div>
+                  <Label className="text-sm font-medium">Name</Label>
+                  <Input
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    placeholder="First name"
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label className="text-sm font-medium">Email</Label>
+                  <Input
+                    value={editEmail}
+                    onChange={(e) => setEditEmail(e.target.value)}
+                    placeholder="email@example.com"
+                    className="mt-1"
+                  />
+                </div>
+                <div className="flex items-center justify-between pt-2">
+                  {!confirmDelete ? (
+                    <button
+                      type="button"
+                      onClick={() => setConfirmDelete(true)}
+                      className="flex items-center gap-2 text-sm text-destructive hover:text-destructive/80 transition-colors"
+                    >
+                      <Trash2 className="w-4 h-4" /> Delete subscriber
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={deleteSubscriber}
+                      disabled={deleting}
+                      className="flex items-center gap-2 px-3 py-1.5 bg-destructive text-destructive-foreground rounded-lg text-sm font-medium hover:bg-destructive/90 disabled:opacity-50"
+                    >
+                      {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                      Confirm delete
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={saveEdit}
+                    disabled={saving || !editEmail.trim()}
+                    className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 disabled:opacity-50"
+                  >
+                    {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                    Save Changes
+                  </button>
+                </div>
               </div>
             )}
           </DialogContent>

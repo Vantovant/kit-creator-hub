@@ -20,8 +20,9 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { ImportExportModal } from "@/components/dashboard/ImportExportModal";
-import { Search, Download, Upload, Users, Tag, X, Plus, Flame, ChevronLeft, ChevronRight, Trash2, Loader2 } from "lucide-react";
+import { Search, Download, Upload, Users, Tag, X, Plus, Flame, ChevronLeft, ChevronRight, Trash2, Loader2, CheckSquare } from "lucide-react";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 
 interface Prospect {
   id: string;
@@ -64,6 +65,60 @@ export default function SubscribersPage() {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+
+  // Bulk actions
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkTagDialogOpen, setBulkTagDialogOpen] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [bulkConfirmDelete, setBulkConfirmDelete] = useState(false);
+
+  const toggleSelect = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === prospects.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(prospects.map((p) => p.id)));
+    }
+  };
+
+  const bulkAddTag = async (tagId: string) => {
+    // Get existing tags to avoid duplicates
+    const { data: existing } = await supabase
+      .from("prospect_tags")
+      .select("prospect_id")
+      .eq("tag_id", tagId)
+      .in("prospect_id", Array.from(selectedIds));
+    const existingSet = new Set((existing || []).map((e) => e.prospect_id));
+    const inserts = Array.from(selectedIds)
+      .filter((pid) => !existingSet.has(pid))
+      .map((pid) => ({ prospect_id: pid, tag_id: tagId }));
+    if (inserts.length > 0) {
+      await supabase.from("prospect_tags").insert(inserts);
+    }
+    fetchProspectTags();
+    setBulkTagDialogOpen(false);
+  };
+
+  const bulkDelete = async () => {
+    setBulkDeleting(true);
+    const ids = Array.from(selectedIds);
+    await supabase.from("prospect_tags").delete().in("prospect_id", ids);
+    await supabase.from("prospects").delete().in("id", ids);
+    setBulkDeleting(false);
+    setBulkConfirmDelete(false);
+    setSelectedIds(new Set());
+    fetchProspects();
+    fetchProspectTags();
+  };
 
   const fetchProspects = useCallback(async () => {
     setLoading(true);
@@ -245,6 +300,48 @@ export default function SubscribersPage() {
           </div>
         </div>
 
+        {/* Bulk action bar */}
+        {selectedIds.size > 0 && (
+          <div className="flex items-center gap-3 p-3 rounded-lg bg-primary/5 border border-primary/20">
+            <CheckSquare className="w-4 h-4 text-primary" />
+            <span className="text-sm font-medium text-foreground">{selectedIds.size} selected</span>
+            <div className="flex-1" />
+            <button
+              type="button"
+              onClick={() => setBulkTagDialogOpen(true)}
+              className="flex items-center gap-2 px-3 py-1.5 text-sm border border-border rounded-lg hover:bg-muted transition-colors"
+            >
+              <Tag className="w-3.5 h-3.5" /> Add Tag
+            </button>
+            {!bulkConfirmDelete ? (
+              <button
+                type="button"
+                onClick={() => setBulkConfirmDelete(true)}
+                className="flex items-center gap-2 px-3 py-1.5 text-sm text-destructive border border-destructive/30 rounded-lg hover:bg-destructive/10 transition-colors"
+              >
+                <Trash2 className="w-3.5 h-3.5" /> Delete
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={bulkDelete}
+                disabled={bulkDeleting}
+                className="flex items-center gap-2 px-3 py-1.5 text-sm bg-destructive text-destructive-foreground rounded-lg hover:bg-destructive/90 disabled:opacity-50"
+              >
+                {bulkDeleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                Confirm Delete ({selectedIds.size})
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => { setSelectedIds(new Set()); setBulkConfirmDelete(false); }}
+              className="p-1.5 text-muted-foreground hover:text-foreground rounded"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
         {/* Table */}
         <Card>
           <CardContent className="p-0">
@@ -265,6 +362,14 @@ export default function SubscribersPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead className="w-10">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.size === prospects.length && prospects.length > 0}
+                          onChange={toggleSelectAll}
+                          className="w-4 h-4 rounded border-border accent-primary"
+                        />
+                      </TableHead>
                       <TableHead>Subscriber</TableHead>
                       <TableHead>Engagement</TableHead>
                       <TableHead>Tags</TableHead>
@@ -275,6 +380,14 @@ export default function SubscribersPage() {
                   <TableBody>
                     {prospects.map((p) => (
                       <TableRow key={p.id} className="cursor-pointer hover:bg-muted/50" onClick={() => openEditDialog(p)}>
+                        <TableCell onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.has(p.id)}
+                            onChange={() => toggleSelect(p.id, { stopPropagation: () => {} } as React.MouseEvent)}
+                            className="w-4 h-4 rounded border-border accent-primary"
+                          />
+                        </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-3">
                             <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary font-medium text-sm">
@@ -503,6 +616,32 @@ export default function SubscribersPage() {
                 </div>
               </div>
             )}
+          </DialogContent>
+        </Dialog>
+
+        {/* Bulk tag dialog */}
+        <Dialog open={bulkTagDialogOpen} onOpenChange={setBulkTagDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Add Tag to {selectedIds.size} Subscribers</DialogTitle>
+              <DialogDescription>Select a tag to apply to all selected subscribers.</DialogDescription>
+            </DialogHeader>
+            <div className="flex flex-wrap gap-2">
+              {allTags.map((tag) => (
+                <button
+                  key={tag.id}
+                  type="button"
+                  onClick={() => bulkAddTag(tag.id)}
+                  className="flex items-center gap-2 px-4 py-2 rounded-full border border-border hover:border-primary text-sm transition-colors"
+                >
+                  <span className="w-3 h-3 rounded-full" style={{ backgroundColor: tag.color }} />
+                  {tag.name}
+                </button>
+              ))}
+              {allTags.length === 0 && (
+                <p className="text-sm text-muted-foreground">No tags created yet.</p>
+              )}
+            </div>
           </DialogContent>
         </Dialog>
       </main>

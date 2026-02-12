@@ -42,12 +42,12 @@ export function parseCsv(text: string): { subscribers: ParsedSubscriber[]; error
   }
 
   const headers = parseCsvLine(lines[0]).map((h) => h.toLowerCase().replace(/[^a-z_]/g, ""));
-  const emailIdx = headers.indexOf("email");
+  const emailIdx = headers.findIndex((h) => h === "email" || h === "emailaddress" || h === "email_address");
   if (emailIdx === -1) {
-    return { subscribers: [], errors: ["CSV must contain an 'email' column."] };
+    return { subscribers: [], errors: ["CSV must contain an 'email' or 'EmailAddress' column."] };
   }
 
-  const nameIdx = headers.findIndex((h) => h === "name" || h === "first_name" || h === "firstname");
+  const nameIdx = headers.findIndex((h) => h === "name" || h === "first_name" || h === "firstname" || h === "fullname" || h === "full_name");
   const sourceIdx = headers.indexOf("source");
 
   const subscribers: ParsedSubscriber[] = [];

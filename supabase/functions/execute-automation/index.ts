@@ -8,6 +8,87 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+const APP_URL = "https://kit-clone-dashboard.lovable.app";
+
+async function executeStep(
+  step: any,
+  email: string,
+  firstName: string,
+  resend: any | null,
+  adminClient: any
+) {
+  if (step.type === "send_email" && resend) {
+    const { data: prospect } = await adminClient
+      .from("prospects")
+      .select("unsubscribe_token, unsubscribed")
+      .eq("email", email)
+      .maybeSingle();
+
+    // Skip if unsubscribed
+    if (prospect?.unsubscribed) return;
+
+    const unsubUrl = `${APP_URL}/unsubscribe?token=${prospect?.unsubscribe_token || ""}`;
+    const personalizedContent = (step.content || "")
+      .replace(/\{\{first_name\}\}/g, firstName);
+    const personalizedSubject = (step.subject || "")
+      .replace(/\{\{first_name\}\}/g, firstName);
+
+    const signature = `
+<table cellpadding="0" cellspacing="0" border="0" style="font-family: Arial, Helvetica, sans-serif; max-width: 540px; margin-top: 24px; border-top: 2px solid #1a3a8a; padding-top: 16px;">
+  <tr>
+    <td style="vertical-align: top; padding-right: 16px;">
+      <img src="${APP_URL}/assets/logo-mlm.jpg" alt="Online Course For MLM" width="90" height="68" style="border-radius: 6px; display: block; object-fit: cover;" />
+    </td>
+    <td style="vertical-align: top;">
+      <p style="margin: 0 0 2px 0; font-size: 16px; font-weight: bold; color: #1a1a1a;">Vanto Vanto</p>
+      <p style="margin: 0 0 2px 0; font-size: 13px; color: #1a3a8a; font-weight: 600;">Founder — Vanto Zazi</p>
+      <p style="margin: 0 0 8px 0; font-size: 12px; color: #666;">Master AI. Recruit Smart. Grow Fast.</p>
+      <table cellpadding="0" cellspacing="0" border="0">
+        <tr><td style="padding-right: 6px;"><span style="font-size: 12px; color: #666;">📧</span></td><td><a href="mailto:vanto@onlinecourseformlm.com" style="font-size: 13px; color: #333; text-decoration: none;">vanto@onlinecourseformlm.com</a></td></tr>
+        <tr><td style="padding-right: 6px; padding-top: 4px;"><span style="font-size: 12px; color: #666;">🌐</span></td><td style="padding-top: 4px;"><a href="https://onlinecourseformlm.com" style="font-size: 13px; color: #1a3a8a; text-decoration: none; font-weight: 500;">onlinecourseformlm.com</a></td></tr>
+      </table>
+    </td>
+  </tr>
+</table>`;
+
+    try {
+      await resend.emails.send({
+        from: `${step.from_name || "Vanto Zazi"} <vanto@onlinecourseformlm.com>`,
+        to: [email],
+        subject: personalizedSubject,
+        html: `${personalizedContent}${signature}<p style="font-size: 11px; color: #999; margin-top: 16px;">You're receiving this email because you registered in APLGO.<br/><a href="${unsubUrl}" style="color:#999; text-decoration: underline;">Unsubscribe</a></p>`,
+      });
+      console.log(`Automation email sent to ${email}: ${personalizedSubject}`);
+    } catch (e) {
+      console.error(`Automation email failed for ${email}:`, e);
+    }
+  } else if (step.type === "add_tag") {
+    if (!step.tag_name) return;
+
+    const { data: prospect } = await adminClient
+      .from("prospects")
+      .select("id")
+      .eq("email", email)
+      .maybeSingle();
+
+    const { data: tag } = await adminClient
+      .from("tags")
+      .select("id")
+      .eq("name", step.tag_name)
+      .maybeSingle();
+
+    if (prospect && tag) {
+      await adminClient
+        .from("prospect_tags")
+        .upsert(
+          { prospect_id: prospect.id, tag_id: tag.id },
+          { onConflict: "prospect_id,tag_id" }
+        )
+        .select();
+    }
+  }
+}
+
 serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -63,79 +144,51 @@ serve(async (req: Request) => {
       const firstName = trigger_data?.first_name || "there";
       if (!email) continue;
 
-      // Execute workflow steps sequentially
-      for (const step of workflow) {
-        if (step.type === "send_email" && resend) {
-          const { data: prospect } = await adminClient
-            .from("prospects")
-            .select("unsubscribe_token")
-            .eq("email", email)
-            .maybeSingle();
+      // Check for duplicate — don't re-enqueue if already queued for this automation
+      const { data: existing } = await adminClient
+        .from("automation_queue")
+        .select("id")
+        .eq("automation_id", automation.id)
+        .eq("email", email)
+        .limit(1);
 
-          const appUrl = "https://kit-clone-dashboard.lovable.app";
-          const unsubUrl = `${appUrl}/unsubscribe?token=${prospect?.unsubscribe_token || ""}`;
-          const personalizedContent = (step.content || "")
-            .replace(/\{\{first_name\}\}/g, firstName);
-          const personalizedSubject = (step.subject || "")
-            .replace(/\{\{first_name\}\}/g, firstName);
+      if (existing && existing.length > 0) {
+        console.log(`Skipping duplicate: ${email} already in queue for automation ${automation.id}`);
+        continue;
+      }
 
-          const signature = `
-<table cellpadding="0" cellspacing="0" border="0" style="font-family: Arial, Helvetica, sans-serif; max-width: 500px; margin-top: 24px; border-top: 2px solid #5CC5DE; padding-top: 16px;">
-  <tr>
-    <td style="vertical-align: top; padding-right: 16px;">
-      <img src="${appUrl}/assets/logo.jpg" alt="Vanto Zazi Mail" width="80" height="80" style="border-radius: 8px; display: block;" />
-    </td>
-    <td style="vertical-align: top;">
-      <p style="margin: 0 0 4px 0; font-size: 16px; font-weight: bold; color: #1a1a1a;">Vanto Zazi</p>
-      <p style="margin: 0 0 8px 0; font-size: 13px; color: #5CC5DE; font-weight: 600;">Wellness Business Leader | APLGO</p>
-      <table cellpadding="0" cellspacing="0" border="0">
-        <tr><td style="padding-right: 6px;"><span style="font-size: 12px; color: #666;">📧</span></td><td><a href="mailto:vanto@onlinecourseformlm.com" style="font-size: 13px; color: #333; text-decoration: none;">vanto@onlinecourseformlm.com</a></td></tr>
-        <tr><td style="padding-right: 6px; padding-top: 4px;"><span style="font-size: 12px; color: #666;">🌐</span></td><td style="padding-top: 4px;"><a href="https://onlinecourseformlm.com" style="font-size: 13px; color: #5CC5DE; text-decoration: none; font-weight: 500;">onlinecourseformlm.com</a></td></tr>
-      </table>
-      <p style="margin: 10px 0 0 0; font-size: 11px; color: #999; font-style: italic;">"Empowering wellness entrepreneurs to build scalable income."</p>
-    </td>
-  </tr>
-</table>`;
+      // Execute immediate steps (before first wait) and queue the rest
+      let cumulativeDelayHours = 0;
+      let hitWait = false;
 
-          try {
-            await resend.emails.send({
-              from: `${step.from_name || "Vanto Zazi"} <vanto@onlinecourseformlm.com>`,
-              to: [email],
-              subject: personalizedSubject,
-              html: `${personalizedContent}${signature}<p style="font-size: 11px; color: #999; margin-top: 16px;">You're receiving this email because you registered in APLGO.<br/><a href="${unsubUrl}" style="color:#999; text-decoration: underline;">Unsubscribe</a></p>`,
-            });
-          } catch (e) {
-            console.error(`Automation email failed for ${email}:`, e);
-          }
-        } else if (step.type === "add_tag") {
-          if (!step.tag_name) continue;
+      for (let i = 0; i < workflow.length; i++) {
+        const step = workflow[i];
 
-          const { data: prospect } = await adminClient
-            .from("prospects")
-            .select("id")
-            .eq("email", email)
-            .maybeSingle();
+        if (step.type === "wait") {
+          cumulativeDelayHours += step.duration_hours || 0;
+          hitWait = true;
+          continue;
+        }
 
-          const { data: tag } = await adminClient
-            .from("tags")
-            .select("id")
-            .eq("name", step.tag_name)
-            .maybeSingle();
-
-          if (prospect && tag) {
-            await adminClient
-              .from("prospect_tags")
-              .upsert(
-                { prospect_id: prospect.id, tag_id: tag.id },
-                { onConflict: "prospect_id,tag_id" }
-              )
-              .select();
-          }
-        } else if (step.type === "wait") {
-          // Wait steps log duration - in production this would schedule the next steps
-          console.log(`Wait step: ${step.duration_hours || 0} hours — skipping (synchronous execution)`);
+        if (!hitWait) {
+          // Execute immediately (steps before first wait)
+          await executeStep(step, email, firstName, resend, adminClient);
+        } else {
+          // Queue for later execution
+          const sendAt = new Date(Date.now() + cumulativeDelayHours * 60 * 60 * 1000).toISOString();
+          await adminClient.from("automation_queue").insert({
+            automation_id: automation.id,
+            email,
+            first_name: firstName,
+            step_index: i,
+            step_data: step,
+            send_at: sendAt,
+            status: "pending",
+          });
+          console.log(`Queued step ${i} for ${email} at ${sendAt}`);
         }
       }
+
       executed++;
     }
 

@@ -132,6 +132,123 @@ serve(async (req: Request) => {
       processed++;
     }
 
+    // --- Process automation queue ---
+    let queueProcessed = 0;
+    const { data: dueItems } = await adminClient
+      .from("automation_queue")
+      .select("*")
+      .eq("status", "pending")
+      .lte("send_at", now)
+      .order("send_at", { ascending: true })
+      .limit(50);
+
+    if (dueItems && dueItems.length > 0) {
+      const resendForQueue = resendKey ? new Resend(resendKey) : null;
+
+      for (const item of dueItems) {
+        try {
+          // Mark as processing to prevent duplicate pickup
+          await adminClient
+            .from("automation_queue")
+            .update({ status: "processing" })
+            .eq("id", item.id);
+
+          const step = item.step_data as any;
+          const email = item.email;
+          const firstName = item.first_name || "there";
+
+          if (step.type === "send_email" && resendForQueue) {
+            const { data: prospect } = await adminClient
+              .from("prospects")
+              .select("unsubscribe_token, unsubscribed")
+              .eq("email", email)
+              .maybeSingle();
+
+            if (prospect?.unsubscribed) {
+              // Cancel all remaining queued steps for this subscriber + automation
+              await adminClient
+                .from("automation_queue")
+                .update({ status: "cancelled", processed_at: new Date().toISOString() })
+                .eq("automation_id", item.automation_id)
+                .eq("email", email)
+                .eq("status", "pending");
+              
+              await adminClient
+                .from("automation_queue")
+                .update({ status: "cancelled", processed_at: new Date().toISOString() })
+                .eq("id", item.id);
+              
+              console.log(`Cancelled queue for unsubscribed ${email}`);
+              continue;
+            }
+
+            const unsubUrl = `${appUrl}/unsubscribe?token=${prospect?.unsubscribe_token || ""}`;
+            const personalizedContent = (step.content || "")
+              .replace(/\{\{first_name\}\}/g, firstName);
+            const personalizedSubject = (step.subject || "")
+              .replace(/\{\{first_name\}\}/g, firstName);
+
+            const signature = `
+<table cellpadding="0" cellspacing="0" border="0" style="font-family: Arial, Helvetica, sans-serif; max-width: 540px; margin-top: 24px; border-top: 2px solid #1a3a8a; padding-top: 16px;">
+  <tr>
+    <td style="vertical-align: top; padding-right: 16px;">
+      <img src="${appUrl}/assets/logo-mlm.jpg" alt="Online Course For MLM" width="90" height="68" style="border-radius: 6px; display: block; object-fit: cover;" />
+    </td>
+    <td style="vertical-align: top;">
+      <p style="margin: 0 0 2px 0; font-size: 16px; font-weight: bold; color: #1a1a1a;">Vanto Vanto</p>
+      <p style="margin: 0 0 2px 0; font-size: 13px; color: #1a3a8a; font-weight: 600;">Founder — Vanto Zazi</p>
+      <p style="margin: 0 0 8px 0; font-size: 12px; color: #666;">Master AI. Recruit Smart. Grow Fast.</p>
+      <table cellpadding="0" cellspacing="0" border="0">
+        <tr><td style="padding-right: 6px;"><span style="font-size: 12px; color: #666;">📧</span></td><td><a href="mailto:vanto@onlinecourseformlm.com" style="font-size: 13px; color: #333; text-decoration: none;">vanto@onlinecourseformlm.com</a></td></tr>
+        <tr><td style="padding-right: 6px; padding-top: 4px;"><span style="font-size: 12px; color: #666;">🌐</span></td><td style="padding-top: 4px;"><a href="https://onlinecourseformlm.com" style="font-size: 13px; color: #1a3a8a; text-decoration: none; font-weight: 500;">onlinecourseformlm.com</a></td></tr>
+      </table>
+    </td>
+  </tr>
+</table>`;
+
+            await resendForQueue.emails.send({
+              from: `${step.from_name || "Vanto Zazi"} <vanto@onlinecourseformlm.com>`,
+              to: [email],
+              subject: personalizedSubject,
+              html: `${personalizedContent}${signature}<p style="font-size: 11px; color: #999; margin-top: 16px;">You're receiving this email because you registered in APLGO.<br/><a href="${unsubUrl}" style="color:#999; text-decoration: underline;">Unsubscribe</a></p>`,
+            });
+
+            console.log(`Queue: sent automation email to ${email} — ${personalizedSubject}`);
+          } else if (step.type === "add_tag" && step.tag_name) {
+            const { data: prospect } = await adminClient
+              .from("prospects")
+              .select("id")
+              .eq("email", email)
+              .maybeSingle();
+            const { data: tag } = await adminClient
+              .from("tags")
+              .select("id")
+              .eq("name", step.tag_name)
+              .maybeSingle();
+            if (prospect && tag) {
+              await adminClient
+                .from("prospect_tags")
+                .upsert({ prospect_id: prospect.id, tag_id: tag.id }, { onConflict: "prospect_id,tag_id" })
+                .select();
+            }
+          }
+
+          await adminClient
+            .from("automation_queue")
+            .update({ status: "sent", processed_at: new Date().toISOString() })
+            .eq("id", item.id);
+
+          queueProcessed++;
+        } catch (e) {
+          console.error(`Queue processing failed for ${item.id}:`, e);
+          await adminClient
+            .from("automation_queue")
+            .update({ status: "failed", processed_at: new Date().toISOString() })
+            .eq("id", item.id);
+        }
+      }
+    }
+
     // --- Auto-check A/B test winners ---
     let abChecked = 0;
     const { data: runningTests } = await adminClient
@@ -145,7 +262,6 @@ serve(async (req: Request) => {
         const durationMs = (test.duration_hours || 4) * 60 * 60 * 1000;
         if (Date.now() < startedAt + durationMs) continue;
 
-        // Duration elapsed — determine winner
         const results = (test.results || {}) as Record<string, any>;
         const metric = test.winning_metric;
         const eventType = metric === "clicks" ? "%clicked%" : "%opened%";
@@ -176,7 +292,7 @@ serve(async (req: Request) => {
     }
 
     return new Response(
-      JSON.stringify({ success: true, processed, ab_tests_checked: abChecked }),
+      JSON.stringify({ success: true, processed, queue_processed: queueProcessed, ab_tests_checked: abChecked }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err: any) {

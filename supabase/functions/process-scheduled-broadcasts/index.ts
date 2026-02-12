@@ -52,11 +52,35 @@ serve(async (req: Request) => {
         .update({ status: "sending" })
         .eq("id", broadcast.id);
 
-      // Get active subscribers
-      const { data: subscribers } = await adminClient
-        .from("prospects")
-        .select("email, first_name, unsubscribe_token")
-        .eq("unsubscribed", false);
+      // Get active subscribers (filtered by segment if set)
+      let subscribers: any[] | null = null;
+
+      if (broadcast.segment_id) {
+        const { data: segment } = await adminClient
+          .from("segments")
+          .select("filters")
+          .eq("id", broadcast.segment_id)
+          .maybeSingle();
+
+        if (segment?.filters) {
+          const { data } = await adminClient.rpc("get_segment_prospects", {
+            segment_filters: segment.filters,
+          }).select("email, first_name, unsubscribe_token");
+          subscribers = data;
+        } else {
+          const { data } = await adminClient
+            .from("prospects")
+            .select("email, first_name, unsubscribe_token")
+            .eq("unsubscribed", false);
+          subscribers = data;
+        }
+      } else {
+        const { data } = await adminClient
+          .from("prospects")
+          .select("email, first_name, unsubscribe_token")
+          .eq("unsubscribed", false);
+        subscribers = data;
+      }
 
       if (!subscribers || subscribers.length === 0) {
         await adminClient

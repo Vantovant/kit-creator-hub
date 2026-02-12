@@ -95,11 +95,41 @@ serve(async (req: Request) => {
       .update({ status: "sending" })
       .eq("id", broadcast_id);
 
-    // Get active subscribers
-    const { data: subscribers, error: subError } = await adminClient
-      .from("prospects")
-      .select("email, first_name, unsubscribe_token")
-      .eq("unsubscribed", false);
+    // Get active subscribers (filtered by segment if set)
+    let subscribers: any[] | null = null;
+    let subError: any = null;
+
+    if (broadcast.segment_id) {
+      // Fetch segment filters
+      const { data: segment } = await adminClient
+        .from("segments")
+        .select("filters")
+        .eq("id", broadcast.segment_id)
+        .maybeSingle();
+
+      if (segment?.filters) {
+        const { data, error } = await adminClient.rpc("get_segment_prospects", {
+          segment_filters: segment.filters,
+        }).select("email, first_name, unsubscribe_token");
+        subscribers = data;
+        subError = error;
+      } else {
+        // Segment not found or no filters, fall back to all
+        const { data, error } = await adminClient
+          .from("prospects")
+          .select("email, first_name, unsubscribe_token")
+          .eq("unsubscribed", false);
+        subscribers = data;
+        subError = error;
+      }
+    } else {
+      const { data, error } = await adminClient
+        .from("prospects")
+        .select("email, first_name, unsubscribe_token")
+        .eq("unsubscribed", false);
+      subscribers = data;
+      subError = error;
+    }
 
     if (subError || !subscribers) {
       await adminClient

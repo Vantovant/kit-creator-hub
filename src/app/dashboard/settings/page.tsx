@@ -20,6 +20,7 @@ import {
   Camera,
   Loader2,
 } from "lucide-react";
+import { EmailSignaturePreview } from "@/components/dashboard/EmailSignaturePreview";
 
 export default function SettingsPage() {
   const { user } = useAuth();
@@ -425,6 +426,7 @@ export default function SettingsPage() {
 
             {/* Email Settings Tab */}
             <TabsContent value="email" className="space-y-6">
+              <EmailSignaturePreview />
               <Card className="bg-white dark:bg-gray-800">
                 <CardHeader>
                   <CardTitle className="text-lg dark:text-gray-100">Default Sender Info</CardTitle>

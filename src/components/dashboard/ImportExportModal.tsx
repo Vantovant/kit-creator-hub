@@ -1,4 +1,4 @@
-// Import/Export modal
+// Import/Export modal with auto-tagging support
 
 import { useState, useRef } from "react";
 import {
@@ -8,6 +8,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Upload,
   Download,
@@ -15,6 +17,7 @@ import {
   CheckCircle2,
   AlertCircle,
   X,
+  Tag,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { parseCsv } from "@/lib/csv-parser";
@@ -36,8 +39,10 @@ export function ImportExportModal({ isOpen, onClose, onImportComplete, mode }: I
   const [activeTab, setActiveTab] = useState(mode);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importStatus, setImportStatus] = useState<"idle" | "processing" | "success" | "error">("idle");
-  const [importResults, setImportResults] = useState({ total: 0, added: 0, skipped: 0 });
+  const [importResults, setImportResults] = useState({ total: 0, added: 0, skipped: 0, tagged: 0 });
   const [importErrors, setImportErrors] = useState<string[]>([]);
+  const [autoTag, setAutoTag] = useState("Registered_not_activated");
+  const [enableAutoTag, setEnableAutoTag] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -65,10 +70,18 @@ export function ImportExportModal({ isOpen, onClose, onImportComplete, mode }: I
         return;
       }
 
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setImportStatus("error");
+        setImportErrors(["You must be logged in to import."]);
+        return;
+      }
+
       // Insert in batches of 100
       let added = 0;
       let skipped = 0;
       const batchSize = 100;
+      const allInsertedIds: string[] = [];
 
       for (let i = 0; i < subscribers.length; i += batchSize) {
         const batch = subscribers.slice(i, i + batchSize);
@@ -80,7 +93,7 @@ export function ImportExportModal({ isOpen, onClose, onImportComplete, mode }: I
               first_name: s.first_name || null,
               source: s.source || "csv_import",
             })),
-            { onConflict: "email", ignoreDuplicates: true }
+            { onConflict: "email", ignoreDuplicates: false }
           )
           .select("id");
 
@@ -90,20 +103,71 @@ export function ImportExportModal({ isOpen, onClose, onImportComplete, mode }: I
         } else {
           added += data?.length || 0;
           skipped += batch.length - (data?.length || 0);
+          if (data) allInsertedIds.push(...data.map((d) => d.id));
         }
+      }
+
+      // Also fetch IDs for existing prospects that were upserted (didn't return new IDs)
+      if (enableAutoTag && autoTag.trim()) {
+        // Get all prospect IDs by email lookup
+        const allEmails = subscribers.map((s) => s.email);
+        const prospectIds: string[] = [];
+        for (let i = 0; i < allEmails.length; i += 100) {
+          const batch = allEmails.slice(i, i + 100);
+          const { data: prospects } = await supabase
+            .from("prospects")
+            .select("id")
+            .in("email", batch);
+          if (prospects) prospectIds.push(...prospects.map((p) => p.id));
+        }
+
+        await autoTagProspects(prospectIds, autoTag.trim(), user.id);
+        setImportResults({ total: subscribers.length + errors.length, added, skipped: skipped + errors.length, tagged: prospectIds.length });
+      } else {
+        setImportResults({ total: subscribers.length + errors.length, added, skipped: skipped + errors.length, tagged: 0 });
       }
 
       if (errors.length > 0) {
         setImportErrors(errors.slice(0, 10));
       }
 
-      setImportResults({ total: subscribers.length + errors.length, added, skipped: skipped + errors.length });
       setImportStatus("success");
       onImportComplete?.();
     } catch (err) {
       console.error("Import error:", err);
       setImportStatus("error");
       setImportErrors(["Failed to process the file. Please check the format and try again."]);
+    }
+  };
+
+  const autoTagProspects = async (prospectIds: string[], tagName: string, userId: string) => {
+    // Ensure tag exists
+    let { data: existingTag } = await supabase
+      .from("tags")
+      .select("id")
+      .eq("name", tagName)
+      .maybeSingle();
+
+    if (!existingTag) {
+      const { data: newTag } = await supabase
+        .from("tags")
+        .insert({ name: tagName, color: "#ef4444", user_id: userId })
+        .select("id")
+        .single();
+      existingTag = newTag;
+    }
+
+    if (!existingTag) return;
+
+    // Assign tag to all prospects in batches
+    for (let i = 0; i < prospectIds.length; i += 100) {
+      const batch = prospectIds.slice(i, i + 100);
+      await supabase
+        .from("prospect_tags")
+        .upsert(
+          batch.map((pid) => ({ prospect_id: pid, tag_id: existingTag!.id })),
+          { onConflict: "prospect_id,tag_id" }
+        );
     }
   };
 
@@ -200,8 +264,13 @@ export function ImportExportModal({ isOpen, onClose, onImportComplete, mode }: I
                     {importResults.added} added
                   </span>
                   <span className="text-amber-600">
-                    {importResults.skipped} skipped (duplicates)
+                    {importResults.skipped} skipped
                   </span>
+                  {importResults.tagged > 0 && (
+                    <span className="text-blue-600">
+                      {importResults.tagged} tagged
+                    </span>
+                  )}
                 </div>
                 {importErrors.length > 0 && (
                   <div className="mt-3 text-xs text-muted-foreground max-h-24 overflow-y-auto">
@@ -229,37 +298,37 @@ export function ImportExportModal({ isOpen, onClose, onImportComplete, mode }: I
                   onDrop={handleDrop}
                   className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
                     importFile
-                      ? "border-[#5CC5DE] bg-[#5CC5DE]/5"
-                      : "border-gray-300 hover:border-gray-400"
+                      ? "border-primary bg-primary/5"
+                      : "border-border hover:border-muted-foreground"
                   }`}
                 >
                   {importFile ? (
                     <div className="flex items-center justify-center gap-3">
-                      <FileText className="w-8 h-8 text-[#5CC5DE]" />
+                      <FileText className="w-8 h-8 text-primary" />
                       <div className="text-left">
                         <p className="font-medium">{importFile.name}</p>
-                        <p className="text-sm text-gray-500">
+                        <p className="text-sm text-muted-foreground">
                           {(importFile.size / 1024).toFixed(1)} KB
                         </p>
                       </div>
                       <button
                         type="button"
                         onClick={() => setImportFile(null)}
-                        className="ml-4 p-1 hover:bg-gray-100 rounded"
+                        className="ml-4 p-1 hover:bg-muted rounded"
                       >
                         <X className="w-4 h-4" />
                       </button>
                     </div>
                   ) : (
                     <>
-                      <Upload className="w-10 h-10 text-gray-400 mx-auto mb-3" />
-                      <p className="text-gray-600 mb-2">
+                      <Upload className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
+                      <p className="text-muted-foreground mb-2">
                         Drag and drop your CSV file here, or
                       </p>
                       <button
                         type="button"
                         onClick={() => fileInputRef.current?.click()}
-                        className="text-[#5CC5DE] hover:underline font-medium"
+                        className="text-primary hover:underline font-medium"
                       >
                         browse to upload
                       </button>
@@ -274,14 +343,38 @@ export function ImportExportModal({ isOpen, onClose, onImportComplete, mode }: I
                   )}
                 </div>
 
-                <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
+                {/* Auto-tag option */}
+                <div className="flex items-center gap-3 p-3 rounded-lg border border-border bg-muted/30">
+                  <Tag className="w-4 h-4 text-primary shrink-0" />
+                  <div className="flex-1 space-y-1">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={enableAutoTag}
+                        onChange={(e) => setEnableAutoTag(e.target.checked)}
+                        className="rounded border-border"
+                      />
+                      <span className="text-sm font-medium">Auto-tag imported subscribers</span>
+                    </label>
+                    {enableAutoTag && (
+                      <Input
+                        value={autoTag}
+                        onChange={(e) => setAutoTag(e.target.value)}
+                        placeholder="e.g. Registered_not_activated"
+                        className="h-8 text-sm"
+                      />
+                    )}
+                  </div>
+                </div>
+
+                <div className="bg-muted/50 rounded-lg p-4">
                   <h4 className="font-medium mb-2 text-sm">CSV Format Requirements</h4>
-                  <ul className="text-sm text-gray-500 space-y-1">
-                    <li>First row should contain headers: email, name, tags</li>
+                  <ul className="text-sm text-muted-foreground space-y-1">
+                    <li>First row should contain headers: email (or EmailAddress), name (or FullName)</li>
                     <li>Email column is required</li>
                     <li>Multiple tags should be comma-separated in quotes</li>
                   </ul>
-                  <div className="mt-3 p-2 bg-white dark:bg-gray-700 rounded border text-xs font-mono">
+                  <div className="mt-3 p-2 bg-background rounded border text-xs font-mono">
                     email,name,tags<br />
                     john@example.com,John Doe,"Newsletter,Premium"
                   </div>
@@ -291,11 +384,11 @@ export function ImportExportModal({ isOpen, onClose, onImportComplete, mode }: I
                   type="button"
                   onClick={handleImport}
                   disabled={!importFile || importStatus === "processing"}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-[#5CC5DE] hover:bg-[#4AB5CE] disabled:bg-gray-300 text-black font-medium rounded-lg transition-colors"
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-primary hover:bg-primary/90 disabled:bg-muted text-primary-foreground font-medium rounded-lg transition-colors"
                 >
                   {importStatus === "processing" ? (
                     <>
-                      <div className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
+                      <div className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
                       Importing...
                     </>
                   ) : (
@@ -310,7 +403,7 @@ export function ImportExportModal({ isOpen, onClose, onImportComplete, mode }: I
           </TabsContent>
 
           <TabsContent value="export" className="space-y-4 mt-4">
-            <p className="text-gray-600 dark:text-gray-300">
+            <p className="text-muted-foreground">
               Export your subscriber list to use in other tools or for backup.
             </p>
 
@@ -318,30 +411,30 @@ export function ImportExportModal({ isOpen, onClose, onImportComplete, mode }: I
               <button
                 type="button"
                 onClick={() => handleExport("csv")}
-                className="flex flex-col items-center gap-3 p-6 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 hover:border-[#5CC5DE] transition-colors"
+                className="flex flex-col items-center gap-3 p-6 border border-border rounded-lg hover:bg-muted hover:border-primary transition-colors"
               >
                 <FileText className="w-10 h-10 text-green-600" />
                 <div className="text-center">
                   <p className="font-medium">CSV Format</p>
-                  <p className="text-xs text-gray-500">Excel, Google Sheets</p>
+                  <p className="text-xs text-muted-foreground">Excel, Google Sheets</p>
                 </div>
               </button>
               <button
                 type="button"
                 onClick={() => handleExport("json")}
-                className="flex flex-col items-center gap-3 p-6 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 hover:border-[#5CC5DE] transition-colors"
+                className="flex flex-col items-center gap-3 p-6 border border-border rounded-lg hover:bg-muted hover:border-primary transition-colors"
               >
                 <FileText className="w-10 h-10 text-amber-600" />
                 <div className="text-center">
                   <p className="font-medium">JSON Format</p>
-                  <p className="text-xs text-gray-500">Developers, APIs</p>
+                  <p className="text-xs text-muted-foreground">Developers, APIs</p>
                 </div>
               </button>
             </div>
 
-            <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
+            <div className="bg-muted/50 rounded-lg p-4">
               <h4 className="font-medium mb-2 text-sm">Export includes:</h4>
-              <ul className="text-sm text-gray-500 space-y-1">
+              <ul className="text-sm text-muted-foreground space-y-1">
                 <li>Email addresses</li>
                 <li>Subscriber names</li>
                 <li>Tags and segments</li>

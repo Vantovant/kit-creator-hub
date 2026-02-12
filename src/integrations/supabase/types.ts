@@ -73,6 +73,53 @@ export type Database = {
           },
         ]
       }
+      automation_queue: {
+        Row: {
+          automation_id: string
+          created_at: string
+          email: string
+          first_name: string | null
+          id: string
+          processed_at: string | null
+          send_at: string
+          status: string
+          step_data: Json
+          step_index: number
+        }
+        Insert: {
+          automation_id: string
+          created_at?: string
+          email: string
+          first_name?: string | null
+          id?: string
+          processed_at?: string | null
+          send_at: string
+          status?: string
+          step_data: Json
+          step_index: number
+        }
+        Update: {
+          automation_id?: string
+          created_at?: string
+          email?: string
+          first_name?: string | null
+          id?: string
+          processed_at?: string | null
+          send_at?: string
+          status?: string
+          step_data?: Json
+          step_index?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "automation_queue_automation_id_fkey"
+            columns: ["automation_id"]
+            isOneToOne: false
+            referencedRelation: "automations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       automations: {
         Row: {
           created_at: string

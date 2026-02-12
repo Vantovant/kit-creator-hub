@@ -1,20 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Plus, Zap, Play, Pause, Trash2, Pencil } from "lucide-react";
 
 interface Automation {
@@ -37,13 +27,9 @@ const TRIGGER_LABELS: Record<string, string> = {
 
 export default function AutomationsPage() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [automations, setAutomations] = useState<Automation[]>([]);
   const [loading, setLoading] = useState(true);
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [editing, setEditing] = useState<Automation | null>(null);
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [triggerType, setTriggerType] = useState("subscribe");
 
   const fetchAutomations = useCallback(async () => {
     const { data } = await supabase
@@ -59,38 +45,11 @@ export default function AutomationsPage() {
   }, [fetchAutomations]);
 
   const openNew = () => {
-    setEditing(null);
-    setName("");
-    setDescription("");
-    setTriggerType("subscribe");
-    setDialogOpen(true);
+    navigate("/dashboard/automations/builder");
   };
 
   const openEdit = (a: Automation) => {
-    setEditing(a);
-    setName(a.name);
-    setDescription(a.description || "");
-    setTriggerType(a.trigger_type);
-    setDialogOpen(true);
-  };
-
-  const save = async () => {
-    if (!name.trim() || !user) return;
-    if (editing) {
-      await supabase
-        .from("automations")
-        .update({ name: name.trim(), description: description.trim() || null, trigger_type: triggerType })
-        .eq("id", editing.id);
-    } else {
-      await supabase.from("automations").insert({
-        name: name.trim(),
-        description: description.trim() || null,
-        trigger_type: triggerType,
-        user_id: user.id,
-      });
-    }
-    setDialogOpen(false);
-    fetchAutomations();
+    navigate(`/dashboard/automations/builder?id=${a.id}`);
   };
 
   const toggleStatus = async (a: Automation) => {
@@ -189,44 +148,6 @@ export default function AutomationsPage() {
         )}
       </main>
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{editing ? "Edit Automation" : "New Automation"}</DialogTitle>
-            <DialogDescription>
-              {editing ? "Update automation details." : "Set up a new automated workflow."}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-2">
-              <Label>Name</Label>
-              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Welcome Series" />
-            </div>
-            <div className="space-y-2">
-              <Label>Description (optional)</Label>
-              <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What does this automation do?" className="min-h-[80px]" />
-            </div>
-            <div className="space-y-2">
-              <Label>Trigger</Label>
-              <select
-                value={triggerType}
-                onChange={(e) => setTriggerType(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border border-border bg-background text-foreground text-sm"
-              >
-                {Object.entries(TRIGGER_LABELS).map(([value, label]) => (
-                  <option key={value} value={value}>{label}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-          <DialogFooter>
-            <button type="button" onClick={() => setDialogOpen(false)} className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Cancel</button>
-            <button type="button" onClick={save} disabled={!name.trim()} className="px-4 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 transition-colors">
-              {editing ? "Save" : "Create"}
-            </button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

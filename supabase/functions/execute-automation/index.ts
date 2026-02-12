@@ -46,15 +46,26 @@ serve(async (req: Request) => {
     let executed = 0;
 
     for (const automation of automations) {
+      const triggerConfig = (automation.trigger_config || {}) as Record<string, any>;
       const workflow = automation.workflow as any[];
       if (!workflow || workflow.length === 0) continue;
 
+      // Check trigger config filters
+      if (trigger_type === "tag_added" && triggerConfig.tag_name) {
+        if (trigger_data?.tag_name !== triggerConfig.tag_name) continue;
+      }
+      if (trigger_type === "link_click" && triggerConfig.link_url) {
+        const clickedUrl = trigger_data?.link_url || "";
+        if (!clickedUrl.includes(triggerConfig.link_url)) continue;
+      }
+
+      const email = trigger_data?.email;
+      const firstName = trigger_data?.first_name || "there";
+      if (!email) continue;
+
+      // Execute workflow steps sequentially
       for (const step of workflow) {
         if (step.type === "send_email" && resend) {
-          const email = trigger_data?.email;
-          const firstName = trigger_data?.first_name || "there";
-          if (!email) continue;
-
           const { data: prospect } = await adminClient
             .from("prospects")
             .select("unsubscribe_token")
@@ -65,20 +76,21 @@ serve(async (req: Request) => {
           const unsubUrl = `${appUrl}/unsubscribe?token=${prospect?.unsubscribe_token || ""}`;
           const personalizedContent = (step.content || "")
             .replace(/\{\{first_name\}\}/g, firstName);
+          const personalizedSubject = (step.subject || "")
+            .replace(/\{\{first_name\}\}/g, firstName);
 
           try {
             await resend.emails.send({
               from: `${step.from_name || "Vanto Zazi"} <vanto@onlinecourseformlm.com>`,
               to: [email],
-              subject: (step.subject || "").replace(/\{\{first_name\}\}/g, firstName),
+              subject: personalizedSubject,
               html: `${personalizedContent}<hr style="margin:24px 0;border:none;border-top:1px solid #eee;"/><p style="font-size:12px;color:#999;"><a href="${unsubUrl}" style="color:#999;">Unsubscribe</a></p>`,
             });
           } catch (e) {
             console.error(`Automation email failed for ${email}:`, e);
           }
         } else if (step.type === "add_tag") {
-          const email = trigger_data?.email;
-          if (!email || !step.tag_name) continue;
+          if (!step.tag_name) continue;
 
           const { data: prospect } = await adminClient
             .from("prospects")
@@ -95,13 +107,15 @@ serve(async (req: Request) => {
           if (prospect && tag) {
             await adminClient
               .from("prospect_tags")
-              .upsert({ prospect_id: prospect.id, tag_id: tag.id }, { onConflict: "prospect_id,tag_id" })
+              .upsert(
+                { prospect_id: prospect.id, tag_id: tag.id },
+                { onConflict: "prospect_id,tag_id" }
+              )
               .select();
           }
         } else if (step.type === "wait") {
-          // Wait steps are logged but not actually delayed in this synchronous execution
-          // A production system would use a job queue
-          console.log(`Wait step: ${step.duration_hours || 0} hours`);
+          // Wait steps log duration - in production this would schedule the next steps
+          console.log(`Wait step: ${step.duration_hours || 0} hours — skipping (synchronous execution)`);
         }
       }
       executed++;

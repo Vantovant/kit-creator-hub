@@ -16,8 +16,7 @@ serve(async (req: Request) => {
     const payload = await req.json();
     const { type, data } = payload;
 
-    // Map Resend event types
-    const eventType = type; // e.g. email.delivered, email.bounced, email.opened, email.clicked, email.complained
+    const eventType = type;
     const email = data?.to?.[0] || data?.email || "";
     const broadcastSubject = data?.subject || "";
 
@@ -47,6 +46,34 @@ serve(async (req: Request) => {
     });
 
     console.log(`Stored email event: ${eventType} for ${email}`);
+
+    // Trigger link_click automations
+    if (eventType === "email.clicked" && email) {
+      const clickUrl = data?.click?.url || data?.url || "";
+      // Get prospect info
+      const { data: prospect } = await adminClient
+        .from("prospects")
+        .select("first_name")
+        .eq("email", email)
+        .maybeSingle();
+
+      try {
+        await fetch(`${supabaseUrl}/functions/v1/execute-automation`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            trigger_type: "link_click",
+            trigger_data: {
+              email,
+              first_name: prospect?.first_name || null,
+              link_url: clickUrl,
+            },
+          }),
+        });
+      } catch (e) {
+        console.error("link_click automation trigger error (non-fatal):", e);
+      }
+    }
 
     return new Response(JSON.stringify({ received: true }), {
       status: 200,

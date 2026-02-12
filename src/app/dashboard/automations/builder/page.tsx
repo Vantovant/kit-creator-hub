@@ -1,7 +1,13 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { useSearchParams, useNavigate } from "react-router-dom";
+import type { Json } from "@/integrations/supabase/types";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import {
   Plus,
@@ -10,303 +16,486 @@ import {
   Save,
   Mail,
   Clock,
-  Users,
   Tag,
-  Filter,
   Zap,
   GitBranch,
-  ArrowDown,
   Trash2,
   GripVertical,
-  Settings,
-  ChevronDown,
   UserPlus,
-  ShoppingCart,
   MousePointerClick,
   Calendar,
+  ArrowLeft,
+  Loader2,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 
-interface WorkflowNode {
+interface WorkflowStep {
   id: string;
-  type: "trigger" | "action" | "condition" | "delay";
-  config: {
-    name: string;
-    description?: string;
-    icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>;
-    color: string;
-  };
+  type: "send_email" | "add_tag" | "wait";
+  subject?: string;
+  content?: string;
+  from_name?: string;
+  tag_name?: string;
+  duration_hours?: number;
 }
 
-const triggerOptions = [
-  { id: "subscribe", name: "Subscribes to a form", icon: UserPlus, color: "#5CC5DE" },
-  { id: "tag_added", name: "Tag is added", icon: Tag, color: "#7BC47F" },
-  { id: "purchase", name: "Makes a purchase", icon: ShoppingCart, color: "#E8B86D" },
-  { id: "link_click", name: "Clicks a link", icon: MousePointerClick, color: "#9B8BDE" },
-  { id: "date", name: "Date-based trigger", icon: Calendar, color: "#E88B8B" },
+interface TriggerConfig {
+  tag_name?: string;
+  link_url?: string;
+  date?: string;
+  time?: string;
+}
+
+const TRIGGER_OPTIONS = [
+  { id: "subscribe", name: "When someone subscribes", icon: UserPlus, color: "hsl(var(--primary))" },
+  { id: "tag_added", name: "When a tag is added", icon: Tag, color: "hsl(var(--accent))" },
+  { id: "link_click", name: "When a link is clicked", icon: MousePointerClick, color: "hsl(var(--secondary))" },
+  { id: "date", name: "On a specific date", icon: Calendar, color: "hsl(var(--destructive))" },
 ];
 
-const actionOptions = [
-  { id: "send_email", name: "Send an email", icon: Mail, color: "#5CC5DE" },
-  { id: "add_tag", name: "Add a tag", icon: Tag, color: "#7BC47F" },
-  { id: "remove_tag", name: "Remove a tag", icon: Tag, color: "#E88B8B" },
-  { id: "add_to_sequence", name: "Add to sequence", icon: Zap, color: "#9B8BDE" },
-  { id: "update_field", name: "Update custom field", icon: Settings, color: "#E8B86D" },
-];
-
-const defaultWorkflow: WorkflowNode[] = [
-  {
-    id: "1",
-    type: "trigger",
-    config: { name: "Subscribes to a form", icon: UserPlus, color: "#5CC5DE" },
-  },
+const ACTION_OPTIONS = [
+  { id: "send_email", name: "Send an email", icon: Mail },
+  { id: "add_tag", name: "Add a tag", icon: Tag },
+  { id: "wait", name: "Wait / Delay", icon: Clock },
 ];
 
 export default function AutomationBuilderPage() {
-  const [workflowName, setWorkflowName] = useState("New Automation");
-  const [workflow, setWorkflow] = useState<WorkflowNode[]>(defaultWorkflow);
-  const [showAddMenu, setShowAddMenu] = useState<string | null>(null);
-  const [isActive, setIsActive] = useState(false);
+  const { user } = useAuth();
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const automationId = searchParams.get("id");
 
-  const addNode = (afterId: string, type: WorkflowNode["type"], config: WorkflowNode["config"]) => {
-    const newNode: WorkflowNode = {
-      id: Date.now().toString(),
-      type,
-      config,
+  const [name, setName] = useState("New Automation");
+  const [description, setDescription] = useState("");
+  const [triggerType, setTriggerType] = useState("subscribe");
+  const [triggerConfig, setTriggerConfig] = useState<TriggerConfig>({});
+  const [workflow, setWorkflow] = useState<WorkflowStep[]>([]);
+  const [status, setStatus] = useState("draft");
+  const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(!!automationId);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const [showAddMenu, setShowAddMenu] = useState<string | null>(null);
+  const [expandedStep, setExpandedStep] = useState<string | null>(null);
+  const [tags, setTags] = useState<{ id: string; name: string }[]>([]);
+
+  // Load tags for tag picker
+  useEffect(() => {
+    supabase.from("tags").select("id, name").order("name").then(({ data }) => {
+      if (data) setTags(data);
+    });
+  }, []);
+
+  // Load existing automation
+  useEffect(() => {
+    if (!automationId) return;
+    (async () => {
+      const { data, error: fetchErr } = await supabase
+        .from("automations")
+        .select("*")
+        .eq("id", automationId)
+        .single();
+      if (fetchErr || !data) {
+        setError("Automation not found");
+        setLoading(false);
+        return;
+      }
+      setName(data.name);
+      setDescription(data.description || "");
+      setTriggerType(data.trigger_type);
+      setTriggerConfig((data.trigger_config as unknown as TriggerConfig) || {});
+      setWorkflow((data.workflow as unknown as WorkflowStep[]) || []);
+      setStatus(data.status);
+      setLoading(false);
+    })();
+  }, [automationId]);
+
+  const saveAutomation = async () => {
+    if (!name.trim() || !user) return;
+    setSaving(true);
+    setError("");
+
+    const payload = {
+      name: name.trim(),
+      description: description.trim() || null,
+      trigger_type: triggerType,
+      trigger_config: triggerConfig as unknown as Json,
+      workflow: workflow as unknown as Json,
+      status,
+      user_id: user.id,
     };
-    const index = workflow.findIndex((n) => n.id === afterId);
-    const newWorkflow = [...workflow];
-    newWorkflow.splice(index + 1, 0, newNode);
-    setWorkflow(newWorkflow);
-    setShowAddMenu(null);
+
+    let result;
+    if (automationId) {
+      result = await supabase.from("automations").update(payload).eq("id", automationId);
+    } else {
+      result = await supabase.from("automations").insert(payload).select("id").single();
+    }
+
+    if (result.error) {
+      setError("Failed to save: " + result.error.message);
+    } else {
+      setMessage("Saved!");
+      if (!automationId && result.data) {
+        navigate(`/dashboard/automations/builder?id=${result.data.id}`, { replace: true });
+      }
+      setTimeout(() => setMessage(""), 3000);
+    }
+    setSaving(false);
   };
 
-  const removeNode = (id: string) => {
-    if (workflow.length > 1) {
-      setWorkflow(workflow.filter((n) => n.id !== id));
+  const toggleStatus = async () => {
+    const next = status === "active" ? "draft" : "active";
+    setStatus(next);
+    if (automationId) {
+      await supabase.from("automations").update({ status: next }).eq("id", automationId);
     }
   };
 
+  const addStep = (afterId: string | null, type: WorkflowStep["type"]) => {
+    const newStep: WorkflowStep = {
+      id: Date.now().toString(),
+      type,
+      ...(type === "send_email" ? { subject: "", content: "", from_name: "Vanto Zazi" } : {}),
+      ...(type === "add_tag" ? { tag_name: "" } : {}),
+      ...(type === "wait" ? { duration_hours: 24 } : {}),
+    };
+    if (afterId === null) {
+      setWorkflow([...workflow, newStep]);
+    } else {
+      const idx = workflow.findIndex((s) => s.id === afterId);
+      const copy = [...workflow];
+      copy.splice(idx + 1, 0, newStep);
+      setWorkflow(copy);
+    }
+    setShowAddMenu(null);
+    setExpandedStep(newStep.id);
+  };
+
+  const updateStep = (id: string, updates: Partial<WorkflowStep>) => {
+    setWorkflow(workflow.map((s) => (s.id === id ? { ...s, ...updates } : s)));
+  };
+
+  const removeStep = (id: string) => {
+    setWorkflow(workflow.filter((s) => s.id !== id));
+  };
+
+  const stepIcon = (type: string) => {
+    if (type === "send_email") return Mail;
+    if (type === "add_tag") return Tag;
+    return Clock;
+  };
+
+  const stepLabel = (type: string) => {
+    if (type === "send_email") return "Send Email";
+    if (type === "add_tag") return "Add Tag";
+    return "Wait";
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  const triggerOption = TRIGGER_OPTIONS.find((t) => t.id === triggerType);
+
   return (
-    <div className="min-h-screen bg-gray-100 dark:bg-gray-900">
-      <DashboardHeader
-        title="Automation Builder"
-        subtitle="Create visual email automation workflows"
-      />
+    <div className="min-h-screen">
+      <DashboardHeader title="Automation Builder" subtitle="Design your automated workflow" />
 
       <main className="p-6">
-        <div className="max-w-4xl mx-auto">
-          {/* Header bar */}
-          <Card className="bg-white dark:bg-gray-800 mb-6">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <Input
-                    value={workflowName}
-                    onChange={(e) => setWorkflowName(e.target.value)}
-                    className="text-lg font-semibold border-none shadow-none focus-visible:ring-0 w-64 dark:bg-gray-800"
-                  />
-                  <Badge variant="secondary" className={isActive ? "bg-green-100 text-green-700" : ""}>
-                    {isActive ? "Active" : "Draft"}
-                  </Badge>
-                </div>
-                <div className="flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setIsActive(!isActive)}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
-                      isActive
-                        ? "bg-amber-100 text-amber-700 hover:bg-amber-200"
-                        : "bg-green-100 text-green-700 hover:bg-green-200"
-                    }`}
-                  >
-                    {isActive ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-                    {isActive ? "Pause" : "Activate"}
-                  </button>
-                  <button
-                    type="button"
-                    className="flex items-center gap-2 px-4 py-2 bg-[#5CC5DE] hover:bg-[#4AB5CE] text-black font-medium rounded-lg transition-colors"
-                  >
-                    <Save className="w-4 h-4" />
-                    Save
-                  </button>
-                </div>
+        <div className="max-w-3xl mx-auto space-y-4">
+          {/* Top bar */}
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <a
+              href="/dashboard/automations"
+              className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <ArrowLeft className="w-4 h-4" /> Back
+            </a>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={toggleStatus}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  status === "active"
+                    ? "bg-amber-500/10 text-amber-600 hover:bg-amber-500/20"
+                    : "bg-green-500/10 text-green-600 hover:bg-green-500/20"
+                }`}
+              >
+                {status === "active" ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                {status === "active" ? "Pause" : "Activate"}
+              </button>
+              <button
+                type="button"
+                onClick={saveAutomation}
+                disabled={saving}
+                className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground font-medium rounded-lg transition-colors disabled:opacity-50 text-sm"
+              >
+                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                Save
+              </button>
+            </div>
+          </div>
+
+          {error && <p className="text-sm text-destructive">{error}</p>}
+          {message && <p className="text-sm text-primary">{message}</p>}
+
+          {/* Name & description */}
+          <Card className="bg-card">
+            <CardContent className="p-4 space-y-3">
+              <div>
+                <Label className="text-sm font-medium">Automation Name</Label>
+                <Input value={name} onChange={(e) => setName(e.target.value)} className="mt-1" />
+              </div>
+              <div>
+                <Label className="text-sm font-medium">Description (optional)</Label>
+                <Input value={description} onChange={(e) => setDescription(e.target.value)} className="mt-1" placeholder="What does this automation do?" />
               </div>
             </CardContent>
           </Card>
 
-          {/* Workflow canvas */}
+          {/* Trigger */}
+          <Card className="bg-card border-2 border-primary/20">
+            <CardContent className="p-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <Zap className="w-5 h-5 text-primary" />
+                <h3 className="font-semibold text-foreground">Trigger</h3>
+              </div>
+              <select
+                value={triggerType}
+                onChange={(e) => {
+                  setTriggerType(e.target.value);
+                  setTriggerConfig({});
+                }}
+                className="w-full px-3 py-2 rounded-lg border border-border bg-background text-foreground text-sm"
+              >
+                {TRIGGER_OPTIONS.map((t) => (
+                  <option key={t.id} value={t.id}>{t.name}</option>
+                ))}
+              </select>
+
+              {/* Trigger-specific config */}
+              {triggerType === "tag_added" && (
+                <div>
+                  <Label className="text-sm text-muted-foreground">Tag name to watch</Label>
+                  <select
+                    value={triggerConfig.tag_name || ""}
+                    onChange={(e) => setTriggerConfig({ ...triggerConfig, tag_name: e.target.value })}
+                    className="w-full mt-1 px-3 py-2 rounded-lg border border-border bg-background text-foreground text-sm"
+                  >
+                    <option value="">Any tag</option>
+                    {tags.map((t) => (
+                      <option key={t.id} value={t.name}>{t.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              {triggerType === "link_click" && (
+                <div>
+                  <Label className="text-sm text-muted-foreground">Link URL to watch (leave blank for any link)</Label>
+                  <Input
+                    value={triggerConfig.link_url || ""}
+                    onChange={(e) => setTriggerConfig({ ...triggerConfig, link_url: e.target.value })}
+                    className="mt-1"
+                    placeholder="https://..."
+                  />
+                </div>
+              )}
+              {triggerType === "date" && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-sm text-muted-foreground">Date</Label>
+                    <Input
+                      type="date"
+                      value={triggerConfig.date || ""}
+                      onChange={(e) => setTriggerConfig({ ...triggerConfig, date: e.target.value })}
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-sm text-muted-foreground">Time</Label>
+                    <Input
+                      type="time"
+                      value={triggerConfig.time || ""}
+                      onChange={(e) => setTriggerConfig({ ...triggerConfig, time: e.target.value })}
+                      className="mt-1"
+                    />
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Workflow steps */}
           <div className="flex flex-col items-center">
-            {workflow.map((node, index) => (
-              <div key={node.id} className="flex flex-col items-center">
-                {/* Node */}
-                <div className="relative group">
-                  <Card className="bg-white dark:bg-gray-800 w-80 hover:shadow-lg transition-shadow">
-                    <CardContent className="p-4">
-                      <div className="flex items-start gap-4">
-                        <div
-                          className="p-3 rounded-xl"
-                          style={{ backgroundColor: `${node.config.color}20` }}
-                        >
-                          <node.config.icon
-                            className="w-6 h-6"
-                            style={{ color: node.config.color }}
-                          />
-                        </div>
-                        <div className="flex-1">
-                          <div className="flex items-center justify-between">
-                            <Badge
-                              variant="outline"
-                              className="text-xs capitalize mb-1"
+            {/* Connector from trigger */}
+            <div className="w-px h-6 bg-border" />
+
+            {workflow.length === 0 ? (
+              <button
+                type="button"
+                onClick={() => addStep(null, "send_email")}
+                className="flex items-center gap-2 px-4 py-2 border-2 border-dashed border-border rounded-lg text-muted-foreground hover:border-primary hover:text-primary transition-colors text-sm"
+              >
+                <Plus className="w-4 h-4" /> Add first step
+              </button>
+            ) : (
+              workflow.map((step, idx) => {
+                const Icon = stepIcon(step.type);
+                const isExpanded = expandedStep === step.id;
+                return (
+                  <div key={step.id} className="flex flex-col items-center w-full max-w-md">
+                    <Card className="bg-card w-full group">
+                      <CardContent className="p-4">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="p-2 rounded-lg bg-primary/10">
+                              <Icon className="w-4 h-4 text-primary" />
+                            </div>
+                            <div>
+                              <Badge variant="outline" className="text-xs capitalize mb-0.5">
+                                {stepLabel(step.type)}
+                              </Badge>
+                              {step.type === "send_email" && step.subject && (
+                                <p className="text-sm text-muted-foreground truncate max-w-[200px]">{step.subject}</p>
+                              )}
+                              {step.type === "add_tag" && step.tag_name && (
+                                <p className="text-sm text-muted-foreground">{step.tag_name}</p>
+                              )}
+                              {step.type === "wait" && (
+                                <p className="text-sm text-muted-foreground">{step.duration_hours}h delay</p>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => setExpandedStep(isExpanded ? null : step.id)}
+                              className="p-1 text-muted-foreground hover:text-foreground rounded"
                             >
-                              {node.type}
-                            </Badge>
-                            {index > 0 && (
-                              <button
-                                type="button"
-                                onClick={() => removeNode(node.id)}
-                                className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-500 transition-all"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
+                              {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => removeStep(step.id)}
+                              className="p-1 text-muted-foreground hover:text-destructive rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Expanded config */}
+                        {isExpanded && (
+                          <div className="mt-4 space-y-3 border-t border-border pt-4">
+                            {step.type === "send_email" && (
+                              <>
+                                <div>
+                                  <Label className="text-sm text-muted-foreground">Subject</Label>
+                                  <Input
+                                    value={step.subject || ""}
+                                    onChange={(e) => updateStep(step.id, { subject: e.target.value })}
+                                    placeholder="Email subject..."
+                                    className="mt-1"
+                                  />
+                                </div>
+                                <div>
+                                  <Label className="text-sm text-muted-foreground">Content (HTML, use {"{{first_name}}"} for personalization)</Label>
+                                  <Textarea
+                                    value={step.content || ""}
+                                    onChange={(e) => updateStep(step.id, { content: e.target.value })}
+                                    placeholder="<p>Hello {{first_name}}!</p>"
+                                    className="mt-1 min-h-[120px] font-mono text-sm"
+                                  />
+                                </div>
+                                <div>
+                                  <Label className="text-sm text-muted-foreground">From Name</Label>
+                                  <Input
+                                    value={step.from_name || "Vanto Zazi"}
+                                    onChange={(e) => updateStep(step.id, { from_name: e.target.value })}
+                                    className="mt-1"
+                                  />
+                                </div>
+                              </>
+                            )}
+                            {step.type === "add_tag" && (
+                              <div>
+                                <Label className="text-sm text-muted-foreground">Tag to add</Label>
+                                <select
+                                  value={step.tag_name || ""}
+                                  onChange={(e) => updateStep(step.id, { tag_name: e.target.value })}
+                                  className="w-full mt-1 px-3 py-2 rounded-lg border border-border bg-background text-foreground text-sm"
+                                >
+                                  <option value="">Select a tag...</option>
+                                  {tags.map((t) => (
+                                    <option key={t.id} value={t.name}>{t.name}</option>
+                                  ))}
+                                </select>
+                              </div>
+                            )}
+                            {step.type === "wait" && (
+                              <div>
+                                <Label className="text-sm text-muted-foreground">Wait duration (hours)</Label>
+                                <Input
+                                  type="number"
+                                  min={1}
+                                  value={step.duration_hours || 24}
+                                  onChange={(e) => updateStep(step.id, { duration_hours: parseInt(e.target.value) || 1 })}
+                                  className="mt-1 w-32"
+                                />
+                              </div>
                             )}
                           </div>
-                          <h3 className="font-medium text-gray-900 dark:text-gray-100">
-                            {node.config.name}
-                          </h3>
-                          {node.config.description && (
-                            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                              {node.config.description}
-                            </p>
+                        )}
+                      </CardContent>
+                    </Card>
+
+                    {/* Connector + add button */}
+                    <div className="relative py-3">
+                      <div className="w-px h-6 bg-border mx-auto" />
+                      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
+                        <div className="relative">
+                          <button
+                            type="button"
+                            onClick={() => setShowAddMenu(showAddMenu === step.id ? null : step.id)}
+                            className="w-7 h-7 rounded-full bg-card border-2 border-border flex items-center justify-center hover:border-primary hover:text-primary transition-colors"
+                          >
+                            <Plus className="w-3 h-3" />
+                          </button>
+                          {showAddMenu === step.id && (
+                            <div className="absolute top-9 left-1/2 -translate-x-1/2 w-48 bg-card rounded-xl shadow-xl border border-border z-10 p-1">
+                              {ACTION_OPTIONS.map((a) => (
+                                <button
+                                  key={a.id}
+                                  type="button"
+                                  onClick={() => addStep(step.id, a.id as WorkflowStep["type"])}
+                                  className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-muted transition-colors text-sm text-foreground"
+                                >
+                                  <a.icon className="w-4 h-4 text-primary" />
+                                  {a.name}
+                                </button>
+                              ))}
+                            </div>
                           )}
                         </div>
                       </div>
-                    </CardContent>
-                  </Card>
-
-                  {/* Drag handle */}
-                  <div className="absolute -left-8 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 cursor-grab">
-                    <GripVertical className="w-5 h-5 text-gray-400" />
-                  </div>
-                </div>
-
-                {/* Connector and Add button */}
-                <div className="relative py-4">
-                  <div className="w-px h-8 bg-gray-300 dark:bg-gray-600 mx-auto" />
-
-                  {/* Add node button */}
-                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
-                    <div className="relative">
-                      <button
-                        type="button"
-                        onClick={() => setShowAddMenu(showAddMenu === node.id ? null : node.id)}
-                        className="w-8 h-8 rounded-full bg-white dark:bg-gray-700 border-2 border-gray-300 dark:border-gray-600 flex items-center justify-center hover:border-[#5CC5DE] hover:text-[#5CC5DE] transition-colors"
-                      >
-                        <Plus className="w-4 h-4" />
-                      </button>
-
-                      {/* Add menu dropdown */}
-                      {showAddMenu === node.id && (
-                        <div className="absolute top-10 left-1/2 -translate-x-1/2 w-64 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 z-10">
-                          <div className="p-2">
-                            <p className="px-3 py-2 text-xs font-semibold text-gray-500 uppercase">
-                              Actions
-                            </p>
-                            {actionOptions.map((action) => (
-                              <button
-                                key={action.id}
-                                type="button"
-                                onClick={() => addNode(node.id, "action", {
-                                  name: action.name,
-                                  icon: action.icon,
-                                  color: action.color,
-                                })}
-                                className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                              >
-                                <action.icon className="w-4 h-4" style={{ color: action.color }} />
-                                <span className="text-sm text-gray-700 dark:text-gray-200">
-                                  {action.name}
-                                </span>
-                              </button>
-                            ))}
-
-                            <div className="border-t border-gray-100 dark:border-gray-700 my-2" />
-
-                            <p className="px-3 py-2 text-xs font-semibold text-gray-500 uppercase">
-                              Flow Control
-                            </p>
-                            <button
-                              type="button"
-                              onClick={() => addNode(node.id, "delay", {
-                                name: "Wait",
-                                description: "1 day",
-                                icon: Clock,
-                                color: "#94A3B8",
-                              })}
-                              className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                            >
-                              <Clock className="w-4 h-4 text-gray-500" />
-                              <span className="text-sm text-gray-700 dark:text-gray-200">
-                                Add delay
-                              </span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => addNode(node.id, "condition", {
-                                name: "If/Else condition",
-                                description: "Split based on rules",
-                                icon: GitBranch,
-                                color: "#9B8BDE",
-                              })}
-                              className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                            >
-                              <GitBranch className="w-4 h-4 text-purple-500" />
-                              <span className="text-sm text-gray-700 dark:text-gray-200">
-                                Add condition
-                              </span>
-                            </button>
-                          </div>
-                        </div>
-                      )}
                     </div>
                   </div>
-                </div>
-              </div>
-            ))}
+                );
+              })
+            )}
 
             {/* End node */}
-            <div className="w-12 h-12 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
-              <div className="w-4 h-4 rounded-full bg-gray-400 dark:bg-gray-500" />
+            <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center">
+              <div className="w-3 h-3 rounded-full bg-muted-foreground/40" />
             </div>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">End of automation</p>
+            <p className="text-xs text-muted-foreground mt-1">End</p>
           </div>
-
-          {/* Sidebar - Templates */}
-          <Card className="bg-white dark:bg-gray-800 mt-8">
-            <CardContent className="p-6">
-              <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-4">
-                Quick Start Templates
-              </h3>
-              <div className="grid sm:grid-cols-3 gap-4">
-                {[
-                  { name: "Welcome Series", steps: 4, icon: UserPlus },
-                  { name: "Re-engagement", steps: 3, icon: Users },
-                  { name: "Product Launch", steps: 5, icon: Zap },
-                ].map((template) => (
-                  <button
-                    key={template.name}
-                    type="button"
-                    className="flex items-center gap-3 p-4 border border-gray-200 dark:border-gray-700 rounded-xl hover:border-[#5CC5DE] hover:bg-[#5CC5DE]/5 transition-colors text-left"
-                  >
-                    <template.icon className="w-5 h-5 text-[#5CC5DE]" />
-                    <div>
-                      <p className="font-medium text-gray-900 dark:text-gray-100">{template.name}</p>
-                      <p className="text-xs text-gray-500">{template.steps} steps</p>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
         </div>
       </main>
     </div>

@@ -25,6 +25,7 @@ import {
   Redo2,
   Clock,
   FileText,
+  FlaskConical,
 } from "lucide-react";
 
 interface BroadcastEditorProps {
@@ -76,6 +77,11 @@ export function BroadcastEditor({ initialData, editId, onSaved }: BroadcastEdito
   const [scheduleTime, setScheduleTime] = useState("");
   const [scheduling, setScheduling] = useState(false);
 
+  // Send test email
+  const [testDialogOpen, setTestDialogOpen] = useState(false);
+  const [testEmail, setTestEmail] = useState("");
+  const [sendingTest, setSendingTest] = useState(false);
+
   // Save as template
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
   const [templateName, setTemplateName] = useState("");
@@ -104,6 +110,45 @@ export function BroadcastEditor({ initialData, editId, onSaved }: BroadcastEdito
     setMessage("Saved as template!");
     setTimeout(() => setMessage(""), 3000);
     setSavingTemplate(false);
+  };
+
+  const sendTestEmail = async () => {
+    if (!testEmail.trim()) return;
+    if (!subject.trim()) { setError("Subject is required"); return; }
+    if (!content.value.trim()) { setError("Email content is required"); return; }
+    setSendingTest(true);
+    setError("");
+
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) { setError("You must be logged in"); setSendingTest(false); return; }
+
+    const res = await fetch(
+      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-broadcast`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          test_email: testEmail.trim(),
+          subject: subject.trim(),
+          content: content.value,
+          from_name: fromName.trim(),
+          preview_text: previewText.trim(),
+        }),
+      }
+    );
+
+    const result = await res.json();
+    if (!res.ok) {
+      setError(result.error || "Failed to send test email");
+    } else {
+      setMessage(`Test email sent to ${testEmail}!`);
+      setTestDialogOpen(false);
+      setTimeout(() => setMessage(""), 4000);
+    }
+    setSendingTest(false);
   };
 
   // Load segments
@@ -292,6 +337,14 @@ export function BroadcastEditor({ initialData, editId, onSaved }: BroadcastEdito
           </button>
           <button
             type="button"
+            onClick={() => setTestDialogOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 border border-border rounded-lg hover:bg-muted transition-colors text-foreground text-sm font-medium"
+          >
+            <FlaskConical className="w-4 h-4" />
+            Send Test
+          </button>
+          <button
+            type="button"
             onClick={sendNow}
             disabled={sending}
             className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground font-medium rounded-lg transition-colors disabled:opacity-50 text-sm"
@@ -457,6 +510,33 @@ export function BroadcastEditor({ initialData, editId, onSaved }: BroadcastEdito
               className="px-4 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 transition-colors"
             >
               {savingTemplate ? "Saving…" : "Save Template"}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Send Test Dialog */}
+      <Dialog open={testDialogOpen} onOpenChange={setTestDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Send Test Email</DialogTitle>
+            <DialogDescription>Send this broadcast to a single email address to preview it in your inbox.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Your Email Address</Label>
+              <Input value={testEmail} onChange={(e) => setTestEmail(e.target.value)} placeholder="you@example.com" type="email" />
+            </div>
+          </div>
+          <DialogFooter>
+            <button type="button" onClick={() => setTestDialogOpen(false)} className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Cancel</button>
+            <button
+              type="button"
+              onClick={sendTestEmail}
+              disabled={sendingTest || !testEmail.trim()}
+              className="px-4 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 transition-colors"
+            >
+              {sendingTest ? "Sending…" : "Send Test"}
             </button>
           </DialogFooter>
         </DialogContent>

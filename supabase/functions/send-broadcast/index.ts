@@ -107,7 +107,35 @@ serve(async (req: Request) => {
       });
     }
 
-    const { broadcast_id } = await req.json();
+    const body = await req.json();
+
+    // ── TEST EMAIL MODE ──
+    if (body.test_email) {
+      const resendKey = Deno.env.get("RESEND_API_KEY");
+      if (!resendKey) {
+        return new Response(JSON.stringify({ error: "Email service not configured" }), {
+          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const resend = new Resend(resendKey);
+      const personalizedContent = (body.content || "")
+        .replace(/\{\{first_name\}\}/g, "Test User");
+
+      await resend.emails.send({
+        from: `${body.from_name || "Vanto Zazi"} <vanto@onlinecourseformlm.com>`,
+        to: [body.test_email],
+        subject: `[TEST] ${body.subject || "(no subject)"}`,
+        html: `${personalizedContent}${EMAIL_SIGNATURE}<p style="font-size: 11px; color: #999; margin-top: 16px;">This is a test email.</p>`,
+      });
+
+      return new Response(
+        JSON.stringify({ success: true, sent: 1 }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // ── NORMAL BROADCAST MODE ──
+    const { broadcast_id } = body;
     if (!broadcast_id) {
       return new Response(JSON.stringify({ error: "broadcast_id is required" }), {
         status: 400,

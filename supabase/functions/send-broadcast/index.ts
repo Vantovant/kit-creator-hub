@@ -8,6 +8,55 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+const APP_URL = "https://kit-clone-dashboard.lovable.app";
+
+// Retry with exponential backoff for 429 errors
+async function sendWithRetry(
+  resend: any,
+  emailPayload: any,
+  maxRetries = 3
+): Promise<boolean> {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      await resend.emails.send(emailPayload);
+      return true;
+    } catch (e: any) {
+      const is429 = e?.statusCode === 429 || e?.message?.includes("429");
+      if (is429 && attempt < maxRetries) {
+        const delay = Math.pow(2, attempt + 1) * 1000; // 2s, 4s, 8s
+        console.log(`Rate limited (429), retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
+        await new Promise((r) => setTimeout(r, delay));
+      } else {
+        throw e;
+      }
+    }
+  }
+  return false;
+}
+
+// Throttle between sends
+function throttle(ms = 600): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+const EMAIL_SIGNATURE = `
+<table cellpadding="0" cellspacing="0" border="0" style="font-family: Arial, Helvetica, sans-serif; max-width: 540px; margin-top: 24px; border-top: 2px solid #1a3a8a; padding-top: 16px;">
+  <tr>
+    <td style="vertical-align: top; padding-right: 16px;">
+      <img src="${APP_URL}/assets/logo-mlm.jpg" alt="Online Course For MLM" width="90" height="68" style="border-radius: 6px; display: block; object-fit: cover;" />
+    </td>
+    <td style="vertical-align: top;">
+      <p style="margin: 0 0 2px 0; font-size: 16px; font-weight: bold; color: #1a1a1a;">Vanto Vanto</p>
+      <p style="margin: 0 0 2px 0; font-size: 13px; color: #1a3a8a; font-weight: 600;">Founder — Vanto Zazi</p>
+      <p style="margin: 0 0 8px 0; font-size: 12px; color: #666;">Master AI. Recruit Smart. Grow Fast.</p>
+      <table cellpadding="0" cellspacing="0" border="0">
+        <tr><td style="padding-right: 6px;"><span style="font-size: 12px; color: #666;">📧</span></td><td><a href="mailto:vanto@onlinecourseformlm.com" style="font-size: 13px; color: #333; text-decoration: none;">vanto@onlinecourseformlm.com</a></td></tr>
+        <tr><td style="padding-right: 6px; padding-top: 4px;"><span style="font-size: 12px; color: #666;">🌐</span></td><td style="padding-top: 4px;"><a href="https://onlinecourseformlm.com" style="font-size: 13px; color: #1a3a8a; text-decoration: none; font-weight: 500;">onlinecourseformlm.com</a></td></tr>
+      </table>
+    </td>
+  </tr>
+</table>`;
+
 serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -42,8 +91,6 @@ serve(async (req: Request) => {
     }
 
     const userId = claimsData.claims.sub;
-
-    // Use service role to check admin and send
     const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
     const { data: roleCheck } = await adminClient
@@ -100,7 +147,6 @@ serve(async (req: Request) => {
     let subError: any = null;
 
     if (broadcast.segment_id) {
-      // Fetch segment filters
       const { data: segment } = await adminClient
         .from("segments")
         .select("filters")
@@ -114,7 +160,6 @@ serve(async (req: Request) => {
         subscribers = data;
         subError = error;
       } else {
-        // Segment not found or no filters, fall back to all
         const { data, error } = await adminClient
           .from("prospects")
           .select("email, first_name, unsubscribe_token")
@@ -155,50 +200,34 @@ serve(async (req: Request) => {
     }
 
     const resend = new Resend(resendKey);
-    const appUrl = "https://kit-clone-dashboard.lovable.app";
     let sent = 0;
     let failed = 0;
 
-    // Send in batches of 10
-    for (let i = 0; i < subscribers.length; i += 10) {
-      const batch = subscribers.slice(i, i + 10);
-      const promises = batch.map(async (sub) => {
-        try {
-          const unsubscribeUrl = `${appUrl}/unsubscribe?token=${sub.unsubscribe_token || ""}`;
-          const personalizedContent = broadcast.content
-            .replace(/\{\{first_name\}\}/g, sub.first_name || "there");
+    // Send ONE AT A TIME with throttle + retry to avoid 429 rate limits
+    for (let i = 0; i < subscribers.length; i++) {
+      const sub = subscribers[i];
+      try {
+        const unsubscribeUrl = `${APP_URL}/unsubscribe?token=${sub.unsubscribe_token || ""}`;
+        const personalizedContent = broadcast.content
+          .replace(/\{\{first_name\}\}/g, sub.first_name || "there");
 
-          const signature = `
-<table cellpadding="0" cellspacing="0" border="0" style="font-family: Arial, Helvetica, sans-serif; max-width: 500px; margin-top: 24px; border-top: 2px solid #5CC5DE; padding-top: 16px;">
-  <tr>
-    <td style="vertical-align: top; padding-right: 16px;">
-      <img src="${appUrl}/assets/logo.jpg" alt="Vanto Zazi Mail" width="80" height="80" style="border-radius: 8px; display: block;" />
-    </td>
-    <td style="vertical-align: top;">
-      <p style="margin: 0 0 4px 0; font-size: 16px; font-weight: bold; color: #1a1a1a;">Vanto Zazi</p>
-      <p style="margin: 0 0 8px 0; font-size: 13px; color: #5CC5DE; font-weight: 600;">Wellness Business Leader | APLGO</p>
-      <table cellpadding="0" cellspacing="0" border="0">
-        <tr><td style="padding-right: 6px;"><span style="font-size: 12px; color: #666;">📧</span></td><td><a href="mailto:vanto@onlinecourseformlm.com" style="font-size: 13px; color: #333; text-decoration: none;">vanto@onlinecourseformlm.com</a></td></tr>
-        <tr><td style="padding-right: 6px; padding-top: 4px;"><span style="font-size: 12px; color: #666;">🌐</span></td><td style="padding-top: 4px;"><a href="https://onlinecourseformlm.com" style="font-size: 13px; color: #5CC5DE; text-decoration: none; font-weight: 500;">onlinecourseformlm.com</a></td></tr>
-      </table>
-      <p style="margin: 10px 0 0 0; font-size: 11px; color: #999; font-style: italic;">"Empowering wellness entrepreneurs to build scalable income."</p>
-    </td>
-  </tr>
-</table>`;
+        await sendWithRetry(resend, {
+          from: `${broadcast.from_name} <vanto@onlinecourseformlm.com>`,
+          to: [sub.email],
+          subject: broadcast.subject,
+          html: `${personalizedContent}${EMAIL_SIGNATURE}<p style="font-size: 11px; color: #999; margin-top: 16px;">You're receiving this email because you registered in APLGO.<br/><a href="${unsubscribeUrl}" style="color:#999; text-decoration: underline;">Unsubscribe</a></p>`,
+        });
+        sent++;
+        console.log(`Sent ${sent}/${subscribers.length}: ${sub.email}`);
+      } catch (e) {
+        console.error(`Failed to send to ${sub.email}:`, e);
+        failed++;
+      }
 
-          await resend.emails.send({
-            from: `${broadcast.from_name} <vanto@onlinecourseformlm.com>`,
-            to: [sub.email],
-            subject: broadcast.subject,
-            html: `${personalizedContent}${signature}<p style="font-size: 11px; color: #999; margin-top: 16px;">You're receiving this email because you registered in APLGO.<br/><a href="${unsubscribeUrl}" style="color:#999; text-decoration: underline;">Unsubscribe</a></p>`,
-          });
-          sent++;
-        } catch (e) {
-          console.error(`Failed to send to ${sub.email}:`, e);
-          failed++;
-        }
-      });
-      await Promise.all(promises);
+      // Throttle: 600ms between each send (~1.6 emails/sec, well under 2/sec limit)
+      if (i < subscribers.length - 1) {
+        await throttle(600);
+      }
     }
 
     // Update broadcast status
@@ -212,6 +241,8 @@ serve(async (req: Request) => {
         total_failed: failed,
       })
       .eq("id", broadcast_id);
+
+    console.log(`Broadcast complete: ${sent} sent, ${failed} failed out of ${subscribers.length}`);
 
     return new Response(
       JSON.stringify({ success: true, sent, failed, total: subscribers.length }),

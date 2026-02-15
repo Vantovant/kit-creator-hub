@@ -6,6 +6,7 @@ export interface ParsedSubscriber {
   email: string;
   first_name?: string;
   source?: string;
+  tags?: string[];
 }
 
 function parseCsvLine(line: string): string[] {
@@ -49,6 +50,7 @@ export function parseCsv(text: string): { subscribers: ParsedSubscriber[]; error
 
   const nameIdx = headers.findIndex((h) => h === "name" || h === "first_name" || h === "firstname" || h === "fullname" || h === "full_name");
   const sourceIdx = headers.indexOf("source");
+  const tagsIdx = headers.indexOf("tags");
 
   const subscribers: ParsedSubscriber[] = [];
   const errors: string[] = [];
@@ -73,11 +75,15 @@ export function parseCsv(text: string): { subscribers: ParsedSubscriber[]; error
 
     const firstName = nameIdx >= 0 ? (fields[nameIdx] || "").trim().slice(0, 100) : undefined;
     const source = sourceIdx >= 0 ? (fields[sourceIdx] || "").trim().slice(0, 50) : "csv_import";
+    const tags = tagsIdx >= 0
+      ? (fields[tagsIdx] || "").split(",").map((t) => t.trim()).filter(Boolean)
+      : undefined;
 
     subscribers.push({
       email,
       first_name: firstName || undefined,
       source: source || "csv_import",
+      tags: tags && tags.length > 0 ? tags : undefined,
     });
   }
 

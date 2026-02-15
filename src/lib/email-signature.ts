@@ -164,3 +164,119 @@ export const REENGAGEMENT_SEQUENCE = [
 <p>Respectfully,</p>`,
   },
 ];
+
+/**
+ * Pre-built 5-email GO-Status Upgrade sequence for Activation_Only distributors.
+ * Goal: encourage R375-only distributors to order 2 starter products and achieve GO-Status rank.
+ */
+export const GO_STATUS_UPGRADE_SEQUENCE = [
+  {
+    type: "send_email" as const,
+    subject: "You're 1 step away from GO-Status 🚀",
+    from_name: "Vanto Zazi",
+    content: `<p>Hi {{first_name}},</p>
+<p>Congratulations on activating your APLGO distributor account! 🎉</p>
+<p>You've already taken the biggest step — investing in yourself with the R375 activation.</p>
+<p>But right now, your business is <strong>parked</strong>. You can't earn commissions or build a team until you reach <strong>GO-Status</strong>.</p>
+<p><strong>What's GO-Status?</strong></p>
+<p>It's simple: order your 2 starter products (R750+VAT) and your business goes LIVE.</p>
+<ul>
+<li>✅ Start earning commissions immediately</li>
+<li>✅ Unlock your personal referral link</li>
+<li>✅ Begin building your team</li>
+<li>✅ Access the full compensation plan</li>
+</ul>
+<p>You've already paid the activation fee. Don't let that investment sit idle.</p>
+<p>Reply <strong>"Ready"</strong> and I'll walk you through the product order.</p>
+<p>Let's get you moving,</p>`,
+  },
+  {
+    type: "wait" as const,
+    duration_hours: 48,
+  },
+  {
+    type: "send_email" as const,
+    subject: "Why your starter products matter (it's not just about selling)",
+    from_name: "Vanto Zazi",
+    content: `<p>Hi {{first_name}},</p>
+<p>Some people think the 2 starter products are "just inventory."</p>
+<p><strong>They're not.</strong></p>
+<p>Your starter products serve 3 critical purposes:</p>
+<ol>
+<li><strong>Personal experience</strong> — You can't recommend what you haven't tried. Your own transformation story becomes your most powerful sales tool.</li>
+<li><strong>Credibility</strong> — When you share results from personal use, people trust you. That trust converts to sales.</li>
+<li><strong>GO-Status activation</strong> — Without this step, your entire business is on pause. No commissions, no team building, no growth.</li>
+</ol>
+<p>Think of it this way: you've already bought the ticket to the concert (R375 activation). Now you just need to walk through the door (starter products).</p>
+<p>The most successful distributors in our network all started the same way — by using the products themselves first.</p>
+<p>Ready to take that step? Reply <strong>"Let's go"</strong> and I'll send you the product options.</p>`,
+  },
+  {
+    type: "wait" as const,
+    duration_hours: 48,
+  },
+  {
+    type: "send_email" as const,
+    subject: "Meet {{first_name}} from 3 months from now",
+    from_name: "Vanto Zazi",
+    content: `<p>Hi {{first_name}},</p>
+<p>Imagine this scenario 3 months from today:</p>
+<ul>
+<li>🏆 You've reached GO-Status and your business is live</li>
+<li>💰 You're earning your first commissions</li>
+<li>👥 You've signed up 2-3 people in your own team</li>
+<li>💪 You're using the products daily and feeling the difference</li>
+<li>📱 People are asking YOU how to get started</li>
+</ul>
+<p>All of that starts with <strong>one decision today</strong>: ordering your starter products.</p>
+<p>The R750+VAT investment pays for itself once you make your first sale — and with the APLGO compensation plan, that can happen in your first week.</p>
+<p>I've seen it happen dozens of times with distributors just like you.</p>
+<p>Don't let another month go by watching from the sidelines.</p>
+<p>Reply <strong>"Show me the products"</strong> and let's make it happen.</p>`,
+  },
+  {
+    type: "wait" as const,
+    duration_hours: 48,
+  },
+  {
+    type: "send_email" as const,
+    subject: "The real cost of waiting",
+    from_name: "Vanto Zazi",
+    content: `<p>Hi {{first_name}},</p>
+<p>Every day without GO-Status is a day of missed opportunities:</p>
+<ul>
+<li>❌ Missed commissions from people who would have joined your team</li>
+<li>❌ Missed bonuses from the compensation plan</li>
+<li>❌ Missed personal health benefits from the products</li>
+<li>❌ Missed momentum — the longer you wait, the harder it feels to start</li>
+</ul>
+<p>You've already invested R375. That money is working for nothing right now.</p>
+<p>With GO-Status, it becomes the foundation of a real income stream.</p>
+<p>I'm not here to pressure you — I'm here because I've seen what happens when people finally take this step. It changes everything.</p>
+<p>If cost is a concern, reply <strong>"Budget"</strong> and I'll show you the most affordable way to get started.</p>
+<p>If timing is the issue, reply <strong>"When"</strong> and we'll find the right moment together.</p>`,
+  },
+  {
+    type: "wait" as const,
+    duration_hours: 48,
+  },
+  {
+    type: "send_email" as const,
+    subject: "Final call: Your activation expires soon ⏰",
+    from_name: "Vanto Zazi",
+    content: `<p>Hi {{first_name}},</p>
+<p>This is my last email about upgrading to GO-Status.</p>
+<p>I want to respect your time and your decision — whatever it may be.</p>
+<p><strong>Here's where things stand:</strong></p>
+<ul>
+<li>Your R375 activation is active ✅</li>
+<li>Your GO-Status is pending ⏳</li>
+<li>Your business potential is untapped 📊</li>
+</ul>
+<p>If you're ready to move forward:</p>
+<p>👉 Reply <strong>"Activate GO"</strong> — I'll personally guide you through the product order and get your business live within 24 hours.</p>
+<p>If this isn't for you right now, I completely understand. You'll continue receiving our general wellness content, and the door is always open.</p>
+<p>Either way, I appreciate your trust in joining our network.</p>
+<p>To your success,</p>`,
+  },
+];

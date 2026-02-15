@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Plus, FileText, Send, Clock, Pencil, Trash2 } from "lucide-react";
+import { Plus, FileText, Send, Clock, Pencil, Trash2, BarChart3, Eye } from "lucide-react";
 
 interface Broadcast {
   id: string;
@@ -11,8 +11,15 @@ interface Broadcast {
   status: string;
   total_recipients: number;
   total_sent: number;
+  total_failed: number | null;
   created_at: string;
   sent_at: string | null;
+}
+
+interface BroadcastStats {
+  opens: number;
+  clicks: number;
+  bounces: number;
 }
 
 const statusColors: Record<string, string> = {
@@ -26,6 +33,8 @@ const statusColors: Record<string, string> = {
 export default function BroadcastsPage() {
   const [broadcasts, setBroadcasts] = useState<Broadcast[]>([]);
   const [loading, setLoading] = useState(true);
+  const [statsMap, setStatsMap] = useState<Record<string, BroadcastStats>>({});
+  const [expandedStats, setExpandedStats] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchBroadcasts = async () => {
@@ -33,8 +42,31 @@ export default function BroadcastsPage() {
         .from("broadcasts")
         .select("*")
         .order("created_at", { ascending: false });
-      setBroadcasts((data as Broadcast[]) || []);
+      const list = (data as Broadcast[]) || [];
+      setBroadcasts(list);
       setLoading(false);
+
+      // Fetch stats for sent broadcasts
+      const sentIds = list.filter((b) => b.status === "sent").map((b) => b.id);
+      if (sentIds.length > 0) {
+        const { data: events } = await supabase
+          .from("email_events")
+          .select("broadcast_id, event_type")
+          .in("broadcast_id", sentIds);
+        const map: Record<string, BroadcastStats> = {};
+        for (const id of sentIds) {
+          map[id] = { opens: 0, clicks: 0, bounces: 0 };
+        }
+        if (events) {
+          for (const e of events) {
+            if (!e.broadcast_id || !map[e.broadcast_id]) continue;
+            if (e.event_type === "email.opened") map[e.broadcast_id].opens++;
+            else if (e.event_type === "email.clicked") map[e.broadcast_id].clicks++;
+            else if (e.event_type === "email.bounced") map[e.broadcast_id].bounces++;
+          }
+        }
+        setStatsMap(map);
+      }
     };
     fetchBroadcasts();
   }, []);
@@ -80,46 +112,88 @@ export default function BroadcastsPage() {
           </Card>
         ) : (
           <div className="space-y-3">
-            {broadcasts.map((b) => (
-              <Card key={b.id} className="bg-card">
-                <CardContent className="p-4 flex items-center justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-1">
-                      <h3 className="font-medium text-foreground">{b.subject || "Untitled"}</h3>
-                      <Badge className={statusColors[b.status] || ""}>
-                        {b.status}
-                      </Badge>
+            {broadcasts.map((b) => {
+              const stats = statsMap[b.id];
+              const openRate = stats && b.total_sent ? Math.round((stats.opens / b.total_sent) * 100) : 0;
+              const clickRate = stats && b.total_sent ? Math.round((stats.clicks / b.total_sent) * 100) : 0;
+              return (
+                <Card key={b.id} className="bg-card">
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-1">
+                          <h3 className="font-medium text-foreground">{b.subject || "Untitled"}</h3>
+                          <Badge className={statusColors[b.status] || ""}>
+                            {b.status}
+                          </Badge>
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          {b.status === "sent"
+                            ? `Sent to ${b.total_sent} of ${b.total_recipients} subscribers on ${formatDate(b.sent_at!)}`
+                            : `Created ${formatDate(b.created_at)}`}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {b.status === "sent" && (
+                          <button
+                            type="button"
+                            onClick={() => setExpandedStats(expandedStats === b.id ? null : b.id)}
+                            className="p-2 rounded hover:bg-muted transition-colors text-muted-foreground"
+                            title="View Stats"
+                          >
+                            <BarChart3 className="w-4 h-4" />
+                          </button>
+                        )}
+                        {b.status === "sent" && (
+                          <a
+                            href={`/dashboard/broadcasts/new?id=${b.id}`}
+                            className="p-2 rounded hover:bg-muted transition-colors text-muted-foreground"
+                            title="View"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </a>
+                        )}
+                        {b.status === "draft" && (
+                          <>
+                            <a
+                              href={`/dashboard/broadcasts/new?id=${b.id}`}
+                              className="p-2 rounded hover:bg-muted transition-colors text-muted-foreground"
+                              title="Edit"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </a>
+                            <button
+                              type="button"
+                              onClick={() => handleDelete(b.id)}
+                              className="p-2 rounded hover:bg-destructive/10 transition-colors text-destructive"
+                              title="Delete"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </>
+                        )}
+                      </div>
                     </div>
-                    <p className="text-sm text-muted-foreground">
-                      {b.status === "sent"
-                        ? `Sent to ${b.total_sent} of ${b.total_recipients} subscribers on ${formatDate(b.sent_at!)}`
-                        : `Created ${formatDate(b.created_at)}`}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {b.status === "draft" && (
-                      <>
-                        <a
-                          href={`/dashboard/broadcasts/new?id=${b.id}`}
-                          className="p-2 rounded hover:bg-muted transition-colors text-muted-foreground"
-                          title="Edit"
-                        >
-                          <Pencil className="w-4 h-4" />
-                        </a>
-                        <button
-                          type="button"
-                          onClick={() => handleDelete(b.id)}
-                          className="p-2 rounded hover:bg-destructive/10 transition-colors text-destructive"
-                          title="Delete"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </>
+                    {expandedStats === b.id && stats && (
+                      <div className="mt-3 pt-3 border-t border-border grid grid-cols-3 gap-4 text-center">
+                        <div>
+                          <p className="text-lg font-semibold text-foreground">{openRate}%</p>
+                          <p className="text-xs text-muted-foreground">Open Rate ({stats.opens})</p>
+                        </div>
+                        <div>
+                          <p className="text-lg font-semibold text-foreground">{clickRate}%</p>
+                          <p className="text-xs text-muted-foreground">Click Rate ({stats.clicks})</p>
+                        </div>
+                        <div>
+                          <p className="text-lg font-semibold text-foreground">{stats.bounces}</p>
+                          <p className="text-xs text-muted-foreground">Bounces</p>
+                        </div>
+                      </div>
                     )}
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         )}
       </main>

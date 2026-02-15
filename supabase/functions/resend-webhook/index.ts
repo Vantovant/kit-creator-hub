@@ -24,7 +24,7 @@ serve(async (req: Request) => {
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
-    // Try to find the broadcast by subject match
+    // Try to find the broadcast by subject match first
     let broadcastId: string | null = null;
     if (broadcastSubject) {
       const { data: broadcast } = await adminClient
@@ -35,6 +35,21 @@ serve(async (req: Request) => {
         .limit(1)
         .maybeSingle();
       if (broadcast) broadcastId = broadcast.id;
+    }
+
+    // For open/click/bounce events without a subject, look up the broadcast
+    // from a previous email.sent event for the same email address
+    if (!broadcastId && email) {
+      const { data: priorEvent } = await adminClient
+        .from("email_events")
+        .select("broadcast_id")
+        .eq("email", email)
+        .eq("event_type", "email.sent")
+        .not("broadcast_id", "is", null)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (priorEvent?.broadcast_id) broadcastId = priorEvent.broadcast_id;
     }
 
     // Store the event

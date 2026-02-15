@@ -107,21 +107,33 @@ export function ImportExportModal({ isOpen, onClose, onImportComplete, mode }: I
         }
       }
 
-      // Also fetch IDs for existing prospects that were upserted (didn't return new IDs)
-      if (enableAutoTag && autoTag.trim()) {
-        // Get all prospect IDs by email lookup
-        const allEmails = subscribers.map((s) => s.email);
-        const prospectIds: string[] = [];
-        for (let i = 0; i < allEmails.length; i += 100) {
-          const batch = allEmails.slice(i, i + 100);
-          const { data: prospects } = await supabase
-            .from("prospects")
-            .select("id")
-            .in("email", batch);
-          if (prospects) prospectIds.push(...prospects.map((p) => p.id));
-        }
+      // Collect all unique tag names from CSV + auto-tag
+      const csvTagNames = new Set<string>();
+      if (enableAutoTag && autoTag.trim()) csvTagNames.add(autoTag.trim());
+      for (const s of subscribers) {
+        if (s.tags) s.tags.forEach((t) => csvTagNames.add(t));
+      }
 
-        await autoTagProspects(prospectIds, autoTag.trim(), user.id);
+      // Get all prospect IDs by email lookup
+      const allEmails = subscribers.map((s) => s.email);
+      const prospectIds: string[] = [];
+      const emailToId = new Map<string, string>();
+      for (let i = 0; i < allEmails.length; i += 100) {
+        const batch = allEmails.slice(i, i + 100);
+        const { data: prospects } = await supabase
+          .from("prospects")
+          .select("id, email")
+          .in("email", batch);
+        if (prospects) {
+          prospects.forEach((p) => {
+            prospectIds.push(p.id);
+            emailToId.set(p.email, p.id);
+          });
+        }
+      }
+
+      if (csvTagNames.size > 0 && prospectIds.length > 0) {
+        await applyTagsFromCsv(subscribers, emailToId, csvTagNames, user.id, enableAutoTag ? autoTag.trim() : null);
         setImportResults({ total: subscribers.length + errors.length, added, skipped: skipped + errors.length, tagged: prospectIds.length });
       } else {
         setImportResults({ total: subscribers.length + errors.length, added, skipped: skipped + errors.length, tagged: 0 });
@@ -140,34 +152,59 @@ export function ImportExportModal({ isOpen, onClose, onImportComplete, mode }: I
     }
   };
 
-  const autoTagProspects = async (prospectIds: string[], tagName: string, userId: string) => {
-    // Ensure tag exists
-    let { data: existingTag } = await supabase
-      .from("tags")
-      .select("id")
-      .eq("name", tagName)
-      .maybeSingle();
-
-    if (!existingTag) {
-      const { data: newTag } = await supabase
+  const applyTagsFromCsv = async (
+    subscribers: { email: string; tags?: string[] }[],
+    emailToId: Map<string, string>,
+    allTagNames: Set<string>,
+    userId: string,
+    globalAutoTag: string | null
+  ) => {
+    // Ensure all tags exist
+    const tagNameToId = new Map<string, string>();
+    for (const tagName of allTagNames) {
+      let { data: existingTag } = await supabase
         .from("tags")
-        .insert({ name: tagName, color: "#ef4444", user_id: userId })
         .select("id")
-        .single();
-      existingTag = newTag;
+        .eq("name", tagName)
+        .maybeSingle();
+
+      if (!existingTag) {
+        const { data: newTag } = await supabase
+          .from("tags")
+          .insert({ name: tagName, color: "#5CC5DE", user_id: userId })
+          .select("id")
+          .single();
+        existingTag = newTag;
+      }
+      if (existingTag) tagNameToId.set(tagName, existingTag.id);
     }
 
-    if (!existingTag) return;
+    // Build prospect-tag pairs
+    const pairs: { prospect_id: string; tag_id: string }[] = [];
+    for (const s of subscribers) {
+      const pid = emailToId.get(s.email);
+      if (!pid) continue;
 
-    // Assign tag to all prospects in batches
-    for (let i = 0; i < prospectIds.length; i += 100) {
-      const batch = prospectIds.slice(i, i + 100);
+      // Apply CSV tags
+      if (s.tags) {
+        for (const t of s.tags) {
+          const tid = tagNameToId.get(t);
+          if (tid) pairs.push({ prospect_id: pid, tag_id: tid });
+        }
+      }
+      // Apply global auto-tag
+      if (globalAutoTag) {
+        const tid = tagNameToId.get(globalAutoTag);
+        if (tid) pairs.push({ prospect_id: pid, tag_id: tid });
+      }
+    }
+
+    // Upsert in batches
+    for (let i = 0; i < pairs.length; i += 100) {
+      const batch = pairs.slice(i, i + 100);
       await supabase
         .from("prospect_tags")
-        .upsert(
-          batch.map((pid) => ({ prospect_id: pid, tag_id: existingTag!.id })),
-          { onConflict: "prospect_id,tag_id" }
-        );
+        .upsert(batch, { onConflict: "prospect_id,tag_id" });
     }
   };
 

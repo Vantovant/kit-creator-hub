@@ -34,7 +34,7 @@ import {
   ChevronUp,
   Loader2,
 } from "lucide-react";
-import { REENGAGEMENT_SEQUENCE } from "@/lib/email-signature";
+import { REENGAGEMENT_SEQUENCE, GO_STATUS_UPGRADE_SEQUENCE } from "@/lib/email-signature";
 
 interface SequenceStep {
   type: "send_email" | "wait";
@@ -120,6 +120,13 @@ export default function SequencesPage() {
     setName("Re-engagement: Registered not activated");
     setDescription("5-email re-engagement sequence for inactive APLGO prospects");
     setSteps(REENGAGEMENT_SEQUENCE as SequenceStep[]);
+    setExpandedStep(null);
+  };
+
+  const loadGoStatusUpgrade = () => {
+    setName("GO-Status Upgrade: Activation Only");
+    setDescription("5-email upgrade sequence for R375 activation-only distributors to achieve GO-Status");
+    setSteps(GO_STATUS_UPGRADE_SEQUENCE as SequenceStep[]);
     setExpandedStep(null);
   };
 
@@ -299,13 +306,22 @@ export default function SequencesPage() {
             </div>
 
             {!editing && steps.length === 0 && (
-              <button
-                type="button"
-                onClick={loadPrebuilt}
-                className="w-full px-4 py-3 text-sm font-medium border-2 border-dashed border-primary/30 text-primary rounded-lg hover:bg-primary/5 transition-colors"
-              >
-                ⚡ Load pre-built re-engagement sequence (5 emails)
-              </button>
+              <div className="space-y-2">
+                <button
+                  type="button"
+                  onClick={loadPrebuilt}
+                  className="w-full px-4 py-3 text-sm font-medium border-2 border-dashed border-primary/30 text-primary rounded-lg hover:bg-primary/5 transition-colors"
+                >
+                  ⚡ Load pre-built re-engagement sequence (5 emails)
+                </button>
+                <button
+                  type="button"
+                  onClick={loadGoStatusUpgrade}
+                  className="w-full px-4 py-3 text-sm font-medium border-2 border-dashed border-accent/50 text-accent-foreground rounded-lg hover:bg-accent/10 transition-colors"
+                >
+                  🚀 Load GO-Status Upgrade sequence (5 emails)
+                </button>
+              </div>
             )}
 
             {/* Steps List */}

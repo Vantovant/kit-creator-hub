@@ -280,3 +280,123 @@ export const GO_STATUS_UPGRADE_SEQUENCE = [
 <p>To your success,</p>`,
   },
 ];
+
+/**
+ * Pre-built 5-email Product Reorder & Retention sequence for Has_GO_Status distributors.
+ * Goal: encourage monthly reorders, share product tips, and maintain active distributor status.
+ */
+export const PRODUCT_RETENTION_SEQUENCE = [
+  {
+    type: "send_email" as const,
+    subject: "Your first month as a GO-Status distributor 🎯",
+    from_name: "Vanto Zazi",
+    content: `<p>Hi {{first_name}},</p>
+<p>Welcome to the active side of the business! 🎉</p>
+<p>Now that you've achieved GO-Status, you're part of an exclusive group of distributors who are actually <strong>building</strong>.</p>
+<p>Here's your first-month checklist:</p>
+<ul>
+<li>✅ Use your products daily — consistency is key</li>
+<li>✅ Track how you feel after 2 weeks (energy, sleep, focus)</li>
+<li>✅ Share your experience with 3 people this week</li>
+<li>✅ Set a reminder for your monthly reorder</li>
+</ul>
+<p>The most successful distributors in our network have one thing in common: <strong>they use the products themselves every single day.</strong></p>
+<p>Your personal results become your most powerful marketing tool.</p>
+<p>Reply <strong>"Tips"</strong> if you'd like product usage guides for maximum results.</p>
+<p>Let's build together,</p>`,
+  },
+  {
+    type: "wait" as const,
+    duration_hours: 72,
+  },
+  {
+    type: "send_email" as const,
+    subject: "Why monthly reorders matter more than you think",
+    from_name: "Vanto Zazi",
+    content: `<p>Hi {{first_name}},</p>
+<p>Quick question: have you set up your monthly product reorder yet?</p>
+<p>Here's why this matters:</p>
+<ol>
+<li><strong>Stay active</strong> — Your distributor status requires consistent monthly volume. Missing a month can reset your progress.</li>
+<li><strong>Compound results</strong> — The health benefits of these products build over time. Stopping and starting reduces effectiveness.</li>
+<li><strong>Lead by example</strong> — When your team sees you reordering consistently, they follow suit. That's how residual income grows.</li>
+</ol>
+<p>Think of your monthly reorder as an investment in three things:</p>
+<ul>
+<li>💪 Your health</li>
+<li>💰 Your business</li>
+<li>👥 Your team's confidence in you</li>
+</ul>
+<p>If you need help choosing which products to reorder, reply <strong>"Help me choose"</strong> and I'll send you my personal recommendations.</p>`,
+  },
+  {
+    type: "wait" as const,
+    duration_hours: 72,
+  },
+  {
+    type: "send_email" as const,
+    subject: "Product spotlight: what top distributors are ordering 🏆",
+    from_name: "Vanto Zazi",
+    content: `<p>Hi {{first_name}},</p>
+<p>I wanted to share something interesting with you.</p>
+<p>I looked at what our <strong>top-performing distributors</strong> are ordering each month, and there's a clear pattern:</p>
+<ul>
+<li>🔄 They reorder the <strong>same core products</strong> every month for personal use</li>
+<li>📦 They keep <strong>1-2 extra units</strong> for demonstrations and sampling</li>
+<li>📊 They track their <strong>personal results</strong> and share them as testimonials</li>
+</ul>
+<p>The strategy is simple: <strong>be your own best customer.</strong></p>
+<p>When someone asks "does this really work?" — you don't need to guess. You show them YOUR results.</p>
+<p>That authenticity converts better than any sales pitch ever could.</p>
+<p>Ready to place your next order? Reply <strong>"Order"</strong> and I'll walk you through it.</p>`,
+  },
+  {
+    type: "wait" as const,
+    duration_hours: 72,
+  },
+  {
+    type: "send_email" as const,
+    subject: "Don't let your momentum slip ⚡",
+    from_name: "Vanto Zazi",
+    content: `<p>Hi {{first_name}},</p>
+<p>I've seen it happen too many times:</p>
+<p>A distributor reaches GO-Status, feels great about it… then gets busy and forgets to reorder. A month goes by. Then two. Suddenly they've lost their active status and have to rebuild.</p>
+<p><strong>Don't let that be you.</strong></p>
+<p>Here's a simple system to stay consistent:</p>
+<ul>
+<li>📅 Pick a specific date each month (e.g., the 1st or 15th)</li>
+<li>⏰ Set a recurring calendar reminder</li>
+<li>💳 Keep your preferred payment method ready</li>
+<li>📝 Know your go-to products so ordering takes 5 minutes</li>
+</ul>
+<p>Consistency beats intensity. A small monthly reorder builds more long-term wealth than sporadic big orders.</p>
+<p>If you're unsure about your reorder date or need help, reply <strong>"Remind me"</strong> and I'll help you set it up.</p>`,
+  },
+  {
+    type: "wait" as const,
+    duration_hours: 72,
+  },
+  {
+    type: "send_email" as const,
+    subject: "Your business is growing — here's the proof 📈",
+    from_name: "Vanto Zazi",
+    content: `<p>Hi {{first_name}},</p>
+<p>Take a moment to appreciate how far you've come:</p>
+<ul>
+<li>✅ You activated your account</li>
+<li>✅ You ordered your starter products</li>
+<li>✅ You achieved GO-Status</li>
+<li>✅ You're building a real business</li>
+</ul>
+<p>Most people never get this far. You did.</p>
+<p>Now the question is: <strong>what's your next milestone?</strong></p>
+<p>Whether it's reaching the next rank, building your first team of 3, or hitting your first commission payout — the path forward is clear:</p>
+<ol>
+<li>Keep using and reordering your products monthly</li>
+<li>Share your story with people who need it</li>
+<li>Support your team members the way I'm supporting you</li>
+</ol>
+<p>I'm here whenever you need guidance. Just reply to any of my emails.</p>
+<p>Proud to have you on the team,</p>`,
+  },
+];

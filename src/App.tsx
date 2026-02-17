@@ -16,6 +16,7 @@ import AnalyticsPage from "@/app/dashboard/analytics/page";
 import SequencesPage from "@/app/dashboard/sequences/page";
 import SettingsPage from "@/app/dashboard/settings/page";
 import WelcomeForm from "@/pages/WelcomeForm";
+import SequenceForm from "@/pages/SequenceForm";
 import AuthPage from "@/pages/AuthPage";
 import UnsubscribePage from "@/pages/UnsubscribePage";
 import { ProtectedRoute } from "@/components/dashboard/ProtectedRoute";
@@ -27,6 +28,7 @@ function App() {
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="/auth" element={<AuthPage />} />
         <Route path="/forms/welcome" element={<WelcomeForm />} />
+        <Route path="/forms/sequence/:id" element={<SequenceForm />} />
         <Route path="/unsubscribe" element={<UnsubscribePage />} />
         <Route path="/dashboard" element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
           <Route index element={<DashboardPage />} />

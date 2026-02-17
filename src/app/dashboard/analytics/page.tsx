@@ -27,24 +27,38 @@ export default function AnalyticsPage() {
         .select("*", { count: "exact", head: true });
       setSubscriberCount(count ?? 0);
 
-      // Email events — single source of truth for all metrics
-      const { data: events } = await supabase
-        .from("email_events")
-        .select("event_type");
-      if (events) {
-        let sent = 0;
-        const counts: EventCounts = { delivered: 0, bounced: 0, opened: 0, clicked: 0, complained: 0 };
-        events.forEach((e: { event_type: string }) => {
-          if (e.event_type.includes("sent")) sent++;
-          else if (e.event_type.includes("delivered")) counts.delivered++;
-          else if (e.event_type.includes("bounced")) counts.bounced++;
-          else if (e.event_type.includes("opened")) counts.opened++;
-          else if (e.event_type.includes("clicked")) counts.clicked++;
-          else if (e.event_type.includes("complained")) counts.complained++;
-        });
-        setTotalSent(sent);
-        setEventCounts(counts);
-      }
+      // Count each event type server-side using exact count + head (no row limit issue)
+      const eventTypes = [
+        { key: "sent", filter: "email.sent" },
+        { key: "delivered", filter: "email.delivered" },
+        { key: "bounced", filter: "email.bounced" },
+        { key: "opened", filter: "email.opened" },
+        { key: "clicked", filter: "email.clicked" },
+        { key: "complained", filter: "email.complained" },
+      ] as const;
+
+      const results = await Promise.all(
+        eventTypes.map(({ filter }) =>
+          supabase
+            .from("email_events")
+            .select("*", { count: "exact", head: true })
+            .eq("event_type", filter)
+        )
+      );
+
+      const countMap: Record<string, number> = {};
+      eventTypes.forEach((et, i) => {
+        countMap[et.key] = results[i].count ?? 0;
+      });
+
+      setTotalSent(countMap.sent);
+      setEventCounts({
+        delivered: countMap.delivered,
+        bounced: countMap.bounced,
+        opened: countMap.opened,
+        clicked: countMap.clicked,
+        complained: countMap.complained,
+      });
     }
     fetchData();
   }, []);

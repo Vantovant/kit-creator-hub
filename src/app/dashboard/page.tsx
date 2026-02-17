@@ -43,7 +43,7 @@ export default function DashboardPage() {
   useEffect(() => {
     async function fetchData() {
       // Fetch recent prospects, total count, broadcasts stats, and email events in parallel
-      const [prospectsRes, countRes, broadcastsRes, eventsRes, recentBroadcastsRes] = await Promise.all([
+      const [prospectsRes, countRes, sentCountRes, openCountRes, clickCountRes, recentBroadcastsRes] = await Promise.all([
         supabase
           .from("prospects")
           .select("*")
@@ -53,12 +53,17 @@ export default function DashboardPage() {
           .from("prospects")
           .select("*", { count: "exact", head: true }),
         supabase
-          .from("broadcasts")
-          .select("total_sent")
-          .eq("status", "sent"),
+          .from("email_events")
+          .select("*", { count: "exact", head: true })
+          .eq("event_type", "email.sent"),
         supabase
           .from("email_events")
-          .select("event_type"),
+          .select("*", { count: "exact", head: true })
+          .eq("event_type", "email.opened"),
+        supabase
+          .from("email_events")
+          .select("*", { count: "exact", head: true })
+          .eq("event_type", "email.clicked"),
         supabase
           .from("broadcasts")
           .select("id, subject, status, sent_at, total_sent, total_recipients, created_at")
@@ -69,12 +74,11 @@ export default function DashboardPage() {
       setProspects(prospectsRes.data || []);
       setTotalCount(countRes.count || 0);
 
-      // Calculate email stats
-      const totalSent = (broadcastsRes.data || []).reduce((sum, b) => sum + (b.total_sent || 0), 0);
-      const events = eventsRes.data || [];
-      const opens = events.filter((e) => e.event_type?.toLowerCase().includes("opened")).length;
-      const clicks = events.filter((e) => e.event_type?.toLowerCase().includes("clicked")).length;
-      setEmailStats({ sent: totalSent, opens, clicks });
+      setEmailStats({
+        sent: sentCountRes.count ?? 0,
+        opens: openCountRes.count ?? 0,
+        clicks: clickCountRes.count ?? 0,
+      });
       setRecentBroadcasts(recentBroadcastsRes.data || []);
 
       // Build growth chart from prospect created_at dates

@@ -28,7 +28,9 @@ export async function getPageContext(pathname: string): Promise<PageContext> {
     { count: segmentCount },
     { count: automationCount },
     { data: broadcastStats },
-    { data: events },
+    sentCountRes,
+    openCountRes,
+    clickCountRes,
   ] = await Promise.all([
     supabase.from("prospects").select("*", { count: "exact", head: true }).eq("unsubscribed", false),
     supabase.from("broadcasts").select("*", { count: "exact", head: true }),
@@ -39,12 +41,14 @@ export async function getPageContext(pathname: string): Promise<PageContext> {
     supabase.from("segments").select("*", { count: "exact", head: true }),
     supabase.from("automations").select("*", { count: "exact", head: true }),
     supabase.from("broadcasts").select("total_sent").eq("status", "sent"),
-    supabase.from("email_events").select("event_type"),
+    supabase.from("email_events").select("*", { count: "exact", head: true }).eq("event_type", "email.sent"),
+    supabase.from("email_events").select("*", { count: "exact", head: true }).eq("event_type", "email.opened"),
+    supabase.from("email_events").select("*", { count: "exact", head: true }).eq("event_type", "email.clicked"),
   ]);
 
-  const totalSent = (broadcastStats || []).reduce((s, b) => s + (b.total_sent || 0), 0);
-  const opens = (events || []).filter(e => e.event_type?.toLowerCase().includes("opened")).length;
-  const clicks = (events || []).filter(e => e.event_type?.toLowerCase().includes("clicked")).length;
+  const totalSent = sentCountRes.count ?? 0;
+  const opens = openCountRes.count ?? 0;
+  const clicks = clickCountRes.count ?? 0;
 
   return {
     page,

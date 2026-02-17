@@ -27,27 +27,22 @@ export default function AnalyticsPage() {
         .select("*", { count: "exact", head: true });
       setSubscriberCount(count ?? 0);
 
-      // Total emails sent from broadcasts
-      const { data: broadcasts } = await supabase
-        .from("broadcasts")
-        .select("total_sent")
-        .eq("status", "sent");
-      const sent = broadcasts?.reduce((sum, b) => sum + (b.total_sent || 0), 0) || 0;
-      setTotalSent(sent);
-
-      // Email events
+      // Email events — single source of truth for all metrics
       const { data: events } = await supabase
         .from("email_events")
         .select("event_type");
       if (events) {
+        let sent = 0;
         const counts: EventCounts = { delivered: 0, bounced: 0, opened: 0, clicked: 0, complained: 0 };
         events.forEach((e: { event_type: string }) => {
-          if (e.event_type.includes("delivered")) counts.delivered++;
+          if (e.event_type.includes("sent")) sent++;
+          else if (e.event_type.includes("delivered")) counts.delivered++;
           else if (e.event_type.includes("bounced")) counts.bounced++;
           else if (e.event_type.includes("opened")) counts.opened++;
           else if (e.event_type.includes("clicked")) counts.clicked++;
           else if (e.event_type.includes("complained")) counts.complained++;
         });
+        setTotalSent(sent);
         setEventCounts(counts);
       }
     }

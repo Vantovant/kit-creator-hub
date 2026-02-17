@@ -28,7 +28,7 @@ serve(async (req: Request) => {
       });
     }
     await kv.set(key, (current.value || 0) + 1, { expireIn: 3600000 });
-    const { email, first_name, source } = await req.json();
+    const { email, first_name, source, sequence_id } = await req.json();
 
     // Server-side validation
     if (!email || typeof email !== "string") {
@@ -51,7 +51,7 @@ serve(async (req: Request) => {
       ? String(first_name).trim().slice(0, 100).replace(/[<>]/g, "")
       : null;
 
-    const allowedSources = ["welcome_form", "website_embed", "csv_import"];
+    const allowedSources = ["welcome_form", "website_embed", "csv_import", "sequence_form"];
     const sanitizedSource = allowedSources.includes(source) ? source : "welcome_form";
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -126,6 +126,35 @@ serve(async (req: Request) => {
       });
     } catch (triggerErr) {
       console.error("Automation trigger error (non-fatal):", triggerErr);
+    }
+
+    // If a sequence_id was provided, enroll the subscriber into that sequence
+    if (sequence_id && typeof sequence_id === "string") {
+      try {
+        const { data: seq } = await supabase
+          .from("email_sequences")
+          .select("id, steps")
+          .eq("id", sequence_id)
+          .eq("status", "active")
+          .maybeSingle();
+
+        if (seq && Array.isArray(seq.steps) && seq.steps.length > 0) {
+          // Trigger sequence enrollment via execute-automation style logic
+          // We'll call the dedicated sequence executor
+          await fetch(`${supabaseUrl}/functions/v1/execute-sequence`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              sequence_id: seq.id,
+              email: trimmedEmail,
+              first_name: sanitizedName,
+            }),
+          });
+          console.log(`Enrolled ${trimmedEmail} in sequence ${seq.id}`);
+        }
+      } catch (seqErr) {
+        console.error("Sequence enrollment error (non-fatal):", seqErr);
+      }
     }
 
     return new Response(JSON.stringify({ success: true }), {

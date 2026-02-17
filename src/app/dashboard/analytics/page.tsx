@@ -18,6 +18,7 @@ export default function AnalyticsPage() {
   const [eventCounts, setEventCounts] = useState<EventCounts>({
     delivered: 0, bounced: 0, opened: 0, clicked: 0, complained: 0,
   });
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function fetchData() {

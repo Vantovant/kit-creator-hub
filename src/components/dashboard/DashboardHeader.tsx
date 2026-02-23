@@ -49,6 +49,12 @@ export function DashboardHeader({ title, subtitle, searchQuery, onSearchChange, 
           </div>
         </div>
 
+        <div className="flex items-center gap-1.5 mr-2 shrink-0">
+            <img src="/assets/aplgo-logo.png" alt="APLGO" className="h-6 w-auto" />
+            <span className="text-[10px] leading-tight text-muted-foreground font-medium hidden sm:block">
+              Accredited Distributors<br />of APLGO
+            </span>
+          </div>
         <div className="flex items-center gap-4">
           {onSearchChange ? (
             <div className="hidden md:block relative">

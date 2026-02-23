@@ -26,3 +26,6 @@ verify_jwt = false
 
 [functions.execute-sequence]
 verify_jwt = false
+
+[functions.batch-enroll-sequence]
+verify_jwt = false

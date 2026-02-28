@@ -38,6 +38,18 @@ function throttle(ms = 500): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+const EMAIL_HEADER = `
+<table cellpadding="0" cellspacing="0" border="0" style="font-family: Arial, Helvetica, sans-serif; max-width: 540px; margin-bottom: 20px;">
+  <tr>
+    <td style="vertical-align: middle; padding-right: 10px;">
+      <img src="${APP_URL}/assets/aplgo-logo.png" alt="APLGO" width="48" height="48" style="display: block;" />
+    </td>
+    <td style="vertical-align: middle;">
+      <p style="margin: 0; font-size: 14px; font-weight: 600; color: #333; line-height: 1.3;">Accredited Distributors<br/>of APLGO</p>
+    </td>
+  </tr>
+</table>`;
+
 const EMAIL_SIGNATURE = `
 <table cellpadding="0" cellspacing="0" border="0" style="font-family: Arial, Helvetica, sans-serif; max-width: 540px; margin-top: 24px; border-top: 2px solid #1a3a8a; padding-top: 16px;">
   <tr>
@@ -82,7 +94,7 @@ async function executeStep(
       from: `${step.from_name || "Vanto Zazi"} <vanto@onlinecourseformlm.com>`,
       to: [email],
       subject: personalizedSubject,
-      html: `${personalizedContent}${EMAIL_SIGNATURE}<p style="font-size: 11px; color: #999; margin-top: 16px;">You're receiving this email because you registered in APLGO.<br/><a href="${unsubUrl}" style="color:#999; text-decoration: underline;">Unsubscribe</a></p>`,
+      html: `${EMAIL_HEADER}${personalizedContent}${EMAIL_SIGNATURE}<p style="font-size: 11px; color: #999; margin-top: 16px;">You're receiving this email because you registered in APLGO.<br/><a href="${unsubUrl}" style="color:#999; text-decoration: underline;">Unsubscribe</a></p>`,
     });
     console.log(`Automation email sent to ${email}: ${personalizedSubject}`);
   } else if (step.type === "add_tag") {

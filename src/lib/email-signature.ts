@@ -44,10 +44,10 @@ export const EMAIL_HEADER_HTML = `
 <table cellpadding="0" cellspacing="0" border="0" style="font-family: Arial, Helvetica, sans-serif; max-width: 540px; margin-bottom: 16px;">
   <tr>
     <td style="vertical-align: middle; padding-right: 8px;">
-      <img src="https://kit-clone-dashboard.lovable.app/assets/aplgo-logo.png" alt="APLGO" width="28" height="28" style="display: block;" />
+      <img src="https://kit-clone-dashboard.lovable.app/assets/aplgo-logo.png" alt="APLGO" height="24" style="display: block; height: 24px; width: auto;" />
     </td>
     <td style="vertical-align: middle;">
-      <p style="margin: 0; font-size: 11px; font-weight: 500; color: #555; line-height: 1.3; letter-spacing: 0.2px;">Accredited Distributors of APLGO</p>
+      <p style="margin: 0; font-size: 10px; font-weight: 500; color: #777; line-height: 1.3; letter-spacing: 0.2px;">Accredited Distributors<br/>of APLGO</p>
     </td>
   </tr>
 </table>

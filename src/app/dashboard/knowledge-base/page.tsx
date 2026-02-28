@@ -12,6 +12,9 @@ const COLLECTIONS = [
   { id: "pricing_pv", label: "Pricing, PV, VAT, Bonuses" },
   { id: "scripts_templates", label: "Scripts & Templates (WhatsApp/Email)" },
   { id: "compliance", label: "Compliance & Disclaimers" },
+  { id: "online_course", label: "Online Course" },
+  { id: "mlm_motivation", label: "MLM Motivation" },
+  { id: "personality_code", label: "Personality Code" },
 ];
 
 const STORAGE_PATHS: Record<string, string> = {
@@ -20,6 +23,9 @@ const STORAGE_PATHS: Record<string, string> = {
   pricing_pv: "aplgo/pricing_pv",
   scripts_templates: "scripts",
   compliance: "compliance",
+  online_course: "online_course",
+  mlm_motivation: "mlm_motivation",
+  personality_code: "personality_code",
 };
 
 const STATUS_ICON: Record<string, React.ReactNode> = {

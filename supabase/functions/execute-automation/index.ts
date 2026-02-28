@@ -39,13 +39,13 @@ function throttle(ms = 500): Promise<void> {
 }
 
 const EMAIL_HEADER = `
-<table cellpadding="0" cellspacing="0" border="0" style="font-family: Arial, Helvetica, sans-serif; max-width: 540px; margin-bottom: 20px;">
+<table cellpadding="0" cellspacing="0" border="0" style="font-family: Arial, Helvetica, sans-serif; max-width: 540px; margin-bottom: 16px;">
   <tr>
-    <td style="vertical-align: middle; padding-right: 10px;">
-      <img src="${APP_URL}/assets/aplgo-logo.png" alt="APLGO" width="48" height="48" style="display: block;" />
+    <td style="vertical-align: middle; padding-right: 8px;">
+      <img src="${APP_URL}/assets/aplgo-logo.png" alt="APLGO" width="28" height="28" style="display: block;" />
     </td>
     <td style="vertical-align: middle;">
-      <p style="margin: 0; font-size: 14px; font-weight: 600; color: #333; line-height: 1.3;">Accredited Distributors<br/>of APLGO</p>
+      <p style="margin: 0; font-size: 11px; font-weight: 500; color: #555; line-height: 1.3; letter-spacing: 0.2px;">Accredited Distributors of APLGO</p>
     </td>
   </tr>
 </table>`;

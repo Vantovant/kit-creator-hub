@@ -37,6 +37,22 @@ export const EMAIL_SIGNATURE_HTML = `
  * Returns the full email signature HTML ready for insertion into emails.
  * Includes unsubscribe link placeholder.
  */
+/**
+ * APLGO header branding block — appears at the top of every outgoing email.
+ */
+export const EMAIL_HEADER_HTML = `
+<table cellpadding="0" cellspacing="0" border="0" style="font-family: Arial, Helvetica, sans-serif; max-width: 540px; margin-bottom: 20px;">
+  <tr>
+    <td style="vertical-align: middle; padding-right: 10px;">
+      <img src="https://kit-clone-dashboard.lovable.app/assets/aplgo-logo.png" alt="APLGO" width="48" height="48" style="display: block;" />
+    </td>
+    <td style="vertical-align: middle;">
+      <p style="margin: 0; font-size: 14px; font-weight: 600; color: #333; line-height: 1.3;">Accredited Distributors<br/>of APLGO</p>
+    </td>
+  </tr>
+</table>
+`;
+
 export function getEmailWithSignature(bodyHtml: string, unsubscribeUrl?: string): string {
   const unsubBlock = unsubscribeUrl
     ? `<p style="font-size: 11px; color: #999; margin-top: 16px;">
@@ -47,7 +63,7 @@ export function getEmailWithSignature(bodyHtml: string, unsubscribeUrl?: string)
         You're receiving this email because you registered in APLGO.
       </p>`;
 
-  return `${bodyHtml}${EMAIL_SIGNATURE_HTML}${unsubBlock}`;
+  return `${EMAIL_HEADER_HTML}${bodyHtml}${EMAIL_SIGNATURE_HTML}${unsubBlock}`;
 }
 
 /**

@@ -29,3 +29,9 @@ verify_jwt = false
 
 [functions.batch-enroll-sequence]
 verify_jwt = false
+
+[functions.kb-ingest]
+verify_jwt = false
+
+[functions.copilot-answer]
+verify_jwt = false

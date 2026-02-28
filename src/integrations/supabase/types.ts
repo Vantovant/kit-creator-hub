@@ -334,6 +334,163 @@ export type Database = {
         }
         Relationships: []
       }
+      kb_chunks: {
+        Row: {
+          chunk_index: number
+          chunk_text: string
+          created_at: string
+          id: string
+          metadata_json: Json | null
+          search_vector: unknown
+          source_id: string
+        }
+        Insert: {
+          chunk_index?: number
+          chunk_text: string
+          created_at?: string
+          id?: string
+          metadata_json?: Json | null
+          search_vector?: unknown
+          source_id: string
+        }
+        Update: {
+          chunk_index?: number
+          chunk_text?: string
+          created_at?: string
+          id?: string
+          metadata_json?: Json | null
+          search_vector?: unknown
+          source_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kb_chunks_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "kb_sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      kb_ingestion_jobs: {
+        Row: {
+          chunks_created: number | null
+          created_at: string
+          error: string | null
+          finished_at: string | null
+          id: string
+          source_id: string
+          started_at: string | null
+          status: string
+        }
+        Insert: {
+          chunks_created?: number | null
+          created_at?: string
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          source_id: string
+          started_at?: string | null
+          status?: string
+        }
+        Update: {
+          chunks_created?: number | null
+          created_at?: string
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          source_id?: string
+          started_at?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kb_ingestion_jobs_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "kb_sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      kb_query_log: {
+        Row: {
+          context: Json | null
+          created_at: string
+          feedback: string | null
+          id: string
+          outcome: string | null
+          query: string
+          response: string | null
+          retrieved_sources: Json | null
+          user_id: string | null
+        }
+        Insert: {
+          context?: Json | null
+          created_at?: string
+          feedback?: string | null
+          id?: string
+          outcome?: string | null
+          query: string
+          response?: string | null
+          retrieved_sources?: Json | null
+          user_id?: string | null
+        }
+        Update: {
+          context?: Json | null
+          created_at?: string
+          feedback?: string | null
+          id?: string
+          outcome?: string | null
+          query?: string
+          response?: string | null
+          retrieved_sources?: Json | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      kb_sources: {
+        Row: {
+          collection: string
+          created_at: string
+          file_size: number | null
+          filename: string
+          id: string
+          mime_type: string | null
+          status: string
+          storage_path: string
+          updated_at: string
+          uploaded_by: string | null
+          version: number
+        }
+        Insert: {
+          collection?: string
+          created_at?: string
+          file_size?: number | null
+          filename: string
+          id?: string
+          mime_type?: string | null
+          status?: string
+          storage_path: string
+          updated_at?: string
+          uploaded_by?: string | null
+          version?: number
+        }
+        Update: {
+          collection?: string
+          created_at?: string
+          file_size?: number | null
+          filename?: string
+          id?: string
+          mime_type?: string | null
+          status?: string
+          storage_path?: string
+          updated_at?: string
+          uploaded_by?: string | null
+          version?: number
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           company: string | null
@@ -541,6 +698,21 @@ export type Database = {
         Returns: boolean
       }
       recalculate_engagement_scores: { Args: never; Returns: undefined }
+      search_kb_chunks: {
+        Args: {
+          collection_filter?: string
+          max_results?: number
+          search_query: string
+        }
+        Returns: {
+          chunk_id: string
+          chunk_text: string
+          collection: string
+          filename: string
+          rank: number
+          source_id: string
+        }[]
+      }
     }
     Enums: {
       app_role: "admin" | "user"

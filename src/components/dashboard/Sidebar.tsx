@@ -12,6 +12,7 @@ import {
   Plus,
   LogOut,
   ListOrdered,
+  BookOpen,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import logo from "@/assets/logo.jpg";
@@ -28,6 +29,7 @@ const navigation = [
   { name: "Segments", href: "/dashboard/segments", icon: Users },
   { name: "Integrations", href: "/dashboard/integrations", icon: Zap },
   { name: "Analytics", href: "/dashboard/analytics", icon: BarChart3 },
+  { name: "Knowledge Base", href: "/dashboard/knowledge-base", icon: BookOpen },
 ];
 
 const bottomNav = [

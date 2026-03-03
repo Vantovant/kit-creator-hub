@@ -9,7 +9,7 @@ import { CalendarTab } from "@/components/plan/CalendarTab";
 import { NotesTab } from "@/components/plan/NotesTab";
 import { CommandBar } from "@/components/plan/CommandBar";
 import { InsiderPanel } from "@/components/plan/InsiderPanel";
-import { VoiceCapture } from "@/components/plan/VoiceCapture";
+import { CommandMic } from "@/components/plan/CommandMic";
 import { useTasks, useReminders, useMeetings } from "@/hooks/usePlanData";
 import { Command } from "lucide-react";
 
@@ -67,7 +67,8 @@ export default function PlanPage() {
               <span>Search & Commands</span>
               <kbd className="text-[10px] px-1 py-0.5 rounded bg-background border border-border ml-1">⌘K</kbd>
             </button>
-            <VoiceCapture onConfirm={handleVoiceConfirm} />
+            <CommandMic onConfirm={handleVoiceConfirm} variant="header" />
+            <CommandMic onConfirm={handleVoiceConfirm} variant="fab" />
           </div>
 
           <Tabs value={activeTab} onValueChange={handleTabChange}>

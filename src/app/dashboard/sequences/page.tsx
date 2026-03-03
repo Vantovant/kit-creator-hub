@@ -74,6 +74,7 @@ export default function SequencesPage() {
   const [editing, setEditing] = useState<Sequence | null>(null);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [brand, setBrand] = useState("aplgo");
   const [steps, setSteps] = useState<SequenceStep[]>([]);
   const [saving, setSaving] = useState(false);
   const [expandedStep, setExpandedStep] = useState<number | null>(null);
@@ -102,6 +103,7 @@ export default function SequencesPage() {
     setEditing(null);
     setName("");
     setDescription("");
+    setBrand("aplgo");
     setSteps([]);
     setExpandedStep(null);
     setDialogOpen(true);
@@ -111,6 +113,7 @@ export default function SequencesPage() {
     setEditing(s);
     setName(s.name);
     setDescription(s.description || "");
+    setBrand((s as any).brand || "aplgo");
     setSteps(s.steps);
     setExpandedStep(null);
     setDialogOpen(true);
@@ -164,15 +167,11 @@ export default function SequencesPage() {
   const save = async () => {
     if (!name.trim() || !user) return;
     setSaving(true);
+    const payload = { name: name.trim(), description: description.trim() || null, steps: steps as any, brand } as any;
     if (editing) {
-      await supabase
-        .from("email_sequences")
-        .update({ name: name.trim(), description: description.trim() || null, steps: steps as any })
-        .eq("id", editing.id);
+      await supabase.from("email_sequences").update(payload).eq("id", editing.id);
     } else {
-      await supabase
-        .from("email_sequences")
-        .insert({ name: name.trim(), description: description.trim() || null, steps: steps as any, user_id: user.id });
+      await supabase.from("email_sequences").insert({ ...payload, user_id: user.id });
     }
     setSaving(false);
     setDialogOpen(false);
@@ -302,6 +301,17 @@ export default function SequencesPage() {
               <div className="space-y-2 col-span-2 sm:col-span-1">
                 <Label>Description</Label>
                 <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What's this sequence for?" />
+              </div>
+              <div className="space-y-2 col-span-2 sm:col-span-1">
+                <Label>Brand</Label>
+                <select
+                  value={brand}
+                  onChange={(e) => setBrand(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-border bg-background text-foreground text-sm"
+                >
+                  <option value="aplgo">APLGO</option>
+                  <option value="vantoos">VantoOS</option>
+                </select>
               </div>
             </div>
 

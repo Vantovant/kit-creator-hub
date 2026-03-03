@@ -63,6 +63,7 @@ export function BroadcastEditor({ initialData, editId, onSaved }: BroadcastEdito
   const content = useUndoRedo(initialData?.content || "");
   const [fromName, setFromName] = useState(initialData?.from_name || "Vanto Zazi");
   const [replyTo, setReplyTo] = useState(initialData?.reply_to || "vanto@onlinecourseformlm.com");
+  const [brand, setBrand] = useState(initialData?.brand || "aplgo");
   const [segmentId, setSegmentId] = useState<string>(initialData?.segment_id || "");
   const [segments, setSegments] = useState<{ id: string; name: string }[]>([]);
   const [showPreview, setShowPreview] = useState(false);
@@ -172,6 +173,7 @@ export function BroadcastEditor({ initialData, editId, onSaved }: BroadcastEdito
       reply_to: replyTo.trim(),
       user_id: user.id,
       segment_id: segmentId || null,
+      brand,
     };
   };
 
@@ -450,6 +452,17 @@ export function BroadcastEditor({ initialData, editId, onSaved }: BroadcastEdito
                 <div>
                   <Label className="text-sm text-muted-foreground">Reply-to Email</Label>
                   <Input value={replyTo} onChange={(e) => setReplyTo(e.target.value)} className="mt-1" />
+                </div>
+                <div>
+                  <Label className="text-sm text-muted-foreground">Brand</Label>
+                  <select
+                    value={brand}
+                    onChange={(e) => setBrand(e.target.value)}
+                    className="mt-1 w-full px-3 py-2 rounded-md border border-input bg-transparent text-sm shadow-xs transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  >
+                    <option value="aplgo">APLGO</option>
+                    <option value="vantoos">VantoOS</option>
+                  </select>
                 </div>
               </div>
             </CardContent>

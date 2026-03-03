@@ -35,3 +35,6 @@ verify_jwt = false
 
 [functions.copilot-answer]
 verify_jwt = false
+
+[functions.plan-intake]
+verify_jwt = false

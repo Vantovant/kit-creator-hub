@@ -16,6 +16,7 @@ import AnalyticsPage from "@/app/dashboard/analytics/page";
 import SequencesPage from "@/app/dashboard/sequences/page";
 import SettingsPage from "@/app/dashboard/settings/page";
 import KnowledgeBasePage from "@/app/dashboard/knowledge-base/page";
+import PlanPage from "@/app/dashboard/plan/page";
 import WelcomeForm from "@/pages/WelcomeForm";
 import SequenceForm from "@/pages/SequenceForm";
 import VantoOSBetaForm from "@/pages/VantoOSBetaForm";
@@ -48,6 +49,7 @@ function App() {
           <Route path="integrations" element={<IntegrationsPage />} />
           <Route path="analytics" element={<AnalyticsPage />} />
           <Route path="knowledge-base" element={<KnowledgeBasePage />} />
+          <Route path="plan" element={<PlanPage />} />
           <Route path="settings" element={<SettingsPage />} />
         </Route>
       </Routes>

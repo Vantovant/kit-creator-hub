@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useNotes, PlanNote } from "@/hooks/usePlanData";
 import { supabase } from "@/integrations/supabase/client";
 import { Plus, Loader2, Trash2, FileText, Sparkles, Check, X, Video, CalendarPlus, Bell, ListTodo } from "lucide-react";
+import { DictationMic } from "@/components/plan/DictationMic";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 
 type ExtractedAction = {
@@ -225,9 +226,15 @@ export function NotesTab({ projectId }: { projectId?: string }) {
         {selected ? (
           <>
             <div className="bg-card border border-border rounded-xl p-5">
-              <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center justify-between mb-3 gap-2">
                 <h3 className="text-sm font-semibold text-foreground">📝 {selected.note_date}</h3>
-                <span className="text-[10px] text-muted-foreground">Auto-saves after 1.5s</span>
+                <div className="flex items-center gap-2">
+                  <DictationMic onTranscript={(text) => {
+                    const newContent = content + (content && !content.endsWith(" ") && !content.endsWith("\n") ? " " : "") + text;
+                    handleChange(newContent);
+                  }} />
+                  <span className="text-[10px] text-muted-foreground">Auto-saves after 1.5s</span>
+                </div>
               </div>
               <textarea
                 ref={editorRef}

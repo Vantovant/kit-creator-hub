@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { CheckCircle, Loader2, Zap, Users, Shield } from "lucide-react";
 
-const SEQUENCE_NAME = "VantoOS Executive Beta — 10 Days / 10 Pages";
+const SEQUENCE_NAME = "VantoOS Executive Beta — 11 Days / 11 Pages";
 
 export default function VantoOSBetaForm() {
   const [sequenceId, setSequenceId] = useState<string | null>(null);

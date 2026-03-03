@@ -23,7 +23,7 @@ async function sendWithRetry(
     } catch (e: any) {
       const is429 = e?.statusCode === 429 || e?.message?.includes("429");
       if (is429 && attempt < maxRetries) {
-        const delay = Math.pow(2, attempt + 1) * 1000; // 2s, 4s, 8s
+        const delay = Math.pow(2, attempt + 1) * 1000;
         console.log(`Rate limited (429), retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
         await new Promise((r) => setTimeout(r, delay));
       } else {
@@ -34,12 +34,12 @@ async function sendWithRetry(
   return false;
 }
 
-// Throttle between sends
 function throttle(ms = 600): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-const EMAIL_HEADER = `
+// ── APLGO branding ──
+const APLGO_HEADER = `
 <table cellpadding="0" cellspacing="0" border="0" style="font-family: Arial, Helvetica, sans-serif; max-width: 540px; margin-bottom: 16px;">
   <tr>
     <td style="vertical-align: middle; padding-right: 8px;">
@@ -51,7 +51,7 @@ const EMAIL_HEADER = `
   </tr>
 </table>`;
 
-const EMAIL_SIGNATURE = `
+const APLGO_SIGNATURE = `
 <table cellpadding="0" cellspacing="0" border="0" style="font-family: Arial, Helvetica, sans-serif; max-width: 540px; margin-top: 24px; border-top: 2px solid #1a3a8a; padding-top: 16px;">
   <tr>
     <td style="vertical-align: top; padding-right: 16px;">
@@ -69,13 +69,50 @@ const EMAIL_SIGNATURE = `
   </tr>
 </table>`;
 
+// ── VantoOS branding ──
+const VANTOOS_HEADER = `
+<table cellpadding="0" cellspacing="0" border="0" style="font-family: 'Segoe UI', Arial, Helvetica, sans-serif; max-width: 540px; margin-bottom: 20px;">
+  <tr>
+    <td style="vertical-align: middle; padding-right: 12px;">
+      <img src="${APP_URL}/assets/vantoos-logo.png" alt="VantoOS" height="36" style="display: block; height: 36px; width: auto;" />
+    </td>
+    <td style="vertical-align: middle;">
+      <p style="margin: 0; font-size: 11px; font-weight: 500; color: #6b7b6a; line-height: 1.3; letter-spacing: 0.3px;">Plan. Fund. Deliver.</p>
+    </td>
+  </tr>
+</table>`;
+
+const VANTOOS_SIGNATURE = `
+<table cellpadding="0" cellspacing="0" border="0" style="font-family: 'Segoe UI', Arial, Helvetica, sans-serif; max-width: 540px; margin-top: 28px; border-top: 2px solid #2d3a4a; padding-top: 16px;">
+  <tr>
+    <td style="vertical-align: top; padding-right: 16px;">
+      <img src="${APP_URL}/assets/vantoos-logo.png" alt="VantoOS" width="64" height="48" style="display: block; object-fit: contain;" />
+    </td>
+    <td style="vertical-align: top;">
+      <p style="margin: 0 0 2px 0; font-size: 16px; font-weight: bold; color: #1a1a1a;">Vanto Vanto</p>
+      <p style="margin: 0 0 2px 0; font-size: 13px; color: #2d3a4a; font-weight: 600;">Founder — VantoOS</p>
+      <p style="margin: 0 0 8px 0; font-size: 12px; color: #6b7b6a;">Plan. Fund. Deliver.</p>
+      <table cellpadding="0" cellspacing="0" border="0">
+        <tr><td style="padding-right: 6px;"><span style="font-size: 12px; color: #666;">📧</span></td><td><a href="mailto:vanto@onlinecourseformlm.com" style="font-size: 13px; color: #333; text-decoration: none;">vanto@onlinecourseformlm.com</a></td></tr>
+        <tr><td style="padding-right: 6px; padding-top: 4px;"><span style="font-size: 12px; color: #666;">🌐</span></td><td style="padding-top: 4px;"><a href="https://onlinecourseformlm.com" style="font-size: 13px; color: #2d3a4a; text-decoration: none; font-weight: 500;">onlinecourseformlm.com</a></td></tr>
+      </table>
+    </td>
+  </tr>
+</table>`;
+
+function getBranding(brand: string) {
+  if (brand === "vantoos") {
+    return { header: VANTOOS_HEADER, signature: VANTOOS_SIGNATURE, unsubText: "You're receiving this because you joined VantoOS." };
+  }
+  return { header: APLGO_HEADER, signature: APLGO_SIGNATURE, unsubText: "You're receiving this email because you registered in APLGO." };
+}
+
 serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    // Verify admin auth
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
@@ -88,7 +125,6 @@ serve(async (req: Request) => {
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-    // Verify user is admin
     const userClient = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: authHeader } },
     });
@@ -129,14 +165,14 @@ serve(async (req: Request) => {
         });
       }
       const resend = new Resend(resendKey);
-      const personalizedContent = (body.content || "")
-        .replace(/\{\{first_name\}\}/g, "Test User");
+      const { header, signature } = getBranding(body.brand || "aplgo");
+      const personalizedContent = (body.content || "").replace(/\{\{first_name\}\}/g, "Test User");
 
       await resend.emails.send({
         from: `${body.from_name || "Vanto Zazi"} <vanto@onlinecourseformlm.com>`,
         to: [body.test_email],
         subject: `[TEST] ${body.subject || "(no subject)"}`,
-        html: `${EMAIL_HEADER}${personalizedContent}${EMAIL_SIGNATURE}<p style="font-size: 11px; color: #999; margin-top: 16px;">This is a test email.</p>`,
+        html: `${header}${personalizedContent}${signature}<p style="font-size: 11px; color: #999; margin-top: 16px;">This is a test email.</p>`,
       });
 
       return new Response(
@@ -154,7 +190,6 @@ serve(async (req: Request) => {
       });
     }
 
-    // Fetch broadcast
     const { data: broadcast, error: broadcastError } = await adminClient
       .from("broadcasts")
       .select("*")
@@ -175,13 +210,11 @@ serve(async (req: Request) => {
       });
     }
 
-    // Mark as sending
-    await adminClient
-      .from("broadcasts")
-      .update({ status: "sending" })
-      .eq("id", broadcast_id);
+    const { header, signature, unsubText } = getBranding(broadcast.brand || "aplgo");
 
-    // Get active subscribers (filtered by segment if set)
+    await adminClient.from("broadcasts").update({ status: "sending" }).eq("id", broadcast_id);
+
+    // Get active subscribers
     let subscribers: any[] | null = null;
     let subError: any = null;
 
@@ -216,10 +249,7 @@ serve(async (req: Request) => {
     }
 
     if (subError || !subscribers) {
-      await adminClient
-        .from("broadcasts")
-        .update({ status: "failed" })
-        .eq("id", broadcast_id);
+      await adminClient.from("broadcasts").update({ status: "failed" }).eq("id", broadcast_id);
       return new Response(JSON.stringify({ error: "Failed to fetch subscribers" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -228,10 +258,7 @@ serve(async (req: Request) => {
 
     const resendKey = Deno.env.get("RESEND_API_KEY");
     if (!resendKey) {
-      await adminClient
-        .from("broadcasts")
-        .update({ status: "failed" })
-        .eq("id", broadcast_id);
+      await adminClient.from("broadcasts").update({ status: "failed" }).eq("id", broadcast_id);
       return new Response(JSON.stringify({ error: "Email service not configured" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -242,7 +269,6 @@ serve(async (req: Request) => {
     let sent = 0;
     let failed = 0;
 
-    // Send ONE AT A TIME with throttle + retry to avoid 429 rate limits
     for (let i = 0; i < subscribers.length; i++) {
       const sub = subscribers[i];
       try {
@@ -254,7 +280,7 @@ serve(async (req: Request) => {
           from: `${broadcast.from_name} <vanto@onlinecourseformlm.com>`,
           to: [sub.email],
           subject: broadcast.subject,
-          html: `${EMAIL_HEADER}${personalizedContent}${EMAIL_SIGNATURE}<p style="font-size: 11px; color: #999; margin-top: 16px;">You're receiving this email because you registered in APLGO.<br/><a href="${unsubscribeUrl}" style="color:#999; text-decoration: underline;">Unsubscribe</a></p>`,
+          html: `${header}${personalizedContent}${signature}<p style="font-size: 11px; color: #999; margin-top: 16px;">${unsubText}<br/><a href="${unsubscribeUrl}" style="color:#999; text-decoration: underline;">Unsubscribe</a></p>`,
         });
         sent++;
         console.log(`Sent ${sent}/${subscribers.length}: ${sub.email}`);
@@ -263,13 +289,11 @@ serve(async (req: Request) => {
         failed++;
       }
 
-      // Throttle: 600ms between each send (~1.6 emails/sec, well under 2/sec limit)
       if (i < subscribers.length - 1) {
         await throttle(600);
       }
     }
 
-    // Update broadcast status
     await adminClient
       .from("broadcasts")
       .update({

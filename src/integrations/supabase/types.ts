@@ -161,6 +161,7 @@ export type Database = {
       }
       broadcasts: {
         Row: {
+          brand: string
           content: string
           created_at: string
           from_name: string
@@ -179,6 +180,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          brand?: string
           content?: string
           created_at?: string
           from_name?: string
@@ -197,6 +199,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          brand?: string
           content?: string
           created_at?: string
           from_name?: string
@@ -261,6 +264,7 @@ export type Database = {
       }
       email_sequences: {
         Row: {
+          brand: string
           created_at: string
           description: string | null
           id: string
@@ -271,6 +275,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          brand?: string
           created_at?: string
           description?: string | null
           id?: string
@@ -281,6 +286,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          brand?: string
           created_at?: string
           description?: string | null
           id?: string

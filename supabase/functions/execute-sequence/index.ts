@@ -10,7 +10,7 @@ const corsHeaders = {
 
 const APP_URL = "https://kit-clone-dashboard.lovable.app";
 
-const EMAIL_HEADER = `
+const APLGO_HEADER = `
 <table cellpadding="0" cellspacing="0" border="0" style="font-family: Arial, Helvetica, sans-serif; max-width: 540px; margin-bottom: 16px;">
   <tr>
     <td style="vertical-align: middle; padding-right: 8px;">
@@ -22,7 +22,7 @@ const EMAIL_HEADER = `
   </tr>
 </table>`;
 
-const EMAIL_SIGNATURE = `
+const APLGO_SIGNATURE = `
 <table cellpadding="0" cellspacing="0" border="0" style="font-family: Arial, Helvetica, sans-serif; max-width: 540px; margin-top: 24px; border-top: 2px solid #1a3a8a; padding-top: 16px;">
   <tr>
     <td style="vertical-align: top; padding-right: 16px;">
@@ -39,6 +39,43 @@ const EMAIL_SIGNATURE = `
     </td>
   </tr>
 </table>`;
+
+const VANTOOS_HEADER = `
+<table cellpadding="0" cellspacing="0" border="0" style="font-family: 'Segoe UI', Arial, Helvetica, sans-serif; max-width: 540px; margin-bottom: 20px;">
+  <tr>
+    <td style="vertical-align: middle; padding-right: 12px;">
+      <img src="${APP_URL}/assets/vantoos-logo.png" alt="VantoOS" height="36" style="display: block; height: 36px; width: auto;" />
+    </td>
+    <td style="vertical-align: middle;">
+      <p style="margin: 0; font-size: 11px; font-weight: 500; color: #6b7b6a; line-height: 1.3; letter-spacing: 0.3px;">Plan. Fund. Deliver.</p>
+    </td>
+  </tr>
+</table>`;
+
+const VANTOOS_SIGNATURE = `
+<table cellpadding="0" cellspacing="0" border="0" style="font-family: 'Segoe UI', Arial, Helvetica, sans-serif; max-width: 540px; margin-top: 28px; border-top: 2px solid #2d3a4a; padding-top: 16px;">
+  <tr>
+    <td style="vertical-align: top; padding-right: 16px;">
+      <img src="${APP_URL}/assets/vantoos-logo.png" alt="VantoOS" width="64" height="48" style="display: block; object-fit: contain;" />
+    </td>
+    <td style="vertical-align: top;">
+      <p style="margin: 0 0 2px 0; font-size: 16px; font-weight: bold; color: #1a1a1a;">Vanto Vanto</p>
+      <p style="margin: 0 0 2px 0; font-size: 13px; color: #2d3a4a; font-weight: 600;">Founder — VantoOS</p>
+      <p style="margin: 0 0 8px 0; font-size: 12px; color: #6b7b6a;">Plan. Fund. Deliver.</p>
+      <table cellpadding="0" cellspacing="0" border="0">
+        <tr><td style="padding-right: 6px;"><span style="font-size: 12px; color: #666;">📧</span></td><td><a href="mailto:vanto@onlinecourseformlm.com" style="font-size: 13px; color: #333; text-decoration: none;">vanto@onlinecourseformlm.com</a></td></tr>
+        <tr><td style="padding-right: 6px; padding-top: 4px;"><span style="font-size: 12px; color: #666;">🌐</span></td><td style="padding-top: 4px;"><a href="https://onlinecourseformlm.com" style="font-size: 13px; color: #2d3a4a; text-decoration: none; font-weight: 500;">onlinecourseformlm.com</a></td></tr>
+      </table>
+    </td>
+  </tr>
+</table>`;
+
+function getBranding(brand: string) {
+  if (brand === "vantoos") {
+    return { header: VANTOOS_HEADER, signature: VANTOOS_SIGNATURE, unsubText: "You're receiving this because you joined VantoOS." };
+  }
+  return { header: APLGO_HEADER, signature: APLGO_SIGNATURE, unsubText: "You're receiving this because you signed up." };
+}
 
 serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -59,10 +96,10 @@ serve(async (req: Request) => {
       });
     }
 
-    // Fetch the sequence
+    // Fetch the sequence (including brand)
     const { data: seq, error: seqErr } = await adminClient
       .from("email_sequences")
-      .select("id, steps")
+      .select("id, steps, brand")
       .eq("id", sequence_id)
       .eq("status", "active")
       .maybeSingle();
@@ -81,6 +118,8 @@ serve(async (req: Request) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    const { header, signature, unsubText } = getBranding(seq.brand || "aplgo");
 
     // Check for duplicate enrollment
     const { data: existing } = await adminClient
@@ -140,7 +179,7 @@ serve(async (req: Request) => {
               from: `${step.from_name || "Vanto Zazi"} <vanto@onlinecourseformlm.com>`,
               to: [email],
               subject: personalizedSubject,
-              html: `${EMAIL_HEADER}${personalizedContent}${EMAIL_SIGNATURE}<p style="font-size: 11px; color: #999; margin-top: 16px;">You're receiving this because you signed up.<br/><a href="${unsubUrl}" style="color:#999; text-decoration: underline;">Unsubscribe</a></p>`,
+              html: `${header}${personalizedContent}${signature}<p style="font-size: 11px; color: #999; margin-top: 16px;">${unsubText}<br/><a href="${unsubUrl}" style="color:#999; text-decoration: underline;">Unsubscribe</a></p>`,
             });
             console.log(`Sequence email sent to ${email}: ${personalizedSubject}`);
           } catch (sendErr) {

@@ -1,4 +1,7 @@
-// Professional email signature HTML template using Vanto Zazi branding
+// Professional email signature HTML templates
+// Two projects: APLGO (default) and VantoOS
+
+const APP_URL = "https://kit-clone-dashboard.lovable.app";
 
 export const EMAIL_SIGNATURE_HTML = `
 <table cellpadding="0" cellspacing="0" border="0" style="font-family: Arial, Helvetica, sans-serif; max-width: 540px; margin-top: 24px; border-top: 2px solid #1a3a8a; padding-top: 16px;">
@@ -416,3 +419,59 @@ export const PRODUCT_RETENTION_SEQUENCE = [
 <p>Proud to have you on the team,</p>`,
   },
 ];
+
+// ═══════════════════════════════════════════════════════════════
+// VantoOS Project — Header & Signature
+// ═══════════════════════════════════════════════════════════════
+
+export const VANTOOS_HEADER_HTML = `
+<table cellpadding="0" cellspacing="0" border="0" style="font-family: 'Segoe UI', Arial, Helvetica, sans-serif; max-width: 540px; margin-bottom: 20px;">
+  <tr>
+    <td style="vertical-align: middle; padding-right: 12px;">
+      <img src="${APP_URL}/assets/vantoos-logo.png" alt="VantoOS" height="36" style="display: block; height: 36px; width: auto;" />
+    </td>
+    <td style="vertical-align: middle;">
+      <p style="margin: 0; font-size: 11px; font-weight: 500; color: #6b7b6a; line-height: 1.3; letter-spacing: 0.3px;">Plan. Fund. Deliver.</p>
+    </td>
+  </tr>
+</table>`;
+
+export const VANTOOS_SIGNATURE_HTML = `
+<table cellpadding="0" cellspacing="0" border="0" style="font-family: 'Segoe UI', Arial, Helvetica, sans-serif; max-width: 540px; margin-top: 28px; border-top: 2px solid #2d3a4a; padding-top: 16px;">
+  <tr>
+    <td style="vertical-align: top; padding-right: 16px;">
+      <img src="${APP_URL}/assets/vantoos-logo.png" alt="VantoOS" width="64" height="48" style="display: block; object-fit: contain;" />
+    </td>
+    <td style="vertical-align: top;">
+      <p style="margin: 0 0 2px 0; font-size: 16px; font-weight: bold; color: #1a1a1a;">Vanto Vanto</p>
+      <p style="margin: 0 0 2px 0; font-size: 13px; color: #2d3a4a; font-weight: 600;">Founder — VantoOS</p>
+      <p style="margin: 0 0 8px 0; font-size: 12px; color: #6b7b6a;">Plan. Fund. Deliver.</p>
+      <table cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td style="padding-right: 6px;"><span style="font-size: 12px; color: #666;">📧</span></td>
+          <td><a href="mailto:vanto@onlinecourseformlm.com" style="font-size: 13px; color: #333; text-decoration: none;">vanto@onlinecourseformlm.com</a></td>
+        </tr>
+        <tr>
+          <td style="padding-right: 6px; padding-top: 4px;"><span style="font-size: 12px; color: #666;">🌐</span></td>
+          <td style="padding-top: 4px;"><a href="https://onlinecourseformlm.com" style="font-size: 13px; color: #2d3a4a; text-decoration: none; font-weight: 500;">onlinecourseformlm.com</a></td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>`;
+
+/**
+ * Wraps email body with VantoOS header + signature + unsubscribe.
+ */
+export function getVantoOSEmailWithSignature(bodyHtml: string, unsubscribeUrl?: string): string {
+  const unsubBlock = unsubscribeUrl
+    ? `<p style="font-size: 11px; color: #999; margin-top: 16px;">
+        You're receiving this because you joined VantoOS.
+        <br/><a href="${unsubscribeUrl}" style="color: #999; text-decoration: underline;">Unsubscribe</a>
+      </p>`
+    : `<p style="font-size: 11px; color: #999; margin-top: 16px;">
+        You're receiving this because you joined VantoOS.
+      </p>`;
+
+  return `${VANTOOS_HEADER_HTML}${bodyHtml}${VANTOOS_SIGNATURE_HTML}${unsubBlock}`;
+}

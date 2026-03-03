@@ -13,6 +13,7 @@ import {
   LogOut,
   ListOrdered,
   BookOpen,
+  Target,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import logo from "@/assets/logo.jpg";
@@ -30,6 +31,7 @@ const navigation = [
   { name: "Integrations", href: "/dashboard/integrations", icon: Zap },
   { name: "Analytics", href: "/dashboard/analytics", icon: BarChart3 },
   { name: "Knowledge Base", href: "/dashboard/knowledge-base", icon: BookOpen },
+  { name: "Plan", href: "/dashboard/plan", icon: Target },
 ];
 
 const bottomNav = [

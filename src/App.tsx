@@ -18,6 +18,7 @@ import SettingsPage from "@/app/dashboard/settings/page";
 import KnowledgeBasePage from "@/app/dashboard/knowledge-base/page";
 import WelcomeForm from "@/pages/WelcomeForm";
 import SequenceForm from "@/pages/SequenceForm";
+import VantoOSBetaForm from "@/pages/VantoOSBetaForm";
 import AuthPage from "@/pages/AuthPage";
 import UnsubscribePage from "@/pages/UnsubscribePage";
 import { ProtectedRoute } from "@/components/dashboard/ProtectedRoute";
@@ -30,6 +31,7 @@ function App() {
         <Route path="/auth" element={<AuthPage />} />
         <Route path="/forms/welcome" element={<WelcomeForm />} />
         <Route path="/forms/sequence/:id" element={<SequenceForm />} />
+        <Route path="/forms/vantoos-beta" element={<VantoOSBetaForm />} />
         <Route path="/unsubscribe" element={<UnsubscribePage />} />
         <Route path="/dashboard" element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
           <Route index element={<DashboardPage />} />

@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-import { Mic, MicOff, Pause, Play, Square } from "lucide-react";
+import { Mic, Pause, Play, Square, Pilcrow } from "lucide-react";
 
 type DictationState = "idle" | "recording" | "paused";
 
@@ -11,7 +11,12 @@ export function DictationMic({ onTranscript }: {
   const [interim, setInterim] = useState("");
   const recognitionRef = useRef<any>(null);
   const timerRef = useRef<ReturnType<typeof setInterval>>();
-  const accumulatedRef = useRef("");
+  const stateRef = useRef<DictationState>("idle");
+  const onTranscriptRef = useRef(onTranscript);
+
+  // Keep refs in sync
+  useEffect(() => { stateRef.current = state; }, [state]);
+  useEffect(() => { onTranscriptRef.current = onTranscript; }, [onTranscript]);
 
   const supported = typeof window !== "undefined" && ("webkitSpeechRecognition" in window || "SpeechRecognition" in window);
 
@@ -50,35 +55,37 @@ export function DictationMic({ onTranscript }: {
         }
       }
       if (finalText) {
-        accumulatedRef.current += finalText;
-        onTranscript(finalText);
+        // Append with a space separator — never overwrite
+        onTranscriptRef.current(finalText.trimStart());
+        setInterim("");
+      } else {
+        setInterim(interimText);
       }
-      setInterim(interimText);
     };
 
     recognition.onerror = (e: any) => {
-      if (e.error !== "aborted") {
+      if (e.error !== "aborted" && e.error !== "no-speech") {
         console.error("Dictation error:", e.error);
-        stop();
+        stopDictation();
       }
     };
 
     recognition.onend = () => {
       // Auto-restart if still recording (browser stops after silence)
-      if (recognitionRef.current && state === "recording") {
-        try { recognitionRef.current.start(); } catch {}
+      if (stateRef.current === "recording") {
+        try { recognitionRef.current?.start(); } catch {}
       }
     };
 
     return recognition;
-  }, [onTranscript, state]);
+  }, []);
 
   const start = useCallback(() => {
     if (!supported) {
       alert("Speech recognition is not supported in this browser. Try Chrome.");
       return;
     }
-    accumulatedRef.current = "";
+    // Do NOT reset elapsed on resume-style start — only on fresh start from idle
     setElapsed(0);
     setInterim("");
     const rec = createRecognition();
@@ -90,6 +97,7 @@ export function DictationMic({ onTranscript }: {
   const pause = useCallback(() => {
     if (recognitionRef.current) {
       try { recognitionRef.current.stop(); } catch {}
+      recognitionRef.current = null;
     }
     setState("paused");
     setInterim("");
@@ -97,13 +105,14 @@ export function DictationMic({ onTranscript }: {
 
   const resume = useCallback(() => {
     if (!supported) return;
+    setInterim("");
     const rec = createRecognition();
     recognitionRef.current = rec;
     rec.start();
     setState("recording");
   }, [supported, createRecognition]);
 
-  const stop = useCallback(() => {
+  const stopDictation = useCallback(() => {
     if (recognitionRef.current) {
       try { recognitionRef.current.stop(); } catch {}
       recognitionRef.current = null;
@@ -111,6 +120,10 @@ export function DictationMic({ onTranscript }: {
     setState("idle");
     setInterim("");
     setElapsed(0);
+  }, []);
+
+  const insertParagraph = useCallback(() => {
+    onTranscriptRef.current("\n\n");
   }, []);
 
   // Cleanup on unmount
@@ -139,21 +152,20 @@ export function DictationMic({ onTranscript }: {
 
   return (
     <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-destructive/10 border border-destructive/20">
-      {/* Live indicator */}
       <span className={`w-2 h-2 rounded-full ${state === "recording" ? "bg-destructive animate-pulse" : "bg-amber-500"}`} />
-
-      {/* Timer */}
       <span className="text-xs font-mono text-foreground min-w-[3ch]">{formatTime(elapsed)}</span>
 
-      {/* Interim text preview */}
       {interim && (
         <span className="text-[11px] text-muted-foreground truncate max-w-[120px] italic">
           {interim}
         </span>
       )}
 
-      {/* Controls */}
       <div className="flex items-center gap-1 ml-auto">
+        <button onClick={insertParagraph} title="Insert new paragraph"
+          className="p-1 rounded hover:bg-muted transition-colors text-muted-foreground">
+          <Pilcrow className="w-3.5 h-3.5" />
+        </button>
         {state === "recording" ? (
           <button onClick={pause} title="Pause dictation"
             className="p-1 rounded hover:bg-muted transition-colors text-amber-600">
@@ -165,7 +177,7 @@ export function DictationMic({ onTranscript }: {
             <Play className="w-3.5 h-3.5" />
           </button>
         )}
-        <button onClick={stop} title="Stop dictation"
+        <button onClick={stopDictation} title="Stop dictation"
           className="p-1 rounded hover:bg-muted transition-colors text-destructive">
           <Square className="w-3.5 h-3.5" />
         </button>

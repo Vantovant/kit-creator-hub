@@ -1,13 +1,15 @@
 import { useCallback, useState } from "react";
-import { Outlet } from "react-router-dom";
+import { Outlet, useLocation } from "react-router-dom";
 import { Sidebar } from "@/components/dashboard/Sidebar";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { SidebarProvider } from "@/components/dashboard/SidebarContext";
 import { AIWorkflowAssistant } from "@/components/dashboard/AIWorkflowAssistant";
 
 export default function DashboardLayout() {
+  const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const toggleSidebar = useCallback(() => setSidebarOpen(true), []);
+  const hideGlobalCopilot = location.pathname.startsWith("/dashboard/plan");
 
   return (
     <SidebarProvider value={toggleSidebar}>
@@ -24,7 +26,7 @@ export default function DashboardLayout() {
         <div className="lg:pl-64">
           <Outlet />
         </div>
-        <AIWorkflowAssistant />
+        {!hideGlobalCopilot && <AIWorkflowAssistant />}
       </div>
     </SidebarProvider>
   );

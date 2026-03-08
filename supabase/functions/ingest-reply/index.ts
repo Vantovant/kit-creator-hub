@@ -55,6 +55,7 @@ async function verifyWebhookSignature(req: Request, body: string): Promise<{ val
     return { valid: true };
   }
 
+
   return { valid: false, reason: "no_verification_configured" };
 }
 

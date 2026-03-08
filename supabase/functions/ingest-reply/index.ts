@@ -43,13 +43,6 @@ async function verifyWebhookSignature(req: Request, body: string): Promise<{ val
     }
   }
 
-  // Path B-0: Dev test mode (temporary, remove before production)
-  const testHeader = req.headers.get("x-test-mode");
-  if (testHeader === "zazi-dev-test") {
-    console.warn("DEV TEST MODE: accepting request via x-test-mode header");
-    return { valid: true };
-  }
-
   // Path B: Shared secret header
   const authToken = req.headers.get("x-webhook-secret");
   const expectedToken = Deno.env.get("WEBHOOK_REPLY_SECRET");

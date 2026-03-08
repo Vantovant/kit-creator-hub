@@ -41,3 +41,6 @@ verify_jwt = false
 
 [functions.plan-ai-extract-actions]
 verify_jwt = false
+
+[functions.ingest-reply]
+verify_jwt = false

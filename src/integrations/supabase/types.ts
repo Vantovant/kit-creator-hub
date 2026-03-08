@@ -842,6 +842,295 @@ export type Database = {
         }
         Relationships: []
       }
+      zazi_inbound_replies: {
+        Row: {
+          account_id: string | null
+          body_html: string | null
+          body_text: string | null
+          created_at: string
+          handled_at: string | null
+          handled_by: string | null
+          id: string
+          in_reply_to: string | null
+          intent_tag: string | null
+          internal_notes: string | null
+          is_read: boolean
+          is_starred: boolean
+          matched_broadcast_id: string | null
+          matched_outbound_id: string | null
+          matched_sequence_id: string | null
+          matched_sequence_step_index: number | null
+          prospect_id: string | null
+          provider_message_id: string | null
+          received_at: string
+          references_header: string | null
+          reply_status: string
+          sender_email: string
+          sender_name: string | null
+          snippet: string | null
+          snoozed_until: string | null
+          subject: string | null
+          thread_id: string | null
+          user_id: string
+          waiting_on: string | null
+        }
+        Insert: {
+          account_id?: string | null
+          body_html?: string | null
+          body_text?: string | null
+          created_at?: string
+          handled_at?: string | null
+          handled_by?: string | null
+          id?: string
+          in_reply_to?: string | null
+          intent_tag?: string | null
+          internal_notes?: string | null
+          is_read?: boolean
+          is_starred?: boolean
+          matched_broadcast_id?: string | null
+          matched_outbound_id?: string | null
+          matched_sequence_id?: string | null
+          matched_sequence_step_index?: number | null
+          prospect_id?: string | null
+          provider_message_id?: string | null
+          received_at?: string
+          references_header?: string | null
+          reply_status?: string
+          sender_email: string
+          sender_name?: string | null
+          snippet?: string | null
+          snoozed_until?: string | null
+          subject?: string | null
+          thread_id?: string | null
+          user_id: string
+          waiting_on?: string | null
+        }
+        Update: {
+          account_id?: string | null
+          body_html?: string | null
+          body_text?: string | null
+          created_at?: string
+          handled_at?: string | null
+          handled_by?: string | null
+          id?: string
+          in_reply_to?: string | null
+          intent_tag?: string | null
+          internal_notes?: string | null
+          is_read?: boolean
+          is_starred?: boolean
+          matched_broadcast_id?: string | null
+          matched_outbound_id?: string | null
+          matched_sequence_id?: string | null
+          matched_sequence_step_index?: number | null
+          prospect_id?: string | null
+          provider_message_id?: string | null
+          received_at?: string
+          references_header?: string | null
+          reply_status?: string
+          sender_email?: string
+          sender_name?: string | null
+          snippet?: string | null
+          snoozed_until?: string | null
+          subject?: string | null
+          thread_id?: string | null
+          user_id?: string
+          waiting_on?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "zazi_inbound_replies_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "zazi_reply_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "zazi_inbound_replies_matched_broadcast_id_fkey"
+            columns: ["matched_broadcast_id"]
+            isOneToOne: false
+            referencedRelation: "broadcasts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "zazi_inbound_replies_matched_outbound_id_fkey"
+            columns: ["matched_outbound_id"]
+            isOneToOne: false
+            referencedRelation: "zazi_outbound_sends"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "zazi_inbound_replies_matched_sequence_id_fkey"
+            columns: ["matched_sequence_id"]
+            isOneToOne: false
+            referencedRelation: "email_sequences"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "zazi_inbound_replies_prospect_id_fkey"
+            columns: ["prospect_id"]
+            isOneToOne: false
+            referencedRelation: "prospects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      zazi_outbound_sends: {
+        Row: {
+          account_id: string | null
+          brand: string
+          broadcast_id: string | null
+          created_at: string
+          id: string
+          prospect_id: string | null
+          provider_message_id: string | null
+          provider_thread_id: string | null
+          recipient_email: string
+          sent_at: string
+          sequence_id: string | null
+          sequence_step_index: number | null
+          subject: string
+          user_id: string
+        }
+        Insert: {
+          account_id?: string | null
+          brand?: string
+          broadcast_id?: string | null
+          created_at?: string
+          id?: string
+          prospect_id?: string | null
+          provider_message_id?: string | null
+          provider_thread_id?: string | null
+          recipient_email: string
+          sent_at?: string
+          sequence_id?: string | null
+          sequence_step_index?: number | null
+          subject: string
+          user_id: string
+        }
+        Update: {
+          account_id?: string | null
+          brand?: string
+          broadcast_id?: string | null
+          created_at?: string
+          id?: string
+          prospect_id?: string | null
+          provider_message_id?: string | null
+          provider_thread_id?: string | null
+          recipient_email?: string
+          sent_at?: string
+          sequence_id?: string | null
+          sequence_step_index?: number | null
+          subject?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "zazi_outbound_sends_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "zazi_reply_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "zazi_outbound_sends_broadcast_id_fkey"
+            columns: ["broadcast_id"]
+            isOneToOne: false
+            referencedRelation: "broadcasts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "zazi_outbound_sends_prospect_id_fkey"
+            columns: ["prospect_id"]
+            isOneToOne: false
+            referencedRelation: "prospects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "zazi_outbound_sends_sequence_id_fkey"
+            columns: ["sequence_id"]
+            isOneToOne: false
+            referencedRelation: "email_sequences"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      zazi_reply_accounts: {
+        Row: {
+          account_email: string
+          brand: string
+          config_json: Json | null
+          created_at: string
+          id: string
+          is_active: boolean
+          last_sync_at: string | null
+          provider: string
+          sync_status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          account_email: string
+          brand?: string
+          config_json?: Json | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          last_sync_at?: string | null
+          provider?: string
+          sync_status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          account_email?: string
+          brand?: string
+          config_json?: Json | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          last_sync_at?: string | null
+          provider?: string
+          sync_status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      zazi_reply_actions: {
+        Row: {
+          action_data: Json | null
+          action_type: string
+          created_at: string
+          id: string
+          reply_id: string
+          user_id: string
+        }
+        Insert: {
+          action_data?: Json | null
+          action_type: string
+          created_at?: string
+          id?: string
+          reply_id: string
+          user_id: string
+        }
+        Update: {
+          action_data?: Json | null
+          action_type?: string
+          created_at?: string
+          id?: string
+          reply_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "zazi_reply_actions_reply_id_fkey"
+            columns: ["reply_id"]
+            isOneToOne: false
+            referencedRelation: "zazi_inbound_replies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never

@@ -14,6 +14,7 @@ import {
   ListOrdered,
   BookOpen,
   Target,
+  MessageSquareReply,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import logo from "@/assets/logo.jpg";
@@ -31,6 +32,7 @@ const navigation = [
   { name: "Integrations", href: "/dashboard/integrations", icon: Zap },
   { name: "Analytics", href: "/dashboard/analytics", icon: BarChart3 },
   { name: "Knowledge Base", href: "/dashboard/knowledge-base", icon: BookOpen },
+  { name: "Reply Inbox", href: "/dashboard/replies", icon: MessageSquareReply },
   { name: "Plan", href: "/dashboard/plan", icon: Target },
 ];
 

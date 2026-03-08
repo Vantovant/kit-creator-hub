@@ -148,10 +148,16 @@ serve(async (req: Request) => {
           .eq("id", broadcast.id);
 
         const brand = broadcast.brand || "aplgo";
-        // Resolve reply account for the broadcast owner
+        // Resolve reply account — required for tracked sends
         const replyAccount = await resolveReplyAccount(adminClient, broadcast.user_id, brand);
-        const accountId = replyAccount?.id || null;
-        const replyToEmail = replyAccount?.email || broadcast.reply_to || "vanto@onlinecourseformlm.com";
+        if (!replyAccount) {
+          console.error(`missing_brand_reply_account: skipping broadcast ${broadcast.id} for brand=${brand} user=${broadcast.user_id}`);
+          await adminClient.from("broadcasts").update({ status: "failed" }).eq("id", broadcast.id);
+          processed++;
+          continue;
+        }
+        const accountId = replyAccount.id;
+        const replyToEmail = replyAccount.email;
 
         let subscribers: any[] | null = null;
 

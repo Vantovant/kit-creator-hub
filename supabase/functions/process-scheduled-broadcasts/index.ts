@@ -69,6 +69,36 @@ function throttle(ms = 600): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+// ── Track outbound send ──
+async function trackOutboundSend(adminClient: any, params: {
+  user_id: string;
+  recipient_email: string;
+  subject: string;
+  brand: string;
+  broadcast_id?: string;
+  sequence_id?: string;
+  sequence_step_index?: number;
+  prospect_id?: string;
+  provider_message_id?: string;
+}) {
+  try {
+    await adminClient.from("zazi_outbound_sends").insert({
+      user_id: params.user_id,
+      recipient_email: params.recipient_email,
+      subject: params.subject,
+      brand: params.brand,
+      broadcast_id: params.broadcast_id || null,
+      sequence_id: params.sequence_id || null,
+      sequence_step_index: params.sequence_step_index ?? null,
+      prospect_id: params.prospect_id || null,
+      provider_message_id: params.provider_message_id || null,
+      sent_at: new Date().toISOString(),
+    });
+  } catch (e) {
+    console.error("Failed to track outbound send:", e);
+  }
+}
+
 serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });

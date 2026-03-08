@@ -141,7 +141,7 @@ serve(async (req: Request) => {
           if (segment?.filters) {
             const { data } = await adminClient.rpc("get_segment_prospects", {
               segment_filters: segment.filters,
-            }).select("email, first_name, unsubscribe_token");
+            }).select("id, email, first_name, unsubscribe_token");
             subscribers = data;
           } else {
             const { data } = await adminClient

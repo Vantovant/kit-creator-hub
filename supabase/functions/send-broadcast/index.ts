@@ -11,15 +11,10 @@ const corsHeaders = {
 const APP_URL = "https://kit-clone-dashboard.lovable.app";
 
 // Retry with exponential backoff for 429 errors
-async function sendWithRetry(
-  resend: any,
-  emailPayload: any,
-  maxRetries = 3
-): Promise<any> {
+async function sendWithRetry(resend: any, emailPayload: any, maxRetries = 3): Promise<any> {
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
-      const result = await resend.emails.send(emailPayload);
-      return result;
+      return await resend.emails.send(emailPayload);
     } catch (e: any) {
       const is429 = e?.statusCode === 429 || e?.message?.includes("429");
       if (is429 && attempt < maxRetries) {
@@ -69,7 +64,6 @@ const APLGO_SIGNATURE = `
   </tr>
 </table>`;
 
-// ── VantoOS branding ──
 const VANTOOS_HEADER = `
 <table cellpadding="0" cellspacing="0" border="0" style="font-family: 'Segoe UI', Arial, Helvetica, sans-serif; max-width: 540px; margin-bottom: 20px;">
   <tr>
@@ -107,21 +101,50 @@ function getBranding(brand: string) {
   return { header: APLGO_HEADER, signature: APLGO_SIGNATURE, unsubText: "You're receiving this email because you registered in APLGO." };
 }
 
+/** Normalize provider message IDs for consistent storage */
+function normalizeId(id: string | null | undefined): string | null {
+  if (!id) return null;
+  return id.replace(/[<>\s]/g, "").trim() || null;
+}
+
+/** Resolve the reply account for a brand/user to get account_id */
+async function resolveReplyAccount(adminClient: any, userId: string, brand: string): Promise<string | null> {
+  const { data } = await adminClient
+    .from("zazi_reply_accounts")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("brand", brand)
+    .eq("is_active", true)
+    .limit(1);
+  if (data?.length) return data[0].id;
+  // Fallback: any active account for this user
+  const { data: fallback } = await adminClient
+    .from("zazi_reply_accounts")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("is_active", true)
+    .limit(1);
+  return fallback?.length ? fallback[0].id : null;
+}
+
 // ── Track outbound send ──
 async function trackOutboundSend(adminClient: any, params: {
   user_id: string;
+  account_id?: string | null;
   recipient_email: string;
   subject: string;
   brand: string;
-  broadcast_id?: string;
-  sequence_id?: string;
-  sequence_step_index?: number;
-  prospect_id?: string;
-  provider_message_id?: string;
+  broadcast_id?: string | null;
+  sequence_id?: string | null;
+  sequence_step_index?: number | null;
+  prospect_id?: string | null;
+  provider_message_id?: string | null;
+  provider_thread_id?: string | null;
 }) {
   try {
     await adminClient.from("zazi_outbound_sends").insert({
       user_id: params.user_id,
+      account_id: params.account_id || null,
       recipient_email: params.recipient_email,
       subject: params.subject,
       brand: params.brand,
@@ -129,7 +152,8 @@ async function trackOutboundSend(adminClient: any, params: {
       sequence_id: params.sequence_id || null,
       sequence_step_index: params.sequence_step_index ?? null,
       prospect_id: params.prospect_id || null,
-      provider_message_id: params.provider_message_id || null,
+      provider_message_id: normalizeId(params.provider_message_id),
+      provider_thread_id: params.provider_thread_id || null,
       sent_at: new Date().toISOString(),
     });
   } catch (e) {
@@ -146,8 +170,7 @@ serve(async (req: Request) => {
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
@@ -162,8 +185,7 @@ serve(async (req: Request) => {
     const { data: { user }, error: userError } = await userClient.auth.getUser();
     if (userError || !user) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
@@ -179,8 +201,7 @@ serve(async (req: Request) => {
 
     if (!roleCheck) {
       return new Response(JSON.stringify({ error: "Admin access required" }), {
-        status: 403,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
@@ -215,8 +236,7 @@ serve(async (req: Request) => {
     const { broadcast_id } = body;
     if (!broadcast_id) {
       return new Response(JSON.stringify({ error: "broadcast_id is required" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
@@ -228,19 +248,21 @@ serve(async (req: Request) => {
 
     if (broadcastError || !broadcast) {
       return new Response(JSON.stringify({ error: "Broadcast not found" }), {
-        status: 404,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     if (broadcast.status === "sent" || broadcast.status === "sending") {
       return new Response(JSON.stringify({ error: "Broadcast already sent or sending" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const { header, signature, unsubText } = getBranding(broadcast.brand || "aplgo");
+    const brand = broadcast.brand || "aplgo";
+    const { header, signature, unsubText } = getBranding(brand);
+
+    // Resolve reply account for this user+brand
+    const accountId = await resolveReplyAccount(adminClient, userId, brand);
 
     await adminClient.from("broadcasts").update({ status: "sending" }).eq("id", broadcast_id);
 
@@ -281,8 +303,7 @@ serve(async (req: Request) => {
     if (subError || !subscribers) {
       await adminClient.from("broadcasts").update({ status: "failed" }).eq("id", broadcast_id);
       return new Response(JSON.stringify({ error: "Failed to fetch subscribers" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
@@ -290,8 +311,7 @@ serve(async (req: Request) => {
     if (!resendKey) {
       await adminClient.from("broadcasts").update({ status: "failed" }).eq("id", broadcast_id);
       return new Response(JSON.stringify({ error: "Email service not configured" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
@@ -313,12 +333,12 @@ serve(async (req: Request) => {
           html: `${header}${personalizedContent}${signature}<p style="font-size: 11px; color: #999; margin-top: 16px;">${unsubText}<br/><a href="${unsubscribeUrl}" style="color:#999; text-decoration: underline;">Unsubscribe</a></p>`,
         });
 
-        // Track outbound send for reply matching
         await trackOutboundSend(adminClient, {
           user_id: userId,
+          account_id: accountId,
           recipient_email: sub.email,
           subject: broadcast.subject,
-          brand: broadcast.brand || "aplgo",
+          brand,
           broadcast_id: broadcast.id,
           prospect_id: sub.id || null,
           provider_message_id: sendResult?.data?.id || null,
@@ -331,9 +351,7 @@ serve(async (req: Request) => {
         failed++;
       }
 
-      if (i < subscribers.length - 1) {
-        await throttle(600);
-      }
+      if (i < subscribers.length - 1) await throttle(600);
     }
 
     await adminClient
@@ -356,8 +374,7 @@ serve(async (req: Request) => {
   } catch (err: any) {
     console.error("send-broadcast error:", err);
     return new Response(JSON.stringify({ error: "An error occurred" }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 });

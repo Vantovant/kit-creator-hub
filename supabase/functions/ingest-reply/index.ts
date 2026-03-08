@@ -2,55 +2,60 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, svix-id, svix-timestamp, svix-signature",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, svix-id, svix-timestamp, svix-signature, x-webhook-secret",
 };
 
-/** Strip angle brackets from message IDs */
+/** Strip angle brackets and whitespace from message IDs */
 function normalizeMessageId(id: string | null | undefined): string | null {
   if (!id) return null;
   return id.replace(/[<>\s]/g, "").trim() || null;
 }
 
-/** Verify Resend/Svix webhook signature */
-async function verifyWebhookSignature(req: Request, body: string): Promise<boolean> {
+/** Verify webhook signature — fail-closed unless ALLOW_INSECURE_WEBHOOKS=true */
+async function verifyWebhookSignature(req: Request, body: string): Promise<{ valid: boolean; reason?: string }> {
+  const allowInsecure = Deno.env.get("ALLOW_INSECURE_WEBHOOKS") === "true";
+
   const svixId = req.headers.get("svix-id");
   const svixTimestamp = req.headers.get("svix-timestamp");
   const svixSignature = req.headers.get("svix-signature");
 
-  // If no signature headers present, check for a shared secret token as fallback
-  if (!svixId || !svixTimestamp || !svixSignature) {
-    const authToken = req.headers.get("x-webhook-secret");
-    const expectedToken = Deno.env.get("WEBHOOK_REPLY_SECRET");
-    if (expectedToken && authToken === expectedToken) return true;
-    // If no signature mechanism at all, reject in production, allow in dev
-    if (!expectedToken) {
-      console.warn("No webhook verification configured — accepting request (configure WEBHOOK_REPLY_SECRET for production)");
-      return true;
+  // Path A: Svix signature headers present → verify HMAC
+  if (svixId && svixTimestamp && svixSignature) {
+    const webhookSecret = Deno.env.get("RESEND_WEBHOOK_SECRET") || Deno.env.get("WEBHOOK_REPLY_SECRET");
+    if (!webhookSecret) {
+      if (allowInsecure) { console.warn("ALLOW_INSECURE_WEBHOOKS: accepting unsigned svix request"); return { valid: true }; }
+      return { valid: false, reason: "no_webhook_secret_configured" };
     }
-    return false;
+
+    try {
+      const secretBytes = Uint8Array.from(atob(webhookSecret.replace("whsec_", "")), c => c.charCodeAt(0));
+      const toSign = `${svixId}.${svixTimestamp}.${body}`;
+      const key = await crypto.subtle.importKey("raw", secretBytes, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+      const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(toSign));
+      const computedSig = btoa(String.fromCharCode(...new Uint8Array(sig)));
+
+      const signatures = svixSignature.split(" ").map(s => s.replace("v1,", ""));
+      if (signatures.some(s => s === computedSig)) return { valid: true };
+      return { valid: false, reason: "signature_mismatch" };
+    } catch (e) {
+      console.error("Svix HMAC verification error:", e);
+      return { valid: false, reason: "signature_verification_error" };
+    }
   }
 
-  // Svix HMAC verification
-  const webhookSecret = Deno.env.get("RESEND_WEBHOOK_SECRET") || Deno.env.get("WEBHOOK_REPLY_SECRET");
-  if (!webhookSecret) {
-    console.warn("No RESEND_WEBHOOK_SECRET configured — skipping signature verification");
-    return true;
+  // Path B: Shared secret header
+  const authToken = req.headers.get("x-webhook-secret");
+  const expectedToken = Deno.env.get("WEBHOOK_REPLY_SECRET");
+  if (expectedToken && authToken === expectedToken) return { valid: true };
+  if (expectedToken && authToken !== expectedToken) return { valid: false, reason: "invalid_shared_secret" };
+
+  // Path C: No verification mechanism at all
+  if (allowInsecure) {
+    console.warn("ALLOW_INSECURE_WEBHOOKS: no verification configured, accepting request");
+    return { valid: true };
   }
 
-  try {
-    const secretBytes = Uint8Array.from(atob(webhookSecret.replace("whsec_", "")), c => c.charCodeAt(0));
-    const toSign = `${svixId}.${svixTimestamp}.${body}`;
-    const key = await crypto.subtle.importKey("raw", secretBytes, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-    const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(toSign));
-    const computedSig = btoa(String.fromCharCode(...new Uint8Array(sig)));
-
-    // svix-signature can contain multiple signatures like "v1,<base64> v1,<base64>"
-    const signatures = svixSignature.split(" ").map(s => s.replace("v1,", ""));
-    return signatures.some(s => s === computedSig);
-  } catch (e) {
-    console.error("Webhook signature verification failed:", e);
-    return false;
-  }
+  return { valid: false, reason: "no_verification_configured" };
 }
 
 Deno.serve(async (req) => {
@@ -59,11 +64,11 @@ Deno.serve(async (req) => {
   try {
     const bodyText = await req.text();
 
-    // Verify webhook signature
-    const isValid = await verifyWebhookSignature(req, bodyText);
-    if (!isValid) {
-      console.error("Webhook signature verification failed — rejecting request");
-      return new Response(JSON.stringify({ error: "invalid_signature" }), {
+    // --- Webhook verification (fail-closed) ---
+    const verification = await verifyWebhookSignature(req, bodyText);
+    if (!verification.valid) {
+      console.error(`Webhook rejected: ${verification.reason}`);
+      return new Response(JSON.stringify({ error: "unauthorized", reason: verification.reason }), {
         status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -86,7 +91,8 @@ Deno.serve(async (req) => {
       });
     }
 
-    // --- STEP 1: Identify receiving reply account from to_email ---
+    // --- STEP 1: Strict reply account resolution from to_email ---
+    // No fallback guessing — if to_email doesn't match an active account, skip.
     let replyAccount: any = null;
     if (to_email) {
       const normalizedTo = to_email.toLowerCase().trim();
@@ -99,92 +105,97 @@ Deno.serve(async (req) => {
       if (data && data.length > 0) replyAccount = data[0];
     }
 
-    // If no specific account found, try to find any active account
     if (!replyAccount) {
-      const { data } = await supabase
-        .from("zazi_reply_accounts")
-        .select("*")
-        .eq("is_active", true)
-        .limit(1);
-      if (data && data.length > 0) replyAccount = data[0];
+      console.log(`Unknown reply account for to_email="${to_email}" — skipping. Reason: unknown_reply_account`);
+      return new Response(JSON.stringify({ status: "skipped", reason: "unknown_reply_account", to_email }), {
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    // Extract scoping from reply account
-    const scopeAccountId = replyAccount?.id || null;
-    const scopeUserId = replyAccount?.user_id || null;
+    const scopeAccountId = replyAccount.id;
+    const scopeUserId = replyAccount.user_id;
 
-    // --- STEP 2: MATCHING LOGIC (scoped by account/user) ---
+    // --- STEP 2: MATCHING LOGIC (scoped by account_id first, then user_id) ---
     const normalizedInReplyTo = normalizeMessageId(in_reply_to);
     const normalizedMsgId = normalizeMessageId(message_id);
 
     let matchedOutbound: any = null;
 
-    // 2a. Try matching by in_reply_to → provider_message_id
-    if (normalizedInReplyTo) {
-      let query = supabase
+    // Helper: build scoped query
+    function scopedQuery() {
+      return supabase
         .from("zazi_outbound_sends")
         .select("*")
-        .eq("provider_message_id", normalizedInReplyTo)
-        .limit(1);
-      if (scopeUserId) query = query.eq("user_id", scopeUserId);
-
-      const { data } = await query;
-      if (data && data.length > 0) matchedOutbound = data[0];
+        .eq("account_id", scopeAccountId);
     }
 
-    // 2b. Try matching by references header (extract all message IDs)
+    // Also prepare a user-scoped fallback (for sends without account_id set)
+    function userScopedQuery() {
+      return supabase
+        .from("zazi_outbound_sends")
+        .select("*")
+        .eq("user_id", scopeUserId);
+    }
+
+    // 2a. in_reply_to → provider_message_id (account-scoped, then user-scoped)
+    if (normalizedInReplyTo) {
+      let { data } = await scopedQuery().eq("provider_message_id", normalizedInReplyTo).limit(1);
+      if (!data?.length) {
+        ({ data } = await userScopedQuery().eq("provider_message_id", normalizedInReplyTo).limit(1));
+      }
+      if (data?.length) matchedOutbound = data[0];
+    }
+
+    // 2b. references header — extract all message IDs
     if (!matchedOutbound && references) {
       const refIds = references.match(/[^\s<>]+/g) || [];
       for (const refId of refIds) {
         const normalized = normalizeMessageId(refId);
         if (!normalized) continue;
-        let query = supabase
-          .from("zazi_outbound_sends")
-          .select("*")
-          .eq("provider_message_id", normalized)
-          .limit(1);
-        if (scopeUserId) query = query.eq("user_id", scopeUserId);
-
-        const { data } = await query;
-        if (data && data.length > 0) { matchedOutbound = data[0]; break; }
+        let { data } = await scopedQuery().eq("provider_message_id", normalized).limit(1);
+        if (!data?.length) {
+          ({ data } = await userScopedQuery().eq("provider_message_id", normalized).limit(1));
+        }
+        if (data?.length) { matchedOutbound = data[0]; break; }
       }
     }
 
-    // 2c. Try matching by thread_id
+    // 2c. thread_id → provider_thread_id
     if (!matchedOutbound && thread_id) {
-      let query = supabase
-        .from("zazi_outbound_sends")
-        .select("*")
-        .eq("provider_thread_id", thread_id)
-        .limit(1);
-      if (scopeUserId) query = query.eq("user_id", scopeUserId);
-
-      const { data } = await query;
-      if (data && data.length > 0) matchedOutbound = data[0];
+      let { data } = await scopedQuery().eq("provider_thread_id", thread_id).limit(1);
+      if (!data?.length) {
+        ({ data } = await userScopedQuery().eq("provider_thread_id", thread_id).limit(1));
+      }
+      if (data?.length) matchedOutbound = data[0];
     }
 
-    // 2d. Fallback: match by recipient_email + normalized subject (within same scope, last 60 days)
+    // 2d. Subject fallback — only within account scope, last 60 days
     if (!matchedOutbound && from_email && subject) {
       const normalized = subject.replace(/^(Re|Fwd|Fw):\s*/gi, "").trim();
       const sixtyDaysAgo = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString();
 
-      let query = supabase
-        .from("zazi_outbound_sends")
-        .select("*")
+      // Account-scoped only for subject fallback (stricter)
+      let { data } = await scopedQuery()
         .eq("recipient_email", from_email)
         .ilike("subject", normalized)
         .gte("sent_at", sixtyDaysAgo)
         .order("sent_at", { ascending: false })
         .limit(1);
-      if (scopeUserId) query = query.eq("user_id", scopeUserId);
 
-      const { data } = await query;
-      if (data && data.length > 0) matchedOutbound = data[0];
+      if (!data?.length) {
+        ({ data } = await userScopedQuery()
+          .eq("recipient_email", from_email)
+          .ilike("subject", normalized)
+          .gte("sent_at", sixtyDaysAgo)
+          .order("sent_at", { ascending: false })
+          .limit(1));
+      }
+      if (data?.length) matchedOutbound = data[0];
     }
 
-    // If no match found, skip
+    // No match → skip
     if (!matchedOutbound) {
-      console.log(`No outbound match for reply from ${from_email}, subject: "${subject}". Skipping.`);
+      console.log(`No outbound match for reply from ${from_email}, subject: "${subject}", account: ${scopeAccountId}. Skipping.`);
       return new Response(JSON.stringify({ status: "skipped", reason: "no_outbound_match" }), {
         status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -197,7 +208,7 @@ Deno.serve(async (req) => {
         .select("id")
         .eq("provider_message_id", normalizedMsgId)
         .limit(1);
-      if (existing && existing.length > 0) {
+      if (existing?.length) {
         return new Response(JSON.stringify({ status: "duplicate", id: existing[0].id }), {
           status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
@@ -215,7 +226,7 @@ Deno.serve(async (req) => {
         .select("id")
         .eq("email", from_email)
         .limit(1);
-      if (prospect && prospect.length > 0) prospect_id = prospect[0].id;
+      if (prospect?.length) prospect_id = prospect[0].id;
     }
 
     // Insert reply

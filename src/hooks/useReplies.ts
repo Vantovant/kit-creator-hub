@@ -54,7 +54,7 @@ export function useReplies(filter: ReplyFilter = "all") {
     else if (filter === "handled") query = query.eq("reply_status", "handled");
 
     const { data } = await query;
-    setReplies((data as InboundReply[]) || []);
+    setReplies((data as unknown as InboundReply[]) || []);
     setLoading(false);
   }, [filter]);
 

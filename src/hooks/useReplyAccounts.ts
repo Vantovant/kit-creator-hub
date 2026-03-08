@@ -25,7 +25,7 @@ export function useReplyAccounts() {
       .from("zazi_reply_accounts" as any)
       .select("*")
       .order("created_at", { ascending: false });
-    setAccounts((data as ReplyAccount[]) || []);
+    setAccounts((data as unknown as ReplyAccount[]) || []);
     setLoading(false);
   }, []);
 

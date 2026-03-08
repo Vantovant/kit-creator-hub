@@ -51,6 +51,7 @@ function App() {
           <Route path="analytics" element={<AnalyticsPage />} />
           <Route path="knowledge-base" element={<KnowledgeBasePage />} />
           <Route path="plan" element={<PlanPage />} />
+          <Route path="replies" element={<RepliesPage />} />
           <Route path="settings" element={<SettingsPage />} />
         </Route>
       </Routes>

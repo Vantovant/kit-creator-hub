@@ -146,7 +146,7 @@ serve(async (req: Request) => {
           } else {
             const { data } = await adminClient
               .from("prospects")
-              .select("email, first_name, unsubscribe_token")
+              .select("id, email, first_name, unsubscribe_token")
               .eq("unsubscribed", false);
             subscribers = data;
           }

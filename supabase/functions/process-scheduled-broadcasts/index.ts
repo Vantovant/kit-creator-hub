@@ -248,7 +248,7 @@ serve(async (req: Request) => {
           if (step.type === "send_email") {
             const { data: prospect } = await adminClient
               .from("prospects")
-              .select("unsubscribe_token, unsubscribed")
+              .select("id, unsubscribe_token, unsubscribed")
               .eq("email", email)
               .maybeSingle();
 
@@ -275,11 +275,23 @@ serve(async (req: Request) => {
             const personalizedSubject = (step.subject || "")
               .replace(/\{\{first_name\}\}/g, firstName);
 
-            await sendWithRetry(resendForQueue, {
+            const sendResult = await sendWithRetry(resendForQueue, {
               from: `${step.from_name || "Vanto Zazi"} <vanto@onlinecourseformlm.com>`,
               to: [email],
               subject: personalizedSubject,
               html: `${EMAIL_HEADER}${personalizedContent}${EMAIL_SIGNATURE}<p style="font-size: 11px; color: #999; margin-top: 16px;">You're receiving this email because you registered in APLGO.<br/><a href="${unsubUrl}" style="color:#999; text-decoration: underline;">Unsubscribe</a></p>`,
+            });
+
+            // Track outbound send for queued sequence step
+            await trackOutboundSend(adminClient, {
+              user_id: "00000000-0000-0000-0000-000000000000", // system send
+              recipient_email: email,
+              subject: personalizedSubject,
+              brand: "aplgo",
+              sequence_id: item.automation_id,
+              sequence_step_index: item.step_index,
+              prospect_id: prospect?.id || null,
+              provider_message_id: sendResult?.data?.id || null,
             });
 
             console.log(`Queue: sent automation email to ${email} — ${personalizedSubject}`);

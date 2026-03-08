@@ -180,7 +180,9 @@ serve(async (req: Request) => {
     const { header, signature, unsubText } = getBranding(brand);
 
     // Resolve reply account for the sequence owner
-    const accountId = await resolveReplyAccount(adminClient, sequenceOwnerId, brand);
+    const replyAccount = await resolveReplyAccount(adminClient, sequenceOwnerId, brand);
+    const accountId = replyAccount?.id || null;
+    const replyToEmail = replyAccount?.email || "vanto@onlinecourseformlm.com";
 
     // Check for duplicate enrollment
     const { data: existing } = await adminClient

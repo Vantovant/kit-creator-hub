@@ -310,8 +310,13 @@ serve(async (req: Request) => {
             const realOwnerId = seqData?.user_id || null;
             const seqBrand = seqData?.brand || "aplgo";
             const queueReplyAccount = realOwnerId ? await resolveReplyAccount(adminClient, realOwnerId, seqBrand) : null;
-            const queueAccountId = queueReplyAccount?.id || null;
-            const queueReplyToEmail = queueReplyAccount?.email || "vanto@onlinecourseformlm.com";
+            if (!queueReplyAccount) {
+              console.error(`missing_brand_reply_account: skipping queued sequence step for email=${email} brand=${seqBrand} user=${realOwnerId}`);
+              await adminClient.from("automation_queue").update({ status: "failed", processed_at: new Date().toISOString() }).eq("id", item.id);
+              continue;
+            }
+            const queueAccountId = queueReplyAccount.id;
+            const queueReplyToEmail = queueReplyAccount.email;
 
             const unsubUrl = `${APP_URL}/unsubscribe?token=${prospect?.unsubscribe_token || ""}`;
             const personalizedContent = (step.content || "")

@@ -255,10 +255,16 @@ serve(async (req: Request) => {
     const brand = broadcast.brand || "aplgo";
     const { header, signature, unsubText } = getBranding(brand);
 
-    // Resolve reply account for this user+brand
+    // Resolve reply account for this user+brand — required for tracked sends
     const replyAccount = await resolveReplyAccount(adminClient, userId, brand);
-    const accountId = replyAccount?.id || null;
-    const replyToEmail = replyAccount?.email || broadcast.reply_to || "vanto@onlinecourseformlm.com";
+    if (!replyAccount) {
+      await adminClient.from("broadcasts").update({ status: "failed" }).eq("id", broadcast_id);
+      return new Response(JSON.stringify({ error: "missing_brand_reply_account", detail: `No active reply account for brand "${brand}". Configure one in Email → Settings before sending.` }), {
+        status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const accountId = replyAccount.id;
+    const replyToEmail = replyAccount.email;
 
     await adminClient.from("broadcasts").update({ status: "sending" }).eq("id", broadcast_id);
 

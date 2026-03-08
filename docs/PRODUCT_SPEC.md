@@ -338,7 +338,48 @@ Brand selection is available on broadcasts, sequences, and templates.
 
 ---
 
-## 8. Roadmap / Planned Features
+## 8. Reply Inbox (Zazi Mail Email CMS)
+
+### Overview
+
+The Reply Inbox (`/dashboard/replies`) is a campaign-reply workspace that surfaces **only** inbound emails matched to Zazi Mail outbound sends (sequences or broadcasts). It is NOT a general inbox.
+
+### Database Tables
+
+| Table | Purpose |
+|---|---|
+| `zazi_reply_accounts` | Connected reply monitoring accounts with brand mapping |
+| `zazi_outbound_sends` | Tracks every outbound email with provider message IDs for reply matching |
+| `zazi_inbound_replies` | Stores matched inbound replies with status, intent, and audit trail |
+| `zazi_reply_actions` | Action log for handled/task/reminder/meeting actions on replies |
+
+### Reply Matching (3-tier)
+
+1. `in_reply_to` header → `provider_message_id` on outbound send
+2. `thread_id` → `provider_thread_id` on outbound send
+3. Fallback: `sender_email` + normalized subject match (high confidence only)
+
+Unmatched emails are silently skipped — never shown in UI.
+
+### UI Features
+
+- **3-panel layout**: reply list (left), detail (right), Command Centre drawer (optional)
+- **Filters**: All, Unread, New, Waiting, Snoozed, Handled
+- **Intent tags**: interested, objection, support, unsubscribe_risk, onboarding, payment_issue, meeting_request, follow_up, customer_care, general_info
+- **Email → Plan actions**: Create Task (T), Reminder (R), Meeting (M) — prefilled from reply context
+- **Triage shortcuts**: J/K navigate, W waiting, S snooze, H handled, X star, U unread toggle, Esc back
+
+### Edge Function: `ingest-reply`
+
+Webhook endpoint that receives inbound email payloads, matches against `zazi_outbound_sends`, deduplicates, and inserts into `zazi_inbound_replies`. Rejects unmatched mail.
+
+### Settings
+
+Reply account configuration with brand mapping, webhook endpoint display, and connection health status.
+
+---
+
+## 9. Roadmap / Planned Features
 
 - Third-party integration connections (Stripe payments, Zapier workflows)
 - Advanced automation conditions and branching
@@ -348,6 +389,8 @@ Brand selection is available on broadcasts, sequences, and templates.
 - Multi-user workspace collaboration
 - Custom domain email sending
 - Advanced analytics with cohort analysis
+- AI reply summarization and intent detection
+- Reply assignment and team routing
 
 ---
 

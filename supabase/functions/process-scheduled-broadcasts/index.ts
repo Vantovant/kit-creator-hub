@@ -208,10 +208,11 @@ serve(async (req: Request) => {
                 .replace(/\{\{first_name\}\}/g, sub.first_name || "there");
 
               const sendResult = await sendWithRetry(resend, {
-                from: `${broadcast.from_name} <vanto@onlinecourseformlm.com>`,
+                from: `${broadcast.from_name} <${replyToEmail}>`,
+                reply_to: replyToEmail,
                 to: [sub.email],
                 subject: broadcast.subject,
-                html: `${EMAIL_HEADER}${personalizedContent}<hr style="margin:24px 0;border:none;border-top:1px solid #eee;"/><p style="font-size:12px;color:#999;"><a href="${unsubscribeUrl}" style="color:#999;">Unsubscribe</a></p>`,
+                html: `${EMAIL_HEADER}${personalizedContent}${EMAIL_SIGNATURE}<p style="font-size: 11px; color: #999; margin-top: 16px;">You're receiving this email because you signed up.<br/><a href="${unsubscribeUrl}" style="color:#999; text-decoration: underline;">Unsubscribe</a></p>`,
               });
 
               await trackOutboundSend(adminClient, {

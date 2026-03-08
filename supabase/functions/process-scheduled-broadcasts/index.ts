@@ -154,7 +154,9 @@ serve(async (req: Request) => {
 
         const brand = broadcast.brand || "aplgo";
         // Resolve reply account for the broadcast owner
-        const accountId = await resolveReplyAccount(adminClient, broadcast.user_id, brand);
+        const replyAccount = await resolveReplyAccount(adminClient, broadcast.user_id, brand);
+        const accountId = replyAccount?.id || null;
+        const replyToEmail = replyAccount?.email || broadcast.reply_to || "vanto@onlinecourseformlm.com";
 
         let subscribers: any[] | null = null;
 

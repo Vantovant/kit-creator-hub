@@ -1,6 +1,7 @@
-import { useEffect } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { Badge } from "@/components/ui/badge";
-import { Star, Clock, CheckCircle2, ArrowLeft, User, Send, Calendar, ListTodo, Bell, MessageSquare, ExternalLink } from "lucide-react";
+import { Star, Clock, CheckCircle2, ArrowLeft, Send } from "lucide-react";
+import { ListTodo, Bell, Calendar } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { InboundReply } from "@/hooks/useReplies";
 
@@ -30,9 +31,27 @@ export function ReplyDetail({
   onToggleStar, onCreateTask, onCreateReminder, onCreateMeeting,
   onMarkRead, onSetIntentTag, onAddNote,
 }: ReplyDetailProps) {
+  // Mark read only here (single source of truth)
   useEffect(() => {
     if (!reply.is_read) onMarkRead();
   }, [reply.id]);
+
+  // Local notes state with save-on-blur (no per-keystroke DB writes)
+  const [localNotes, setLocalNotes] = useState(reply.internal_notes || "");
+  const lastSavedRef = useRef(reply.internal_notes || "");
+
+  // Reset local notes when reply changes
+  useEffect(() => {
+    setLocalNotes(reply.internal_notes || "");
+    lastSavedRef.current = reply.internal_notes || "";
+  }, [reply.id, reply.internal_notes]);
+
+  const handleNoteBlur = useCallback(() => {
+    if (localNotes !== lastSavedRef.current) {
+      lastSavedRef.current = localNotes;
+      onAddNote(localNotes);
+    }
+  }, [localNotes, onAddNote]);
 
   const formatDate = (d: string) => new Date(d).toLocaleString("en-ZA", {
     day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit",
@@ -116,12 +135,13 @@ export function ReplyDetail({
           </div>
         </div>
 
-        {/* Internal notes */}
+        {/* Internal notes — local state, save on blur */}
         <div className="mt-4 pt-4 border-t border-border">
           <p className="text-xs font-medium text-muted-foreground mb-2">Internal Notes</p>
           <textarea
-            defaultValue={reply.internal_notes || ""}
-            onBlur={(e) => onAddNote(e.target.value)}
+            value={localNotes}
+            onChange={(e) => setLocalNotes(e.target.value)}
+            onBlur={handleNoteBlur}
             placeholder="Add internal notes…"
             className="w-full text-sm bg-muted/50 border border-border rounded-lg px-3 py-2 resize-none h-20 focus:outline-none focus:ring-1 focus:ring-primary"
           />

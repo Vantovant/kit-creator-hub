@@ -62,12 +62,6 @@ async function verifyWebhookSignature(req: Request, body: string): Promise<{ val
     return { valid: true };
   }
 
-  // Path D: Test mode header (for development testing only)
-  const testHeader = req.headers.get("x-test-mode");
-  if (testHeader === "zazi-dev-test") {
-    console.warn("DEV TEST MODE: accepting request via x-test-mode header");
-    return { valid: true };
-  }
 
   return { valid: false, reason: "no_verification_configured" };
 }

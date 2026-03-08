@@ -179,11 +179,21 @@ serve(async (req: Request) => {
               const personalizedContent = broadcast.content
                 .replace(/\{\{first_name\}\}/g, sub.first_name || "there");
 
-              await sendWithRetry(resend, {
+              const sendResult = await sendWithRetry(resend, {
                 from: `${broadcast.from_name} <vanto@onlinecourseformlm.com>`,
                 to: [sub.email],
                 subject: broadcast.subject,
                 html: `${EMAIL_HEADER}${personalizedContent}<hr style="margin:24px 0;border:none;border-top:1px solid #eee;"/><p style="font-size:12px;color:#999;"><a href="${unsubscribeUrl}" style="color:#999;">Unsubscribe</a></p>`,
+              });
+              // Track outbound send
+              await trackOutboundSend(adminClient, {
+                user_id: broadcast.user_id,
+                recipient_email: sub.email,
+                subject: broadcast.subject,
+                brand: broadcast.brand || "aplgo",
+                broadcast_id: broadcast.id,
+                prospect_id: sub.id || null,
+                provider_message_id: sendResult?.data?.id || null,
               });
               sent++;
             } catch (e) {

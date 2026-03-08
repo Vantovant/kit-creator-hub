@@ -51,7 +51,7 @@ serve(async (req: Request) => {
       ? String(first_name).trim().slice(0, 100).replace(/[<>]/g, "")
       : null;
 
-    const allowedSources = ["welcome_form", "website_embed", "csv_import", "sequence_form"];
+    const allowedSources = ["welcome_form", "website_embed", "csv_import", "sequence_form", "vantoos_beta_form"];
     const sanitizedSource = allowedSources.includes(source) ? source : "welcome_form";
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;

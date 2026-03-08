@@ -107,7 +107,7 @@ function normalizeId(id: string | null | undefined): string | null {
   return id.replace(/[<>\s]/g, "").trim() || null;
 }
 
-/** Resolve the reply account for a brand/user to get account_id + account_email */
+/** Resolve the reply account for a brand/user — exact match only, no cross-brand fallback */
 async function resolveReplyAccount(adminClient: any, userId: string, brand: string): Promise<{ id: string; email: string } | null> {
   const { data } = await adminClient
     .from("zazi_reply_accounts")
@@ -117,14 +117,8 @@ async function resolveReplyAccount(adminClient: any, userId: string, brand: stri
     .eq("is_active", true)
     .limit(1);
   if (data?.length) return { id: data[0].id, email: data[0].account_email };
-  // Fallback: any active account for this user
-  const { data: fallback } = await adminClient
-    .from("zazi_reply_accounts")
-    .select("id, account_email")
-    .eq("user_id", userId)
-    .eq("is_active", true)
-    .limit(1);
-  return fallback?.length ? { id: fallback[0].id, email: fallback[0].account_email } : null;
+  console.warn(`missing_brand_reply_account: no active reply account for user_id=${userId} brand=${brand}`);
+  return null;
 }
 
 // ── Track outbound send ──

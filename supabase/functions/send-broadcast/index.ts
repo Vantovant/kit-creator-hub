@@ -262,7 +262,9 @@ serve(async (req: Request) => {
     const { header, signature, unsubText } = getBranding(brand);
 
     // Resolve reply account for this user+brand
-    const accountId = await resolveReplyAccount(adminClient, userId, brand);
+    const replyAccount = await resolveReplyAccount(adminClient, userId, brand);
+    const accountId = replyAccount?.id || null;
+    const replyToEmail = replyAccount?.email || broadcast.reply_to || "vanto@onlinecourseformlm.com";
 
     await adminClient.from("broadcasts").update({ status: "sending" }).eq("id", broadcast_id);
 

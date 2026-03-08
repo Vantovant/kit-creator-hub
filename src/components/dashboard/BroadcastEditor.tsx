@@ -62,7 +62,7 @@ export function BroadcastEditor({ initialData, editId, onSaved }: BroadcastEdito
   const [previewText, setPreviewText] = useState(initialData?.preview_text || "");
   const content = useUndoRedo(initialData?.content || "");
   const [fromName, setFromName] = useState(initialData?.from_name || "Vanto Zazi");
-  const [replyTo, setReplyTo] = useState(initialData?.reply_to || "vanto@onlinecourseformlm.com");
+  const [replyTo, setReplyTo] = useState(initialData?.reply_to || "vanto@reply.onlinecourseformlm.com");
   const [brand, setBrand] = useState(initialData?.brand || "aplgo");
   const [segmentId, setSegmentId] = useState<string>(initialData?.segment_id || "");
   const [segments, setSegments] = useState<{ id: string; name: string }[]>([]);

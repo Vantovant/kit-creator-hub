@@ -1,0 +1,1 @@
+ALTER TABLE broadcasts ALTER COLUMN reply_to SET DEFAULT 'vanto@reply.onlinecourseformlm.com';

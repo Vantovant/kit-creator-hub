@@ -237,7 +237,8 @@ serve(async (req: Request) => {
 
           try {
             const sendResult = await resend.emails.send({
-              from: `${step.from_name || "Vanto Zazi"} <vanto@onlinecourseformlm.com>`,
+              from: `${step.from_name || "Vanto Zazi"} <${replyToEmail}>`,
+              reply_to: replyToEmail,
               to: [email],
               subject: personalizedSubject,
               html: `${header}${personalizedContent}${signature}<p style="font-size: 11px; color: #999; margin-top: 16px;">${unsubText}<br/><a href="${unsubUrl}" style="color:#999; text-decoration: underline;">Unsubscribe</a></p>`,

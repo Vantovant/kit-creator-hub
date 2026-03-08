@@ -319,17 +319,18 @@ serve(async (req: Request) => {
               .replace(/\{\{first_name\}\}/g, firstName);
 
             const sendResult = await sendWithRetry(resendForQueue, {
-              from: `${step.from_name || "Vanto Zazi"} <vanto@onlinecourseformlm.com>`,
+              from: `${step.from_name || "Vanto Zazi"} <${queueReplyToEmail}>`,
+              reply_to: queueReplyToEmail,
               to: [email],
               subject: personalizedSubject,
-              html: `${EMAIL_HEADER}${personalizedContent}${EMAIL_SIGNATURE}<p style="font-size: 11px; color: #999; margin-top: 16px;">You're receiving this email because you registered in APLGO.<br/><a href="${unsubUrl}" style="color:#999; text-decoration: underline;">Unsubscribe</a></p>`,
+              html: `${EMAIL_HEADER}${personalizedContent}${EMAIL_SIGNATURE}<p style="font-size: 11px; color: #999; margin-top: 16px;">You're receiving this email because you signed up.<br/><a href="${unsubUrl}" style="color:#999; text-decoration: underline;">Unsubscribe</a></p>`,
             });
 
             // Track with real owner, not placeholder
             if (realOwnerId) {
               await trackOutboundSend(adminClient, {
                 user_id: realOwnerId,
-                account_id: accountId,
+                account_id: queueAccountId,
                 recipient_email: email,
                 subject: personalizedSubject,
                 brand: seqBrand,

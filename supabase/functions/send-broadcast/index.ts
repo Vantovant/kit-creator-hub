@@ -329,7 +329,8 @@ serve(async (req: Request) => {
           .replace(/\{\{first_name\}\}/g, sub.first_name || "there");
 
         const sendResult = await sendWithRetry(resend, {
-          from: `${broadcast.from_name} <vanto@onlinecourseformlm.com>`,
+          from: `${broadcast.from_name} <${replyToEmail}>`,
+          reply_to: replyToEmail,
           to: [sub.email],
           subject: broadcast.subject,
           html: `${header}${personalizedContent}${signature}<p style="font-size: 11px; color: #999; margin-top: 16px;">${unsubText}<br/><a href="${unsubscribeUrl}" style="color:#999; text-decoration: underline;">Unsubscribe</a></p>`,

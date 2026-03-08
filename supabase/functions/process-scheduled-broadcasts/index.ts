@@ -69,6 +69,36 @@ function throttle(ms = 600): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+// ── Track outbound send ──
+async function trackOutboundSend(adminClient: any, params: {
+  user_id: string;
+  recipient_email: string;
+  subject: string;
+  brand: string;
+  broadcast_id?: string;
+  sequence_id?: string;
+  sequence_step_index?: number;
+  prospect_id?: string;
+  provider_message_id?: string;
+}) {
+  try {
+    await adminClient.from("zazi_outbound_sends").insert({
+      user_id: params.user_id,
+      recipient_email: params.recipient_email,
+      subject: params.subject,
+      brand: params.brand,
+      broadcast_id: params.broadcast_id || null,
+      sequence_id: params.sequence_id || null,
+      sequence_step_index: params.sequence_step_index ?? null,
+      prospect_id: params.prospect_id || null,
+      provider_message_id: params.provider_message_id || null,
+      sent_at: new Date().toISOString(),
+    });
+  } catch (e) {
+    console.error("Failed to track outbound send:", e);
+  }
+}
+
 serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -111,19 +141,19 @@ serve(async (req: Request) => {
           if (segment?.filters) {
             const { data } = await adminClient.rpc("get_segment_prospects", {
               segment_filters: segment.filters,
-            }).select("email, first_name, unsubscribe_token");
+            }).select("id, email, first_name, unsubscribe_token");
             subscribers = data;
           } else {
             const { data } = await adminClient
               .from("prospects")
-              .select("email, first_name, unsubscribe_token")
+              .select("id, email, first_name, unsubscribe_token")
               .eq("unsubscribed", false);
             subscribers = data;
           }
         } else {
           const { data } = await adminClient
             .from("prospects")
-            .select("email, first_name, unsubscribe_token")
+            .select("id, email, first_name, unsubscribe_token")
             .eq("unsubscribed", false);
           subscribers = data;
         }
@@ -149,11 +179,21 @@ serve(async (req: Request) => {
               const personalizedContent = broadcast.content
                 .replace(/\{\{first_name\}\}/g, sub.first_name || "there");
 
-              await sendWithRetry(resend, {
+              const sendResult = await sendWithRetry(resend, {
                 from: `${broadcast.from_name} <vanto@onlinecourseformlm.com>`,
                 to: [sub.email],
                 subject: broadcast.subject,
                 html: `${EMAIL_HEADER}${personalizedContent}<hr style="margin:24px 0;border:none;border-top:1px solid #eee;"/><p style="font-size:12px;color:#999;"><a href="${unsubscribeUrl}" style="color:#999;">Unsubscribe</a></p>`,
+              });
+              // Track outbound send
+              await trackOutboundSend(adminClient, {
+                user_id: broadcast.user_id,
+                recipient_email: sub.email,
+                subject: broadcast.subject,
+                brand: broadcast.brand || "aplgo",
+                broadcast_id: broadcast.id,
+                prospect_id: sub.id || null,
+                provider_message_id: sendResult?.data?.id || null,
               });
               sent++;
             } catch (e) {
@@ -208,7 +248,7 @@ serve(async (req: Request) => {
           if (step.type === "send_email") {
             const { data: prospect } = await adminClient
               .from("prospects")
-              .select("unsubscribe_token, unsubscribed")
+              .select("id, unsubscribe_token, unsubscribed")
               .eq("email", email)
               .maybeSingle();
 
@@ -235,11 +275,23 @@ serve(async (req: Request) => {
             const personalizedSubject = (step.subject || "")
               .replace(/\{\{first_name\}\}/g, firstName);
 
-            await sendWithRetry(resendForQueue, {
+            const sendResult = await sendWithRetry(resendForQueue, {
               from: `${step.from_name || "Vanto Zazi"} <vanto@onlinecourseformlm.com>`,
               to: [email],
               subject: personalizedSubject,
               html: `${EMAIL_HEADER}${personalizedContent}${EMAIL_SIGNATURE}<p style="font-size: 11px; color: #999; margin-top: 16px;">You're receiving this email because you registered in APLGO.<br/><a href="${unsubUrl}" style="color:#999; text-decoration: underline;">Unsubscribe</a></p>`,
+            });
+
+            // Track outbound send for queued sequence step
+            await trackOutboundSend(adminClient, {
+              user_id: "00000000-0000-0000-0000-000000000000", // system send
+              recipient_email: email,
+              subject: personalizedSubject,
+              brand: "aplgo",
+              sequence_id: item.automation_id,
+              sequence_step_index: item.step_index,
+              prospect_id: prospect?.id || null,
+              provider_message_id: sendResult?.data?.id || null,
             });
 
             console.log(`Queue: sent automation email to ${email} — ${personalizedSubject}`);

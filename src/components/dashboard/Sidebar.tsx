@@ -32,7 +32,7 @@ const navigation = [
   { name: "Integrations", href: "/dashboard/integrations", icon: Zap },
   { name: "Analytics", href: "/dashboard/analytics", icon: BarChart3 },
   { name: "Knowledge Base", href: "/dashboard/knowledge-base", icon: BookOpen },
-  { name: "Reply Inbox", href: "/dashboard/replies", icon: MessageSquareReply },
+  { name: "Email", href: "/dashboard/email", icon: MessageSquareReply },
   { name: "Plan", href: "/dashboard/plan", icon: Target },
 ];
 

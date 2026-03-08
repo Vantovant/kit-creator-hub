@@ -15,11 +15,11 @@ async function sendWithRetry(
   resend: any,
   emailPayload: any,
   maxRetries = 3
-): Promise<boolean> {
+): Promise<any> {
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
-      await resend.emails.send(emailPayload);
-      return true;
+      const result = await resend.emails.send(emailPayload);
+      return result;
     } catch (e: any) {
       const is429 = e?.statusCode === 429 || e?.message?.includes("429");
       if (is429 && attempt < maxRetries) {
@@ -31,7 +31,7 @@ async function sendWithRetry(
       }
     }
   }
-  return false;
+  return null;
 }
 
 function throttle(ms = 600): Promise<void> {
@@ -105,6 +105,36 @@ function getBranding(brand: string) {
     return { header: VANTOOS_HEADER, signature: VANTOOS_SIGNATURE, unsubText: "You're receiving this because you joined VantoOS." };
   }
   return { header: APLGO_HEADER, signature: APLGO_SIGNATURE, unsubText: "You're receiving this email because you registered in APLGO." };
+}
+
+// ── Track outbound send ──
+async function trackOutboundSend(adminClient: any, params: {
+  user_id: string;
+  recipient_email: string;
+  subject: string;
+  brand: string;
+  broadcast_id?: string;
+  sequence_id?: string;
+  sequence_step_index?: number;
+  prospect_id?: string;
+  provider_message_id?: string;
+}) {
+  try {
+    await adminClient.from("zazi_outbound_sends").insert({
+      user_id: params.user_id,
+      recipient_email: params.recipient_email,
+      subject: params.subject,
+      brand: params.brand,
+      broadcast_id: params.broadcast_id || null,
+      sequence_id: params.sequence_id || null,
+      sequence_step_index: params.sequence_step_index ?? null,
+      prospect_id: params.prospect_id || null,
+      provider_message_id: params.provider_message_id || null,
+      sent_at: new Date().toISOString(),
+    });
+  } catch (e) {
+    console.error("Failed to track outbound send:", e);
+  }
 }
 
 serve(async (req: Request) => {
@@ -228,13 +258,13 @@ serve(async (req: Request) => {
       if (segment?.filters) {
         const { data, error } = await adminClient.rpc("get_segment_prospects", {
           segment_filters: segment.filters,
-        }).select("email, first_name, unsubscribe_token");
+        }).select("id, email, first_name, unsubscribe_token");
         subscribers = data;
         subError = error;
       } else {
         const { data, error } = await adminClient
           .from("prospects")
-          .select("email, first_name, unsubscribe_token")
+          .select("id, email, first_name, unsubscribe_token")
           .eq("unsubscribed", false);
         subscribers = data;
         subError = error;
@@ -242,7 +272,7 @@ serve(async (req: Request) => {
     } else {
       const { data, error } = await adminClient
         .from("prospects")
-        .select("email, first_name, unsubscribe_token")
+        .select("id, email, first_name, unsubscribe_token")
         .eq("unsubscribed", false);
       subscribers = data;
       subError = error;
@@ -276,12 +306,24 @@ serve(async (req: Request) => {
         const personalizedContent = broadcast.content
           .replace(/\{\{first_name\}\}/g, sub.first_name || "there");
 
-        await sendWithRetry(resend, {
+        const sendResult = await sendWithRetry(resend, {
           from: `${broadcast.from_name} <vanto@onlinecourseformlm.com>`,
           to: [sub.email],
           subject: broadcast.subject,
           html: `${header}${personalizedContent}${signature}<p style="font-size: 11px; color: #999; margin-top: 16px;">${unsubText}<br/><a href="${unsubscribeUrl}" style="color:#999; text-decoration: underline;">Unsubscribe</a></p>`,
         });
+
+        // Track outbound send for reply matching
+        await trackOutboundSend(adminClient, {
+          user_id: userId,
+          recipient_email: sub.email,
+          subject: broadcast.subject,
+          brand: broadcast.brand || "aplgo",
+          broadcast_id: broadcast.id,
+          prospect_id: sub.id || null,
+          provider_message_id: sendResult?.data?.id || null,
+        });
+
         sent++;
         console.log(`Sent ${sent}/${subscribers.length}: ${sub.email}`);
       } catch (e) {

@@ -169,7 +169,7 @@ export default function RepliesPage() {
             <ReplyList
               replies={replies}
               selectedId={selectedId}
-              onSelect={(id) => { setSelectedId(id); markRead(id); }}
+              onSelect={(id) => setSelectedId(id)}
               onToggleStar={toggleStar}
             />
           )}

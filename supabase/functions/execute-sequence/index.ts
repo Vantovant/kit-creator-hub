@@ -77,6 +77,38 @@ function getBranding(brand: string) {
   return { header: APLGO_HEADER, signature: APLGO_SIGNATURE, unsubText: "You're receiving this because you signed up." };
 }
 
+// ── Track outbound send ──
+async function trackOutboundSend(adminClient: any, params: {
+  user_id?: string;
+  recipient_email: string;
+  subject: string;
+  brand: string;
+  sequence_id?: string;
+  sequence_step_index?: number;
+  broadcast_id?: string;
+  prospect_id?: string;
+  provider_message_id?: string;
+}) {
+  try {
+    // If no user_id provided, use a system placeholder — sequences are triggered by system
+    const userId = params.user_id || "00000000-0000-0000-0000-000000000000";
+    await adminClient.from("zazi_outbound_sends").insert({
+      user_id: userId,
+      recipient_email: params.recipient_email,
+      subject: params.subject,
+      brand: params.brand,
+      sequence_id: params.sequence_id || null,
+      sequence_step_index: params.sequence_step_index ?? null,
+      broadcast_id: params.broadcast_id || null,
+      prospect_id: params.prospect_id || null,
+      provider_message_id: params.provider_message_id || null,
+      sent_at: new Date().toISOString(),
+    });
+  } catch (e) {
+    console.error("Failed to track outbound send:", e);
+  }
+}
+
 serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -99,7 +131,7 @@ serve(async (req: Request) => {
     // Fetch the sequence (including brand)
     const { data: seq, error: seqErr } = await adminClient
       .from("email_sequences")
-      .select("id, steps, brand")
+      .select("id, steps, brand, user_id")
       .eq("id", sequence_id)
       .eq("status", "active")
       .maybeSingle();
@@ -140,10 +172,10 @@ serve(async (req: Request) => {
     const resend = resendKey ? new Resend(resendKey) : null;
     const firstName = first_name || "there";
 
-    // Get prospect info for unsubscribe link
+    // Get prospect info for unsubscribe link + prospect_id
     const { data: prospect } = await adminClient
       .from("prospects")
-      .select("unsubscribe_token, unsubscribed")
+      .select("id, unsubscribe_token, unsubscribed")
       .eq("email", email)
       .maybeSingle();
 
@@ -175,12 +207,25 @@ serve(async (req: Request) => {
           const personalizedSubject = (step.subject || "").replace(/\{\{first_name\}\}/g, firstName);
 
           try {
-            await resend.emails.send({
+            const sendResult = await resend.emails.send({
               from: `${step.from_name || "Vanto Zazi"} <vanto@onlinecourseformlm.com>`,
               to: [email],
               subject: personalizedSubject,
               html: `${header}${personalizedContent}${signature}<p style="font-size: 11px; color: #999; margin-top: 16px;">${unsubText}<br/><a href="${unsubUrl}" style="color:#999; text-decoration: underline;">Unsubscribe</a></p>`,
             });
+
+            // Track outbound send
+            await trackOutboundSend(adminClient, {
+              user_id: seq.user_id,
+              recipient_email: email,
+              subject: personalizedSubject,
+              brand: seq.brand || "aplgo",
+              sequence_id: seq.id,
+              sequence_step_index: i,
+              prospect_id: prospect?.id || null,
+              provider_message_id: sendResult?.data?.id || null,
+            });
+
             console.log(`Sequence email sent to ${email}: ${personalizedSubject}`);
           } catch (sendErr) {
             console.error(`Failed to send sequence email to ${email}:`, sendErr);

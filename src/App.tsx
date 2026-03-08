@@ -52,6 +52,7 @@ function App() {
           <Route path="knowledge-base" element={<KnowledgeBasePage />} />
           <Route path="plan" element={<PlanPage />} />
           <Route path="replies" element={<RepliesPage />} />
+          <Route path="email" element={<RepliesPage />} />
           <Route path="settings" element={<SettingsPage />} />
         </Route>
       </Routes>

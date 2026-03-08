@@ -83,23 +83,23 @@ function normalizeId(id: string | null | undefined): string | null {
   return id.replace(/[<>\s]/g, "").trim() || null;
 }
 
-/** Resolve the reply account for a user+brand to get account_id */
-async function resolveReplyAccount(adminClient: any, userId: string, brand: string): Promise<string | null> {
+/** Resolve the reply account for a user+brand to get account_id + account_email */
+async function resolveReplyAccount(adminClient: any, userId: string, brand: string): Promise<{ id: string; email: string } | null> {
   const { data } = await adminClient
     .from("zazi_reply_accounts")
-    .select("id")
+    .select("id, account_email")
     .eq("user_id", userId)
     .eq("brand", brand)
     .eq("is_active", true)
     .limit(1);
-  if (data?.length) return data[0].id;
+  if (data?.length) return { id: data[0].id, email: data[0].account_email };
   const { data: fallback } = await adminClient
     .from("zazi_reply_accounts")
-    .select("id")
+    .select("id, account_email")
     .eq("user_id", userId)
     .eq("is_active", true)
     .limit(1);
-  return fallback?.length ? fallback[0].id : null;
+  return fallback?.length ? { id: fallback[0].id, email: fallback[0].account_email } : null;
 }
 
 // ── Track outbound send ──
@@ -180,7 +180,9 @@ serve(async (req: Request) => {
     const { header, signature, unsubText } = getBranding(brand);
 
     // Resolve reply account for the sequence owner
-    const accountId = await resolveReplyAccount(adminClient, sequenceOwnerId, brand);
+    const replyAccount = await resolveReplyAccount(adminClient, sequenceOwnerId, brand);
+    const accountId = replyAccount?.id || null;
+    const replyToEmail = replyAccount?.email || "vanto@onlinecourseformlm.com";
 
     // Check for duplicate enrollment
     const { data: existing } = await adminClient
@@ -235,7 +237,8 @@ serve(async (req: Request) => {
 
           try {
             const sendResult = await resend.emails.send({
-              from: `${step.from_name || "Vanto Zazi"} <vanto@onlinecourseformlm.com>`,
+              from: `${step.from_name || "Vanto Zazi"} <${replyToEmail}>`,
+              reply_to: replyToEmail,
               to: [email],
               subject: personalizedSubject,
               html: `${header}${personalizedContent}${signature}<p style="font-size: 11px; color: #999; margin-top: 16px;">${unsubText}<br/><a href="${unsubUrl}" style="color:#999; text-decoration: underline;">Unsubscribe</a></p>`,

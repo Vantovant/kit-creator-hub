@@ -169,27 +169,18 @@ Deno.serve(async (req) => {
       if (data?.length) matchedOutbound = data[0];
     }
 
-    // 2d. Subject fallback — only within account scope, last 60 days
+    // 2d. Subject fallback — account_id-scoped ONLY, last 60 days, NO user_id fallback
     if (!matchedOutbound && from_email && subject) {
       const normalized = subject.replace(/^(Re|Fwd|Fw):\s*/gi, "").trim();
       const sixtyDaysAgo = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString();
 
-      // Account-scoped only for subject fallback (stricter)
-      let { data } = await scopedQuery()
+      const { data } = await scopedQuery()
         .eq("recipient_email", from_email)
         .ilike("subject", normalized)
         .gte("sent_at", sixtyDaysAgo)
         .order("sent_at", { ascending: false })
         .limit(1);
 
-      if (!data?.length) {
-        ({ data } = await userScopedQuery()
-          .eq("recipient_email", from_email)
-          .ilike("subject", normalized)
-          .gte("sent_at", sixtyDaysAgo)
-          .order("sent_at", { ascending: false })
-          .limit(1));
-      }
       if (data?.length) matchedOutbound = data[0];
     }
 

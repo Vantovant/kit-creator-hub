@@ -107,24 +107,24 @@ function normalizeId(id: string | null | undefined): string | null {
   return id.replace(/[<>\s]/g, "").trim() || null;
 }
 
-/** Resolve the reply account for a brand/user to get account_id */
-async function resolveReplyAccount(adminClient: any, userId: string, brand: string): Promise<string | null> {
+/** Resolve the reply account for a brand/user to get account_id + account_email */
+async function resolveReplyAccount(adminClient: any, userId: string, brand: string): Promise<{ id: string; email: string } | null> {
   const { data } = await adminClient
     .from("zazi_reply_accounts")
-    .select("id")
+    .select("id, account_email")
     .eq("user_id", userId)
     .eq("brand", brand)
     .eq("is_active", true)
     .limit(1);
-  if (data?.length) return data[0].id;
+  if (data?.length) return { id: data[0].id, email: data[0].account_email };
   // Fallback: any active account for this user
   const { data: fallback } = await adminClient
     .from("zazi_reply_accounts")
-    .select("id")
+    .select("id, account_email")
     .eq("user_id", userId)
     .eq("is_active", true)
     .limit(1);
-  return fallback?.length ? fallback[0].id : null;
+  return fallback?.length ? { id: fallback[0].id, email: fallback[0].account_email } : null;
 }
 
 // ── Track outbound send ──
@@ -262,7 +262,9 @@ serve(async (req: Request) => {
     const { header, signature, unsubText } = getBranding(brand);
 
     // Resolve reply account for this user+brand
-    const accountId = await resolveReplyAccount(adminClient, userId, brand);
+    const replyAccount = await resolveReplyAccount(adminClient, userId, brand);
+    const accountId = replyAccount?.id || null;
+    const replyToEmail = replyAccount?.email || broadcast.reply_to || "vanto@onlinecourseformlm.com";
 
     await adminClient.from("broadcasts").update({ status: "sending" }).eq("id", broadcast_id);
 
@@ -327,7 +329,8 @@ serve(async (req: Request) => {
           .replace(/\{\{first_name\}\}/g, sub.first_name || "there");
 
         const sendResult = await sendWithRetry(resend, {
-          from: `${broadcast.from_name} <vanto@onlinecourseformlm.com>`,
+          from: `${broadcast.from_name} <${replyToEmail}>`,
+          reply_to: replyToEmail,
           to: [sub.email],
           subject: broadcast.subject,
           html: `${header}${personalizedContent}${signature}<p style="font-size: 11px; color: #999; margin-top: 16px;">${unsubText}<br/><a href="${unsubscribeUrl}" style="color:#999; text-decoration: underline;">Unsubscribe</a></p>`,

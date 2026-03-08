@@ -69,23 +69,23 @@ function normalizeId(id: string | null | undefined): string | null {
   return id.replace(/[<>\s]/g, "").trim() || null;
 }
 
-/** Resolve reply account for user+brand */
-async function resolveReplyAccount(adminClient: any, userId: string, brand: string): Promise<string | null> {
+/** Resolve reply account for user+brand — returns id + email */
+async function resolveReplyAccount(adminClient: any, userId: string, brand: string): Promise<{ id: string; email: string } | null> {
   const { data } = await adminClient
     .from("zazi_reply_accounts")
-    .select("id")
+    .select("id, account_email")
     .eq("user_id", userId)
     .eq("brand", brand)
     .eq("is_active", true)
     .limit(1);
-  if (data?.length) return data[0].id;
+  if (data?.length) return { id: data[0].id, email: data[0].account_email };
   const { data: fallback } = await adminClient
     .from("zazi_reply_accounts")
-    .select("id")
+    .select("id, account_email")
     .eq("user_id", userId)
     .eq("is_active", true)
     .limit(1);
-  return fallback?.length ? fallback[0].id : null;
+  return fallback?.length ? { id: fallback[0].id, email: fallback[0].account_email } : null;
 }
 
 // ── Track outbound send ──
@@ -154,7 +154,9 @@ serve(async (req: Request) => {
 
         const brand = broadcast.brand || "aplgo";
         // Resolve reply account for the broadcast owner
-        const accountId = await resolveReplyAccount(adminClient, broadcast.user_id, brand);
+        const replyAccount = await resolveReplyAccount(adminClient, broadcast.user_id, brand);
+        const accountId = replyAccount?.id || null;
+        const replyToEmail = replyAccount?.email || broadcast.reply_to || "vanto@onlinecourseformlm.com";
 
         let subscribers: any[] | null = null;
 
@@ -206,10 +208,11 @@ serve(async (req: Request) => {
                 .replace(/\{\{first_name\}\}/g, sub.first_name || "there");
 
               const sendResult = await sendWithRetry(resend, {
-                from: `${broadcast.from_name} <vanto@onlinecourseformlm.com>`,
+                from: `${broadcast.from_name} <${replyToEmail}>`,
+                reply_to: replyToEmail,
                 to: [sub.email],
                 subject: broadcast.subject,
-                html: `${EMAIL_HEADER}${personalizedContent}<hr style="margin:24px 0;border:none;border-top:1px solid #eee;"/><p style="font-size:12px;color:#999;"><a href="${unsubscribeUrl}" style="color:#999;">Unsubscribe</a></p>`,
+                html: `${EMAIL_HEADER}${personalizedContent}${EMAIL_SIGNATURE}<p style="font-size: 11px; color: #999; margin-top: 16px;">You're receiving this email because you signed up.<br/><a href="${unsubscribeUrl}" style="color:#999; text-decoration: underline;">Unsubscribe</a></p>`,
               });
 
               await trackOutboundSend(adminClient, {
@@ -305,7 +308,9 @@ serve(async (req: Request) => {
 
             const realOwnerId = seqData?.user_id || null;
             const seqBrand = seqData?.brand || "aplgo";
-            const accountId = realOwnerId ? await resolveReplyAccount(adminClient, realOwnerId, seqBrand) : null;
+            const queueReplyAccount = realOwnerId ? await resolveReplyAccount(adminClient, realOwnerId, seqBrand) : null;
+            const queueAccountId = queueReplyAccount?.id || null;
+            const queueReplyToEmail = queueReplyAccount?.email || "vanto@onlinecourseformlm.com";
 
             const unsubUrl = `${APP_URL}/unsubscribe?token=${prospect?.unsubscribe_token || ""}`;
             const personalizedContent = (step.content || "")
@@ -314,17 +319,18 @@ serve(async (req: Request) => {
               .replace(/\{\{first_name\}\}/g, firstName);
 
             const sendResult = await sendWithRetry(resendForQueue, {
-              from: `${step.from_name || "Vanto Zazi"} <vanto@onlinecourseformlm.com>`,
+              from: `${step.from_name || "Vanto Zazi"} <${queueReplyToEmail}>`,
+              reply_to: queueReplyToEmail,
               to: [email],
               subject: personalizedSubject,
-              html: `${EMAIL_HEADER}${personalizedContent}${EMAIL_SIGNATURE}<p style="font-size: 11px; color: #999; margin-top: 16px;">You're receiving this email because you registered in APLGO.<br/><a href="${unsubUrl}" style="color:#999; text-decoration: underline;">Unsubscribe</a></p>`,
+              html: `${EMAIL_HEADER}${personalizedContent}${EMAIL_SIGNATURE}<p style="font-size: 11px; color: #999; margin-top: 16px;">You're receiving this email because you signed up.<br/><a href="${unsubUrl}" style="color:#999; text-decoration: underline;">Unsubscribe</a></p>`,
             });
 
             // Track with real owner, not placeholder
             if (realOwnerId) {
               await trackOutboundSend(adminClient, {
                 user_id: realOwnerId,
-                account_id: accountId,
+                account_id: queueAccountId,
                 recipient_email: email,
                 subject: personalizedSubject,
                 brand: seqBrand,

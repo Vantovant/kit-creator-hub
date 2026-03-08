@@ -308,7 +308,9 @@ serve(async (req: Request) => {
 
             const realOwnerId = seqData?.user_id || null;
             const seqBrand = seqData?.brand || "aplgo";
-            const accountId = realOwnerId ? await resolveReplyAccount(adminClient, realOwnerId, seqBrand) : null;
+            const queueReplyAccount = realOwnerId ? await resolveReplyAccount(adminClient, realOwnerId, seqBrand) : null;
+            const queueAccountId = queueReplyAccount?.id || null;
+            const queueReplyToEmail = queueReplyAccount?.email || "vanto@onlinecourseformlm.com";
 
             const unsubUrl = `${APP_URL}/unsubscribe?token=${prospect?.unsubscribe_token || ""}`;
             const personalizedContent = (step.content || "")

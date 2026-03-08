@@ -148,10 +148,16 @@ serve(async (req: Request) => {
           .eq("id", broadcast.id);
 
         const brand = broadcast.brand || "aplgo";
-        // Resolve reply account for the broadcast owner
+        // Resolve reply account — required for tracked sends
         const replyAccount = await resolveReplyAccount(adminClient, broadcast.user_id, brand);
-        const accountId = replyAccount?.id || null;
-        const replyToEmail = replyAccount?.email || broadcast.reply_to || "vanto@onlinecourseformlm.com";
+        if (!replyAccount) {
+          console.error(`missing_brand_reply_account: skipping broadcast ${broadcast.id} for brand=${brand} user=${broadcast.user_id}`);
+          await adminClient.from("broadcasts").update({ status: "failed" }).eq("id", broadcast.id);
+          processed++;
+          continue;
+        }
+        const accountId = replyAccount.id;
+        const replyToEmail = replyAccount.email;
 
         let subscribers: any[] | null = null;
 
@@ -304,8 +310,13 @@ serve(async (req: Request) => {
             const realOwnerId = seqData?.user_id || null;
             const seqBrand = seqData?.brand || "aplgo";
             const queueReplyAccount = realOwnerId ? await resolveReplyAccount(adminClient, realOwnerId, seqBrand) : null;
-            const queueAccountId = queueReplyAccount?.id || null;
-            const queueReplyToEmail = queueReplyAccount?.email || "vanto@onlinecourseformlm.com";
+            if (!queueReplyAccount) {
+              console.error(`missing_brand_reply_account: skipping queued sequence step for email=${email} brand=${seqBrand} user=${realOwnerId}`);
+              await adminClient.from("automation_queue").update({ status: "failed", processed_at: new Date().toISOString() }).eq("id", item.id);
+              continue;
+            }
+            const queueAccountId = queueReplyAccount.id;
+            const queueReplyToEmail = queueReplyAccount.email;
 
             const unsubUrl = `${APP_URL}/unsubscribe?token=${prospect?.unsubscribe_token || ""}`;
             const personalizedContent = (step.content || "")

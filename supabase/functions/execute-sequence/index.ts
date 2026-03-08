@@ -174,10 +174,15 @@ serve(async (req: Request) => {
     const sequenceOwnerId = seq.user_id;
     const { header, signature, unsubText } = getBranding(brand);
 
-    // Resolve reply account for the sequence owner
+    // Resolve reply account for the sequence owner — required for tracked sends
     const replyAccount = await resolveReplyAccount(adminClient, sequenceOwnerId, brand);
-    const accountId = replyAccount?.id || null;
-    const replyToEmail = replyAccount?.email || "vanto@onlinecourseformlm.com";
+    if (!replyAccount) {
+      return new Response(JSON.stringify({ error: "missing_brand_reply_account", detail: `No active reply account for brand "${brand}". Configure one in Email → Settings before enrolling.` }), {
+        status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const accountId = replyAccount.id;
+    const replyToEmail = replyAccount.email;
 
     // Check for duplicate enrollment
     const { data: existing } = await adminClient

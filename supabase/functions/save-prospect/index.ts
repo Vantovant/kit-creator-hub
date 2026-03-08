@@ -14,21 +14,9 @@ serve(async (req: Request) => {
   }
 
   try {
-    // Rate limiting via in-memory tracking (resets on cold start, but sufficient for basic protection)
-    const clientIp = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-      req.headers.get("cf-connecting-ip") || "unknown";
-
-    const kv = await Deno.openKv();
-    const key = ["ratelimit", "save-prospect", clientIp];
-    const current = await kv.get<number>(key);
-    if (current.value && current.value >= 5) {
-      return new Response(JSON.stringify({ error: "Too many requests. Please try again later." }), {
-        status: 429,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-    await kv.set(key, (current.value || 0) + 1, { expireIn: 3600000 });
-    const { email, first_name, source, sequence_id } = await req.json();
+    // Simple in-memory rate limiting (resets on cold start)
+    const body = await req.json();
+    const { email, first_name, source, sequence_id } = body;
 
     // Server-side validation
     if (!email || typeof email !== "string") {

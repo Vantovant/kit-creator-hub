@@ -77,23 +77,49 @@ function getBranding(brand: string) {
   return { header: APLGO_HEADER, signature: APLGO_SIGNATURE, unsubText: "You're receiving this because you signed up." };
 }
 
+/** Normalize provider message IDs */
+function normalizeId(id: string | null | undefined): string | null {
+  if (!id) return null;
+  return id.replace(/[<>\s]/g, "").trim() || null;
+}
+
+/** Resolve the reply account for a user+brand to get account_id */
+async function resolveReplyAccount(adminClient: any, userId: string, brand: string): Promise<string | null> {
+  const { data } = await adminClient
+    .from("zazi_reply_accounts")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("brand", brand)
+    .eq("is_active", true)
+    .limit(1);
+  if (data?.length) return data[0].id;
+  const { data: fallback } = await adminClient
+    .from("zazi_reply_accounts")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("is_active", true)
+    .limit(1);
+  return fallback?.length ? fallback[0].id : null;
+}
+
 // ── Track outbound send ──
 async function trackOutboundSend(adminClient: any, params: {
-  user_id?: string;
+  user_id: string;
+  account_id?: string | null;
   recipient_email: string;
   subject: string;
   brand: string;
-  sequence_id?: string;
-  sequence_step_index?: number;
-  broadcast_id?: string;
-  prospect_id?: string;
-  provider_message_id?: string;
+  sequence_id?: string | null;
+  sequence_step_index?: number | null;
+  broadcast_id?: string | null;
+  prospect_id?: string | null;
+  provider_message_id?: string | null;
+  provider_thread_id?: string | null;
 }) {
   try {
-    // If no user_id provided, use a system placeholder — sequences are triggered by system
-    const userId = params.user_id || "00000000-0000-0000-0000-000000000000";
     await adminClient.from("zazi_outbound_sends").insert({
-      user_id: userId,
+      user_id: params.user_id,
+      account_id: params.account_id || null,
       recipient_email: params.recipient_email,
       subject: params.subject,
       brand: params.brand,
@@ -101,7 +127,8 @@ async function trackOutboundSend(adminClient: any, params: {
       sequence_step_index: params.sequence_step_index ?? null,
       broadcast_id: params.broadcast_id || null,
       prospect_id: params.prospect_id || null,
-      provider_message_id: params.provider_message_id || null,
+      provider_message_id: normalizeId(params.provider_message_id),
+      provider_thread_id: params.provider_thread_id || null,
       sent_at: new Date().toISOString(),
     });
   } catch (e) {
@@ -123,12 +150,11 @@ serve(async (req: Request) => {
 
     if (!sequence_id || !email) {
       return new Response(JSON.stringify({ error: "sequence_id and email required" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Fetch the sequence (including brand)
+    // Fetch the sequence (including brand + real owner user_id)
     const { data: seq, error: seqErr } = await adminClient
       .from("email_sequences")
       .select("id, steps, brand, user_id")
@@ -138,20 +164,23 @@ serve(async (req: Request) => {
 
     if (seqErr || !seq) {
       return new Response(JSON.stringify({ error: "Sequence not found or inactive" }), {
-        status: 404,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     const steps = seq.steps as any[];
     if (!steps || steps.length === 0) {
       return new Response(JSON.stringify({ message: "Sequence has no steps" }), {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const { header, signature, unsubText } = getBranding(seq.brand || "aplgo");
+    const brand = seq.brand || "aplgo";
+    const sequenceOwnerId = seq.user_id;
+    const { header, signature, unsubText } = getBranding(brand);
+
+    // Resolve reply account for the sequence owner
+    const accountId = await resolveReplyAccount(adminClient, sequenceOwnerId, brand);
 
     // Check for duplicate enrollment
     const { data: existing } = await adminClient
@@ -163,8 +192,7 @@ serve(async (req: Request) => {
 
     if (existing && existing.length > 0) {
       return new Response(JSON.stringify({ message: "Already enrolled in this sequence" }), {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
@@ -172,7 +200,7 @@ serve(async (req: Request) => {
     const resend = resendKey ? new Resend(resendKey) : null;
     const firstName = first_name || "there";
 
-    // Get prospect info for unsubscribe link + prospect_id
+    // Get prospect info
     const { data: prospect } = await adminClient
       .from("prospects")
       .select("id, unsubscribe_token, unsubscribed")
@@ -181,8 +209,7 @@ serve(async (req: Request) => {
 
     if (prospect?.unsubscribed) {
       return new Response(JSON.stringify({ message: "Subscriber is unsubscribed" }), {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
@@ -214,12 +241,12 @@ serve(async (req: Request) => {
               html: `${header}${personalizedContent}${signature}<p style="font-size: 11px; color: #999; margin-top: 16px;">${unsubText}<br/><a href="${unsubUrl}" style="color:#999; text-decoration: underline;">Unsubscribe</a></p>`,
             });
 
-            // Track outbound send
             await trackOutboundSend(adminClient, {
-              user_id: seq.user_id,
+              user_id: sequenceOwnerId,
+              account_id: accountId,
               recipient_email: email,
               subject: personalizedSubject,
-              brand: seq.brand || "aplgo",
+              brand,
               sequence_id: seq.id,
               sequence_step_index: i,
               prospect_id: prospect?.id || null,
@@ -254,8 +281,7 @@ serve(async (req: Request) => {
   } catch (err: any) {
     console.error("execute-sequence error:", err);
     return new Response(JSON.stringify({ error: "An error occurred" }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 });

@@ -41,15 +41,10 @@ const EMAIL_SIGNATURE = `
 </table>`;
 
 // Retry with exponential backoff for 429 errors
-async function sendWithRetry(
-  resend: any,
-  emailPayload: any,
-  maxRetries = 3
-): Promise<boolean> {
+async function sendWithRetry(resend: any, emailPayload: any, maxRetries = 3): Promise<any> {
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
-      await resend.emails.send(emailPayload);
-      return true;
+      return await resend.emails.send(emailPayload);
     } catch (e: any) {
       const is429 = e?.statusCode === 429 || e?.message?.includes("429");
       if (is429 && attempt < maxRetries) {
@@ -61,29 +56,56 @@ async function sendWithRetry(
       }
     }
   }
-  return false;
+  return null;
 }
 
-// Throttle between individual sends
 function throttle(ms = 600): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
+}
+
+/** Normalize provider message IDs */
+function normalizeId(id: string | null | undefined): string | null {
+  if (!id) return null;
+  return id.replace(/[<>\s]/g, "").trim() || null;
+}
+
+/** Resolve reply account for user+brand */
+async function resolveReplyAccount(adminClient: any, userId: string, brand: string): Promise<string | null> {
+  const { data } = await adminClient
+    .from("zazi_reply_accounts")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("brand", brand)
+    .eq("is_active", true)
+    .limit(1);
+  if (data?.length) return data[0].id;
+  const { data: fallback } = await adminClient
+    .from("zazi_reply_accounts")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("is_active", true)
+    .limit(1);
+  return fallback?.length ? fallback[0].id : null;
 }
 
 // ── Track outbound send ──
 async function trackOutboundSend(adminClient: any, params: {
   user_id: string;
+  account_id?: string | null;
   recipient_email: string;
   subject: string;
   brand: string;
-  broadcast_id?: string;
-  sequence_id?: string;
-  sequence_step_index?: number;
-  prospect_id?: string;
-  provider_message_id?: string;
+  broadcast_id?: string | null;
+  sequence_id?: string | null;
+  sequence_step_index?: number | null;
+  prospect_id?: string | null;
+  provider_message_id?: string | null;
+  provider_thread_id?: string | null;
 }) {
   try {
     await adminClient.from("zazi_outbound_sends").insert({
       user_id: params.user_id,
+      account_id: params.account_id || null,
       recipient_email: params.recipient_email,
       subject: params.subject,
       brand: params.brand,
@@ -91,7 +113,8 @@ async function trackOutboundSend(adminClient: any, params: {
       sequence_id: params.sequence_id || null,
       sequence_step_index: params.sequence_step_index ?? null,
       prospect_id: params.prospect_id || null,
-      provider_message_id: params.provider_message_id || null,
+      provider_message_id: normalizeId(params.provider_message_id),
+      provider_thread_id: params.provider_thread_id || null,
       sent_at: new Date().toISOString(),
     });
   } catch (e) {
@@ -128,6 +151,10 @@ serve(async (req: Request) => {
           .from("broadcasts")
           .update({ status: "sending" })
           .eq("id", broadcast.id);
+
+        const brand = broadcast.brand || "aplgo";
+        // Resolve reply account for the broadcast owner
+        const accountId = await resolveReplyAccount(adminClient, broadcast.user_id, brand);
 
         let subscribers: any[] | null = null;
 
@@ -170,7 +197,6 @@ serve(async (req: Request) => {
         let sent = 0;
         let failed = 0;
 
-        // Send in small batches of 3 with throttle between each
         for (let i = 0; i < subscribers.length; i += 3) {
           const batch = subscribers.slice(i, i + 3);
           const promises = batch.map(async (sub) => {
@@ -185,16 +211,18 @@ serve(async (req: Request) => {
                 subject: broadcast.subject,
                 html: `${EMAIL_HEADER}${personalizedContent}<hr style="margin:24px 0;border:none;border-top:1px solid #eee;"/><p style="font-size:12px;color:#999;"><a href="${unsubscribeUrl}" style="color:#999;">Unsubscribe</a></p>`,
               });
-              // Track outbound send
+
               await trackOutboundSend(adminClient, {
                 user_id: broadcast.user_id,
+                account_id: accountId,
                 recipient_email: sub.email,
                 subject: broadcast.subject,
-                brand: broadcast.brand || "aplgo",
+                brand,
                 broadcast_id: broadcast.id,
                 prospect_id: sub.id || null,
                 provider_message_id: sendResult?.data?.id || null,
               });
+
               sent++;
             } catch (e) {
               console.error(`Failed to send to ${sub.email}:`, e);
@@ -202,7 +230,6 @@ serve(async (req: Request) => {
             }
           });
           await Promise.all(promises);
-          // Throttle between batches
           if (i + 3 < subscribers.length) await throttle(1000);
         }
 
@@ -269,6 +296,17 @@ serve(async (req: Request) => {
               continue;
             }
 
+            // Resolve real sequence owner from email_sequences
+            const { data: seqData } = await adminClient
+              .from("email_sequences")
+              .select("user_id, brand")
+              .eq("id", item.automation_id)
+              .maybeSingle();
+
+            const realOwnerId = seqData?.user_id || null;
+            const seqBrand = seqData?.brand || "aplgo";
+            const accountId = realOwnerId ? await resolveReplyAccount(adminClient, realOwnerId, seqBrand) : null;
+
             const unsubUrl = `${APP_URL}/unsubscribe?token=${prospect?.unsubscribe_token || ""}`;
             const personalizedContent = (step.content || "")
               .replace(/\{\{first_name\}\}/g, firstName);
@@ -282,17 +320,22 @@ serve(async (req: Request) => {
               html: `${EMAIL_HEADER}${personalizedContent}${EMAIL_SIGNATURE}<p style="font-size: 11px; color: #999; margin-top: 16px;">You're receiving this email because you registered in APLGO.<br/><a href="${unsubUrl}" style="color:#999; text-decoration: underline;">Unsubscribe</a></p>`,
             });
 
-            // Track outbound send for queued sequence step
-            await trackOutboundSend(adminClient, {
-              user_id: "00000000-0000-0000-0000-000000000000", // system send
-              recipient_email: email,
-              subject: personalizedSubject,
-              brand: "aplgo",
-              sequence_id: item.automation_id,
-              sequence_step_index: item.step_index,
-              prospect_id: prospect?.id || null,
-              provider_message_id: sendResult?.data?.id || null,
-            });
+            // Track with real owner, not placeholder
+            if (realOwnerId) {
+              await trackOutboundSend(adminClient, {
+                user_id: realOwnerId,
+                account_id: accountId,
+                recipient_email: email,
+                subject: personalizedSubject,
+                brand: seqBrand,
+                sequence_id: item.automation_id,
+                sequence_step_index: item.step_index,
+                prospect_id: prospect?.id || null,
+                provider_message_id: sendResult?.data?.id || null,
+              });
+            } else {
+              console.warn(`Could not resolve owner for sequence ${item.automation_id} — outbound send not tracked`);
+            }
 
             console.log(`Queue: sent automation email to ${email} — ${personalizedSubject}`);
           } else if (step.type === "add_tag" && step.tag_name) {
@@ -320,7 +363,6 @@ serve(async (req: Request) => {
             .eq("id", item.id);
 
           queueProcessed++;
-          // Throttle between queue items
           await throttle(600);
         } catch (e) {
           console.error(`Queue processing failed for ${item.id}:`, e);
@@ -381,8 +423,7 @@ serve(async (req: Request) => {
   } catch (err: any) {
     console.error("process-scheduled-broadcasts error:", err);
     return new Response(JSON.stringify({ error: "An error occurred" }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 });

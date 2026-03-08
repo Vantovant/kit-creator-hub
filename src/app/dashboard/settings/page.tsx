@@ -444,7 +444,7 @@ export default function SettingsPage() {
                       <Label className="dark:text-gray-200">Reply-to Email</Label>
                       <Input
                         type="email"
-                        defaultValue="vanto@onlinecourseformlm.com"
+                        defaultValue="vanto@reply.onlinecourseformlm.com"
                         className="dark:bg-gray-700 dark:border-gray-600"
                       />
                     </div>

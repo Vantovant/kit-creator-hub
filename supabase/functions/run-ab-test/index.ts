@@ -159,7 +159,7 @@ async function startABTest(body: any, adminClient: any, userId: string) {
         preview_text: variant.previewText || "",
         content: broadcast_content || "",
         from_name: from_name || "Vanto Zazi",
-        reply_to: "vanto@onlinecourseformlm.com",
+        reply_to: "vanto@reply.onlinecourseformlm.com",
         status: "sending",
         user_id: userId,
       })

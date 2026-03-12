@@ -73,6 +73,33 @@ export type Database = {
           },
         ]
       }
+      activity_goals: {
+        Row: {
+          activity_type: string
+          created_at: string
+          daily_target: number
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          activity_type?: string
+          created_at?: string
+          daily_target?: number
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          activity_type?: string
+          created_at?: string
+          daily_target?: number
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       automation_queue: {
         Row: {
           automation_id: string
@@ -223,6 +250,44 @@ export type Database = {
             columns: ["segment_id"]
             isOneToOne: false
             referencedRelation: "segments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      contact_activities: {
+        Row: {
+          activity_type: string
+          created_at: string
+          id: string
+          notes: string | null
+          outcome: string | null
+          prospect_id: string | null
+          user_id: string
+        }
+        Insert: {
+          activity_type?: string
+          created_at?: string
+          id?: string
+          notes?: string | null
+          outcome?: string | null
+          prospect_id?: string | null
+          user_id: string
+        }
+        Update: {
+          activity_type?: string
+          created_at?: string
+          id?: string
+          notes?: string | null
+          outcome?: string | null
+          prospect_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contact_activities_prospect_id_fkey"
+            columns: ["prospect_id"]
+            isOneToOne: false
+            referencedRelation: "prospects"
             referencedColumns: ["id"]
           },
         ]

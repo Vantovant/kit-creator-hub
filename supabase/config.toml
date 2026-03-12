@@ -47,3 +47,6 @@ verify_jwt = false
 
 [functions.smart-import]
 verify_jwt = false
+
+[functions.integration-webhook]
+verify_jwt = false

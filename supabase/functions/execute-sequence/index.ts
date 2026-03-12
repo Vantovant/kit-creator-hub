@@ -256,6 +256,19 @@ serve(async (req: Request) => {
               provider_message_id: sendResult?.data?.id || null,
             });
 
+            // Log CRM activity for sequence email
+            try {
+              await adminClient.from("contact_activities").insert({
+                user_id: sequenceOwnerId,
+                prospect_id: prospect?.id || null,
+                activity_type: "email",
+                notes: `Sequence Email Sent: ${personalizedSubject}`,
+                outcome: "sent",
+              });
+            } catch (actErr) {
+              console.error("Failed to log sequence email activity:", actErr);
+            }
+
             console.log(`Sequence email sent to ${email}: ${personalizedSubject}`);
           } catch (sendErr) {
             console.error(`Failed to send sequence email to ${email}:`, sendErr);

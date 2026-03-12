@@ -44,3 +44,6 @@ verify_jwt = false
 
 [functions.ingest-reply]
 verify_jwt = false
+
+[functions.smart-import]
+verify_jwt = false

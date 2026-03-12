@@ -207,7 +207,7 @@ export function ImportExportModal({ isOpen, onClose, onImportComplete, mode }: I
             if (!error) updated++;
             else skipped++;
           } else {
-            const { error } = await supabase.from("prospects").insert(record);
+            const { error } = await supabase.from("prospects").insert(record as any);
             if (!error) added++;
             else skipped++;
           }

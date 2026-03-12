@@ -584,6 +584,15 @@ export default function SubscribersPage() {
                     className="mt-1"
                   />
                 </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    window.dispatchEvent(new CustomEvent("ai-subscriber-context", { detail: { prospect_id: editProspect.id } }));
+                  }}
+                  className="flex items-center gap-2 w-full px-3 py-2 rounded-lg bg-primary/10 text-primary text-sm font-medium hover:bg-primary/20 transition-colors"
+                >
+                  <Bot className="w-4 h-4" /> Analyze with AI Copilot
+                </button>
                 <div className="flex items-center justify-between pt-2">
                   {!confirmDelete ? (
                     <button

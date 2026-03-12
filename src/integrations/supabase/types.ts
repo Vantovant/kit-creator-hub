@@ -736,35 +736,110 @@ export type Database = {
       }
       prospects: {
         Row: {
+          action_taken: string | null
+          additional_notes: string | null
+          aplgo_id: string | null
+          assigned_to: string | null
+          associate_status: string | null
+          city: string | null
+          communication_status: string | null
+          country: string | null
           created_at: string
+          date_captured: string | null
           email: string
+          email_normalized: string | null
           engagement_score: number
           first_name: string | null
+          focus_area: string | null
+          full_name: string | null
+          go_status: string | null
           id: string
+          interest_level: string | null
           last_activity_at: string | null
+          lead_path: string | null
+          lead_temperature: string | null
+          lead_type: string | null
+          meeting_time: string | null
+          next_action: string | null
+          phone_normalized: string | null
+          phone_number: string | null
+          province: string | null
+          registration_status: string | null
           source: string | null
+          sponsor_name: string | null
+          state: string | null
           unsubscribe_token: string | null
           unsubscribed: boolean
         }
         Insert: {
+          action_taken?: string | null
+          additional_notes?: string | null
+          aplgo_id?: string | null
+          assigned_to?: string | null
+          associate_status?: string | null
+          city?: string | null
+          communication_status?: string | null
+          country?: string | null
           created_at?: string
+          date_captured?: string | null
           email: string
+          email_normalized?: string | null
           engagement_score?: number
           first_name?: string | null
+          focus_area?: string | null
+          full_name?: string | null
+          go_status?: string | null
           id?: string
+          interest_level?: string | null
           last_activity_at?: string | null
+          lead_path?: string | null
+          lead_temperature?: string | null
+          lead_type?: string | null
+          meeting_time?: string | null
+          next_action?: string | null
+          phone_normalized?: string | null
+          phone_number?: string | null
+          province?: string | null
+          registration_status?: string | null
           source?: string | null
+          sponsor_name?: string | null
+          state?: string | null
           unsubscribe_token?: string | null
           unsubscribed?: boolean
         }
         Update: {
+          action_taken?: string | null
+          additional_notes?: string | null
+          aplgo_id?: string | null
+          assigned_to?: string | null
+          associate_status?: string | null
+          city?: string | null
+          communication_status?: string | null
+          country?: string | null
           created_at?: string
+          date_captured?: string | null
           email?: string
+          email_normalized?: string | null
           engagement_score?: number
           first_name?: string | null
+          focus_area?: string | null
+          full_name?: string | null
+          go_status?: string | null
           id?: string
+          interest_level?: string | null
           last_activity_at?: string | null
+          lead_path?: string | null
+          lead_temperature?: string | null
+          lead_type?: string | null
+          meeting_time?: string | null
+          next_action?: string | null
+          phone_normalized?: string | null
+          phone_number?: string | null
+          province?: string | null
+          registration_status?: string | null
           source?: string | null
+          sponsor_name?: string | null
+          state?: string | null
           unsubscribe_token?: string | null
           unsubscribed?: boolean
         }
@@ -1139,13 +1214,38 @@ export type Database = {
       get_segment_prospects: {
         Args: { segment_filters: Json }
         Returns: {
+          action_taken: string | null
+          additional_notes: string | null
+          aplgo_id: string | null
+          assigned_to: string | null
+          associate_status: string | null
+          city: string | null
+          communication_status: string | null
+          country: string | null
           created_at: string
+          date_captured: string | null
           email: string
+          email_normalized: string | null
           engagement_score: number
           first_name: string | null
+          focus_area: string | null
+          full_name: string | null
+          go_status: string | null
           id: string
+          interest_level: string | null
           last_activity_at: string | null
+          lead_path: string | null
+          lead_temperature: string | null
+          lead_type: string | null
+          meeting_time: string | null
+          next_action: string | null
+          phone_normalized: string | null
+          phone_number: string | null
+          province: string | null
+          registration_status: string | null
           source: string | null
+          sponsor_name: string | null
+          state: string | null
           unsubscribe_token: string | null
           unsubscribed: boolean
         }[]

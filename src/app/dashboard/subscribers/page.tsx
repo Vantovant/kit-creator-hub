@@ -20,7 +20,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { ImportExportModal } from "@/components/dashboard/ImportExportModal";
-import { Search, Download, Upload, Users, Tag, X, Plus, Flame, ChevronLeft, ChevronRight, Trash2, Loader2, CheckSquare } from "lucide-react";
+import { Search, Download, Upload, Users, Tag, X, Plus, Flame, ChevronLeft, ChevronRight, Trash2, Loader2, CheckSquare, Bot } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 

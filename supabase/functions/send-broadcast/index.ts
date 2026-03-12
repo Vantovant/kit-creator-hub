@@ -347,6 +347,19 @@ serve(async (req: Request) => {
           provider_message_id: sendResult?.data?.id || null,
         });
 
+        // Log CRM activity for outbound email
+        try {
+          await adminClient.from("contact_activities").insert({
+            user_id: userId,
+            prospect_id: sub.id || null,
+            activity_type: "email",
+            notes: `Email Sent: ${broadcast.subject}`,
+            outcome: "sent",
+          });
+        } catch (actErr) {
+          console.error("Failed to log email activity:", actErr);
+        }
+
         sent++;
         console.log(`Sent ${sent}/${subscribers.length}: ${sub.email}`);
       } catch (e) {

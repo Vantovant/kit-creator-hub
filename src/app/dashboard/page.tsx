@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
+import { ActivitySummaryPanel } from "@/components/dashboard/ActivitySummaryPanel";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Users,
@@ -245,6 +246,9 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Activity Summary */}
+        <ActivitySummaryPanel />
 
         {/* Growth chart */}
         <Card className="bg-card">

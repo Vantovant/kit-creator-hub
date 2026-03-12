@@ -261,6 +261,19 @@ Deno.serve(async (req) => {
 
     console.log(`Reply ingested: ${inserted.id} from ${from_email}, matched outbound: ${matchedOutbound.id}, account: ${scopeAccountId}`);
 
+    // Log CRM activity for inbound reply
+    try {
+      await supabase.from("contact_activities").insert({
+        user_id: matchedOutbound.user_id,
+        prospect_id: prospect_id || null,
+        activity_type: "email_reply",
+        notes: `Reply Received: ${snippet || "(no content)"}`,
+        outcome: "received",
+      });
+    } catch (actErr) {
+      console.error("Failed to log reply activity:", actErr);
+    }
+
     return new Response(JSON.stringify({ status: "ingested", id: inserted.id }), {
       status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

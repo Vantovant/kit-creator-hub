@@ -78,7 +78,39 @@ export function useTasks() {
   const create = async (task: Partial<PlanTask>) => {
     const user = (await supabase.auth.getUser()).data.user;
     if (!user) return;
-    await supabase.from("plan_tasks").insert({ ...task, user_id: user.id, title: task.title || "Untitled" } as any);
+
+    // Dedup check: skip if identical title+project already exists and is not done
+    const title = task.title || "Untitled";
+    const { data: existing } = await supabase
+      .from("plan_tasks")
+      .select("id")
+      .eq("user_id", user.id)
+      .eq("title", title)
+      .neq("status", "done");
+
+    if (task.project_id) {
+      const match = existing?.find(() => true);
+      // Also check project match
+      if (match) {
+        const { data: projectMatch } = await supabase
+          .from("plan_tasks")
+          .select("id")
+          .eq("user_id", user.id)
+          .eq("title", title)
+          .eq("project_id", task.project_id)
+          .neq("status", "done")
+          .maybeSingle();
+        if (projectMatch) {
+          console.log("Duplicate task skipped:", title);
+          return;
+        }
+      }
+    } else if (existing && existing.length > 0) {
+      console.log("Duplicate task skipped:", title);
+      return;
+    }
+
+    await supabase.from("plan_tasks").insert({ ...task, user_id: user.id, title } as any);
     fetch();
   };
 

@@ -247,6 +247,9 @@ export default function DashboardPage() {
           </Card>
         </div>
 
+        {/* Activity Summary */}
+        <ActivitySummaryPanel />
+
         {/* Growth chart */}
         <Card className="bg-card">
           <CardHeader>

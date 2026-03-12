@@ -365,7 +365,7 @@ export function ImportExportModal({ isOpen, onClose, onImportComplete, mode }: I
         record.phone_normalized = phone.phone_normalized;
       }
 
-      await supabase.from("prospects").upsert(record, { onConflict: "email", ignoreDuplicates: false });
+      await supabase.from("prospects").upsert(record as any, { onConflict: "email", ignoreDuplicates: false });
       setSingleForm({ email: "", full_name: "", phone_number: "", source: "manual_entry" });
       onImportComplete?.();
     } catch (err) {

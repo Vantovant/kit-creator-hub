@@ -309,6 +309,13 @@ serve(async (req: Request) => {
       });
     }
 
+    // Support resuming: exclude emails that were already sent
+    if (body.exclude_emails && Array.isArray(body.exclude_emails)) {
+      const excludeSet = new Set(body.exclude_emails.map((e: string) => e.toLowerCase()));
+      subscribers = subscribers.filter((s: any) => !excludeSet.has(s.email?.toLowerCase()));
+      console.log(`Filtered out ${body.exclude_emails.length} already-sent emails, ${subscribers.length} remaining`);
+    }
+
     const resendKey = Deno.env.get("RESEND_API_KEY");
     if (!resendKey) {
       await adminClient.from("broadcasts").update({ status: "failed" }).eq("id", broadcast_id);

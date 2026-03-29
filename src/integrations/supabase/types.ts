@@ -137,15 +137,7 @@ export type Database = {
           step_data?: Json
           step_index?: number
         }
-        Relationships: [
-          {
-            foreignKeyName: "automation_queue_automation_id_fkey"
-            columns: ["automation_id"]
-            isOneToOne: false
-            referencedRelation: "automations"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       automations: {
         Row: {

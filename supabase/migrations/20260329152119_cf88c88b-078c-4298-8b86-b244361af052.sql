@@ -1,0 +1,1 @@
+ALTER TABLE automation_queue DROP CONSTRAINT automation_queue_automation_id_fkey;

@@ -1,0 +1,3 @@
+UPDATE email_sequences SET steps = replace(steps::text, 'https://chat.whatsapp.com/EjXcGY9doth5fHgMMAkFgx?mode=gi_t', 'https://chat.whatsapp.com/JAuEcoRs8jRC443tfPQG1h?mode=gi_t')::jsonb, updated_at = now() WHERE id = 'e38ad029-8b2a-4744-9a80-5c665ae41c45';
+
+UPDATE automation_queue SET step_data = replace(step_data::text, 'https://chat.whatsapp.com/EjXcGY9doth5fHgMMAkFgx?mode=gi_t', 'https://chat.whatsapp.com/JAuEcoRs8jRC443tfPQG1h?mode=gi_t')::jsonb WHERE automation_id = 'e38ad029-8b2a-4744-9a80-5c665ae41c45' AND status = 'pending';

@@ -40,12 +40,10 @@ const EMAIL_SIGNATURE = `
   </tr>
 </table>`;
 
-// Throttle between sends
 function throttle(ms = 700): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-// Retry with exponential backoff for 429 errors
 async function sendWithRetry(resend: any, payload: any, maxRetries = 3): Promise<boolean> {
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
@@ -99,41 +97,54 @@ serve(async (req: Request) => {
 
     const steps = seq.steps as any[];
 
-    // Get all subscribers with this tag who are not unsubscribed
-    const { data: subscribers, error: subErr } = await adminClient
-      .from("prospects")
-      .select("id, email, first_name, unsubscribe_token, unsubscribed")
-      .eq("unsubscribed", false)
-      .in("id", 
-        (await adminClient
-          .from("prospect_tags")
-          .select("prospect_id")
-          .in("tag_id", 
-            (await adminClient.from("tags").select("id").eq("name", tag_name)).data?.map(t => t.id) || []
-          )
-        ).data?.map(pt => pt.prospect_id) || []
-      );
+    // Use RPC/SQL to get subscribers with this tag (avoids nested .in() 1000 row limit)
+    const { data: subscribers, error: subErr } = await adminClient.rpc('get_segment_prospects', {
+      segment_filters: {
+        match: 'all',
+        groups: [{
+          match: 'all',
+          type: 'include',
+          conditions: [
+            { field: 'tag', operator: 'has', value: tag_name },
+            { field: 'unsubscribed', operator: 'equals', value: 'false' }
+          ]
+        }]
+      }
+    });
 
     if (subErr || !subscribers || subscribers.length === 0) {
-      return new Response(JSON.stringify({ error: "No subscribers found", details: subErr }), {
+      return new Response(JSON.stringify({ error: "No subscribers found", details: subErr?.message }), {
         status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Check who is already enrolled
-    const { data: alreadyEnrolled } = await adminClient
-      .from("automation_queue")
-      .select("email")
-      .eq("automation_id", sequence_id);
+    console.log(`Found ${subscribers.length} subscribers with tag "${tag_name}"`);
 
-    const enrolledEmails = new Set((alreadyEnrolled || []).map(e => e.email));
-    const newSubscribers = subscribers.filter(s => !enrolledEmails.has(s.email));
+    // Check who is already enrolled — use pagination to get all
+    const enrolledEmails = new Set<string>();
+    let offset = 0;
+    const pageSize = 1000;
+    while (true) {
+      const { data: batch } = await adminClient
+        .from("automation_queue")
+        .select("email")
+        .eq("automation_id", sequence_id)
+        .range(offset, offset + pageSize - 1);
+      if (!batch || batch.length === 0) break;
+      batch.forEach(e => enrolledEmails.add(e.email));
+      if (batch.length < pageSize) break;
+      offset += pageSize;
+    }
+
+    const newSubscribers = subscribers.filter((s: any) => !enrolledEmails.has(s.email));
 
     if (newSubscribers.length === 0) {
       return new Response(JSON.stringify({ message: "All subscribers already enrolled", total: subscribers.length }), {
         status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    console.log(`${newSubscribers.length} new subscribers to enroll (${enrolledEmails.size} already enrolled)`);
 
     const resendKey = Deno.env.get("RESEND_API_KEY");
     const resend = resendKey ? new Resend(resendKey) : null;
@@ -142,63 +153,81 @@ serve(async (req: Request) => {
     let failed = 0;
     let queued = 0;
 
-    for (let si = 0; si < newSubscribers.length; si++) {
-      const sub = newSubscribers[si];
-      const firstName = sub.first_name || "there";
-      const unsubUrl = `${APP_URL}/unsubscribe?token=${sub.unsubscribe_token || ""}`;
+    // Process in batches to avoid timeout — queue all steps, send first email in batches
+    const BATCH_SIZE = 50; // Process 50 subscribers at a time for queuing
 
-      let cumulativeDelayHours = 0;
-      let hitWait = false;
+    for (let batchStart = 0; batchStart < newSubscribers.length; batchStart += BATCH_SIZE) {
+      const batch = newSubscribers.slice(batchStart, batchStart + BATCH_SIZE);
+      const queueRows: any[] = [];
 
-      for (let i = 0; i < steps.length; i++) {
-        const step = steps[i];
+      for (const sub of batch) {
+        const firstName = sub.first_name || "there";
+        const unsubUrl = `${APP_URL}/unsubscribe?token=${sub.unsubscribe_token || ""}`;
 
-        if (step.type === "wait") {
-          cumulativeDelayHours += step.duration_hours || 0;
-          hitWait = true;
-          continue;
-        }
+        let cumulativeDelayHours = 0;
+        let hitWait = false;
 
-        if (step.type === "send_email") {
-          if (!hitWait && resend) {
-            // Send first email immediately
-            const personalizedContent = (step.content || "").replace(/\{\{first_name\}\}/g, firstName);
-            const personalizedSubject = (step.subject || "").replace(/\{\{first_name\}\}/g, firstName);
+        for (let i = 0; i < steps.length; i++) {
+          const step = steps[i];
 
-            try {
-              await sendWithRetry(resend, {
-                from: `${step.from_name || "Vanto Zazi"} <vanto@onlinecourseformlm.com>`,
-                to: [sub.email],
-                subject: personalizedSubject,
-                html: `${EMAIL_HEADER}${personalizedContent}${EMAIL_SIGNATURE}<p style="font-size: 11px; color: #999; margin-top: 16px;">You're receiving this because you signed up.<br/><a href="${unsubUrl}" style="color:#999; text-decoration: underline;">Unsubscribe</a></p>`,
-              });
-              sent++;
-              console.log(`Sent ${sent}/${newSubscribers.length}: ${sub.email}`);
-            } catch (sendErr) {
-              console.error(`Failed to send to ${sub.email}:`, sendErr);
-              failed++;
-            }
+          if (step.type === "wait") {
+            cumulativeDelayHours += step.duration_hours || 0;
+            hitWait = true;
+            continue;
+          }
 
-            // Throttle between sends
-            if (si < newSubscribers.length - 1) {
+          if (step.type === "send_email") {
+            if (!hitWait && resend) {
+              // Send first email immediately
+              const personalizedContent = (step.content || "").replace(/\{\{first_name\}\}/g, firstName);
+              const personalizedSubject = (step.subject || "").replace(/\{\{first_name\}\}/g, firstName);
+
+              try {
+                await sendWithRetry(resend, {
+                  from: `${step.from_name || "Vanto Zazi"} <vanto@onlinecourseformlm.com>`,
+                  to: [sub.email],
+                  subject: personalizedSubject,
+                  html: `${EMAIL_HEADER}${personalizedContent}${EMAIL_SIGNATURE}<p style="font-size: 11px; color: #999; margin-top: 16px;">You're receiving this because you signed up.<br/><a href="${unsubUrl}" style="color:#999; text-decoration: underline;">Unsubscribe</a></p>`,
+                });
+                sent++;
+              } catch (sendErr) {
+                console.error(`Failed to send to ${sub.email}:`, sendErr);
+                failed++;
+              }
+
               await throttle(700);
+            } else {
+              // Queue for later
+              const sendAt = new Date(Date.now() + cumulativeDelayHours * 60 * 60 * 1000).toISOString();
+              queueRows.push({
+                automation_id: sequence_id,
+                email: sub.email,
+                first_name: firstName,
+                step_index: i,
+                step_data: step,
+                send_at: sendAt,
+                status: "pending",
+              });
             }
-          } else {
-            // Queue for later
-            const sendAt = new Date(Date.now() + cumulativeDelayHours * 60 * 60 * 1000).toISOString();
-            await adminClient.from("automation_queue").insert({
-              automation_id: sequence_id,
-              email: sub.email,
-              first_name: firstName,
-              step_index: i,
-              step_data: step,
-              send_at: sendAt,
-              status: "pending",
-            });
-            queued++;
           }
         }
       }
+
+      // Bulk insert queue rows for this batch
+      if (queueRows.length > 0) {
+        // Insert in chunks of 500 to avoid payload limits
+        for (let ci = 0; ci < queueRows.length; ci += 500) {
+          const chunk = queueRows.slice(ci, ci + 500);
+          const { error: insertErr } = await adminClient.from("automation_queue").insert(chunk);
+          if (insertErr) {
+            console.error(`Queue insert error:`, insertErr);
+          } else {
+            queued += chunk.length;
+          }
+        }
+      }
+
+      console.log(`Batch ${Math.floor(batchStart / BATCH_SIZE) + 1}: ${sent} sent, ${queued} queued`);
     }
 
     console.log(`Batch enroll complete: ${sent} sent, ${failed} failed, ${queued} queued for ${newSubscribers.length} subscribers`);

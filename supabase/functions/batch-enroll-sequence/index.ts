@@ -153,8 +153,9 @@ serve(async (req: Request) => {
     let failed = 0;
     let queued = 0;
 
-    // Process in batches to avoid timeout — queue all steps, send first email in batches
-    const BATCH_SIZE = 50; // Process 50 subscribers at a time for queuing
+    // Queue ALL steps (including first email) — cron job will send them
+    // This avoids timeouts when enrolling hundreds of subscribers
+    const BATCH_SIZE = 100;
 
     for (let batchStart = 0; batchStart < newSubscribers.length; batchStart += BATCH_SIZE) {
       const batch = newSubscribers.slice(batchStart, batchStart + BATCH_SIZE);
@@ -162,60 +163,33 @@ serve(async (req: Request) => {
 
       for (const sub of batch) {
         const firstName = sub.first_name || "there";
-        const unsubUrl = `${APP_URL}/unsubscribe?token=${sub.unsubscribe_token || ""}`;
-
         let cumulativeDelayHours = 0;
-        let hitWait = false;
 
         for (let i = 0; i < steps.length; i++) {
           const step = steps[i];
 
           if (step.type === "wait") {
             cumulativeDelayHours += step.duration_hours || 0;
-            hitWait = true;
             continue;
           }
 
           if (step.type === "send_email") {
-            if (!hitWait && resend) {
-              // Send first email immediately
-              const personalizedContent = (step.content || "").replace(/\{\{first_name\}\}/g, firstName);
-              const personalizedSubject = (step.subject || "").replace(/\{\{first_name\}\}/g, firstName);
-
-              try {
-                await sendWithRetry(resend, {
-                  from: `${step.from_name || "Vanto Zazi"} <vanto@onlinecourseformlm.com>`,
-                  to: [sub.email],
-                  subject: personalizedSubject,
-                  html: `${EMAIL_HEADER}${personalizedContent}${EMAIL_SIGNATURE}<p style="font-size: 11px; color: #999; margin-top: 16px;">You're receiving this because you signed up.<br/><a href="${unsubUrl}" style="color:#999; text-decoration: underline;">Unsubscribe</a></p>`,
-                });
-                sent++;
-              } catch (sendErr) {
-                console.error(`Failed to send to ${sub.email}:`, sendErr);
-                failed++;
-              }
-
-              await throttle(700);
-            } else {
-              // Queue for later
-              const sendAt = new Date(Date.now() + cumulativeDelayHours * 60 * 60 * 1000).toISOString();
-              queueRows.push({
-                automation_id: sequence_id,
-                email: sub.email,
-                first_name: firstName,
-                step_index: i,
-                step_data: step,
-                send_at: sendAt,
-                status: "pending",
-              });
-            }
+            const sendAt = new Date(Date.now() + cumulativeDelayHours * 60 * 60 * 1000).toISOString();
+            queueRows.push({
+              automation_id: sequence_id,
+              email: sub.email,
+              first_name: firstName,
+              step_index: i,
+              step_data: step,
+              send_at: sendAt,
+              status: "pending",
+            });
           }
         }
       }
 
-      // Bulk insert queue rows for this batch
+      // Bulk insert in chunks of 500
       if (queueRows.length > 0) {
-        // Insert in chunks of 500 to avoid payload limits
         for (let ci = 0; ci < queueRows.length; ci += 500) {
           const chunk = queueRows.slice(ci, ci + 500);
           const { error: insertErr } = await adminClient.from("automation_queue").insert(chunk);
@@ -227,7 +201,7 @@ serve(async (req: Request) => {
         }
       }
 
-      console.log(`Batch ${Math.floor(batchStart / BATCH_SIZE) + 1}: ${sent} sent, ${queued} queued`);
+      console.log(`Batch ${Math.floor(batchStart / BATCH_SIZE) + 1}: ${queued} queued so far`);
     }
 
     console.log(`Batch enroll complete: ${sent} sent, ${failed} failed, ${queued} queued for ${newSubscribers.length} subscribers`);

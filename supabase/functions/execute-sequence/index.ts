@@ -281,14 +281,19 @@ serve(async (req: Request) => {
             console.error(`Failed to send sequence email to ${email}:`, sendErr);
           }
         } else {
-          // Queue for later
+          // Queue for later — bake ref_code into step_data snapshot (pass-through, per-prospect)
           const sendAt = new Date(Date.now() + cumulativeDelayHours * 60 * 60 * 1000).toISOString();
+          const stepSnapshot = {
+            ...step,
+            content: (step.content || "").replace(/\{\{ref_code\}\}/g, safeRefCode),
+            subject: (step.subject || "").replace(/\{\{ref_code\}\}/g, safeRefCode),
+          };
           await adminClient.from("automation_queue").insert({
             automation_id: sequence_id,
             email,
             first_name: firstName,
             step_index: i,
-            step_data: step,
+            step_data: stepSnapshot,
             send_at: sendAt,
             status: "pending",
           });

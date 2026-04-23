@@ -107,18 +107,24 @@ serve(async (req: Request) => {
       }
     }
 
-    // Trigger 'subscribe' automations
-    try {
-      await fetch(`${supabaseUrl}/functions/v1/execute-automation`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          trigger_type: "subscribe",
-          trigger_data: { email: trimmedEmail, first_name: sanitizedName },
-        }),
-      });
-    } catch (triggerErr) {
-      console.error("Automation trigger error (non-fatal):", triggerErr);
+    // Trigger 'subscribe' automations — but ONLY when the lead is NOT being enrolled
+    // into a specific sequence. Bridge sequences (RLX, NRM, etc.) are self-contained
+    // welcome flows; firing the generic Welcome Series on top would double-send.
+    if (!sequence_id) {
+      try {
+        await fetch(`${supabaseUrl}/functions/v1/execute-automation`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            trigger_type: "subscribe",
+            trigger_data: { email: trimmedEmail, first_name: sanitizedName },
+          }),
+        });
+      } catch (triggerErr) {
+        console.error("Automation trigger error (non-fatal):", triggerErr);
+      }
+    } else {
+      console.log(`Skipping generic 'subscribe' automation for ${trimmedEmail} — enrolled in sequence ${sequence_id}`);
     }
 
     // If a sequence_id was provided, enroll the subscriber into that sequence

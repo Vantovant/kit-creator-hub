@@ -552,11 +552,14 @@ export default function SequenceQAPage() {
               <Link2 className="w-5 h-5" />
               Lead-magnet link validator
             </CardTitle>
-            <Button
-              variant="outline"
-              size="sm"
+            <button
+              type="button"
               onClick={runValidator}
               disabled={validating}
+              className={cn(
+                "inline-flex items-center justify-center px-3 py-1.5 rounded-md text-sm font-medium border border-border",
+                "bg-background hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              )}
             >
               {validating ? (
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -564,7 +567,7 @@ export default function SequenceQAPage() {
                 <RefreshCw className="w-4 h-4 mr-2" />
               )}
               Validate now
-            </Button>
+            </button>
           </CardHeader>
           <CardContent className="space-y-3">
             <p className="text-sm text-muted-foreground">

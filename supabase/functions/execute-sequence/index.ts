@@ -141,7 +141,10 @@ serve(async (req: Request) => {
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
-    const { sequence_id, email, first_name } = await req.json();
+    const { sequence_id, email, first_name, ref_code } = await req.json();
+    const safeRefCode = ref_code && typeof ref_code === "string"
+      ? ref_code.trim().slice(0, 80).replace(/[^a-zA-Z0-9\-_]/g, "")
+      : "";
 
     if (!sequence_id || !email) {
       return new Response(JSON.stringify({ error: "sequence_id and email required" }), {

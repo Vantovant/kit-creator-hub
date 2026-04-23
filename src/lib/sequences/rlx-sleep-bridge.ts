@@ -81,10 +81,10 @@ export const RLX_SLEEP_BRIDGE_SEQUENCE = [
     subject: "One more option (only if you want it)",
     from_name: "Vanto Zazi",
     content: `<p>Hey {{first_name}},</p>
-<p>Some readers add a small lozenge called <strong>NRM</strong> to their wind-down. It's a plant-based blend designed to support a calmer evening — not a sleeping pill, not a sedative. Just one more tool.</p>
+<p>Some readers add a small lozenge called <strong>RLX</strong> to their wind-down. It's a plant-based blend designed to support a calmer evening — not a sleeping pill, not a sedative. Just one more tool.</p>
 <p>If you're curious, here's the page:</p>
 <p style="margin: 24px 0;">
-  <a href="${SHOP_URL}?ref={{ref_code}}" style="display:inline-block; background:#1a3a8a; color:#fff; padding:14px 24px; border-radius:8px; text-decoration:none; font-weight:600;">🌿 See NRM on the shop</a>
+  <a href="${SHOP_URL}?ref={{ref_code}}" style="display:inline-block; background:#1a3a8a; color:#fff; padding:14px 24px; border-radius:8px; text-decoration:none; font-weight:600;">🌿 See RLX on the shop</a>
 </p>
 <p>If not, no problem — keep using the guide. Either way, <strong>sleep well</strong>.</p>
 <p>— Vanto</p>`,

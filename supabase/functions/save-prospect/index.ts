@@ -81,9 +81,10 @@ serve(async (req: Request) => {
     const appUrl = Deno.env.get("APP_URL") || "https://kit-clone-dashboard.lovable.app";
     const unsubscribeUrl = `${appUrl}/unsubscribe?token=${unsubscribeToken}`;
 
-    // Send welcome email via Resend
+    // Send generic welcome email via Resend — ONLY when not enrolling in a specific sequence.
+    // Bridge sequences send their own product-specific Day 1 email.
     const resendKey = Deno.env.get("RESEND_API_KEY");
-    if (resendKey) {
+    if (resendKey && !sequence_id) {
       try {
         const resend = new Resend(resendKey);
         await resend.emails.send({
@@ -107,18 +108,24 @@ serve(async (req: Request) => {
       }
     }
 
-    // Trigger 'subscribe' automations
-    try {
-      await fetch(`${supabaseUrl}/functions/v1/execute-automation`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          trigger_type: "subscribe",
-          trigger_data: { email: trimmedEmail, first_name: sanitizedName },
-        }),
-      });
-    } catch (triggerErr) {
-      console.error("Automation trigger error (non-fatal):", triggerErr);
+    // Trigger 'subscribe' automations — but ONLY when the lead is NOT being enrolled
+    // into a specific sequence. Bridge sequences (RLX, NRM, etc.) are self-contained
+    // welcome flows; firing the generic Welcome Series on top would double-send.
+    if (!sequence_id) {
+      try {
+        await fetch(`${supabaseUrl}/functions/v1/execute-automation`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            trigger_type: "subscribe",
+            trigger_data: { email: trimmedEmail, first_name: sanitizedName },
+          }),
+        });
+      } catch (triggerErr) {
+        console.error("Automation trigger error (non-fatal):", triggerErr);
+      }
+    } else {
+      console.log(`Skipping generic 'subscribe' automation for ${trimmedEmail} — enrolled in sequence ${sequence_id}`);
     }
 
     // If a sequence_id was provided, enroll the subscriber into that sequence

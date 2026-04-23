@@ -81,9 +81,10 @@ serve(async (req: Request) => {
     const appUrl = Deno.env.get("APP_URL") || "https://kit-clone-dashboard.lovable.app";
     const unsubscribeUrl = `${appUrl}/unsubscribe?token=${unsubscribeToken}`;
 
-    // Send welcome email via Resend
+    // Send generic welcome email via Resend — ONLY when not enrolling in a specific sequence.
+    // Bridge sequences send their own product-specific Day 1 email.
     const resendKey = Deno.env.get("RESEND_API_KEY");
-    if (resendKey) {
+    if (resendKey && !sequence_id) {
       try {
         const resend = new Resend(resendKey);
         await resend.emails.send({

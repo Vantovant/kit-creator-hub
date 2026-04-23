@@ -141,7 +141,10 @@ serve(async (req: Request) => {
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
-    const { sequence_id, email, first_name } = await req.json();
+    const { sequence_id, email, first_name, ref_code } = await req.json();
+    const safeRefCode = ref_code && typeof ref_code === "string"
+      ? ref_code.trim().slice(0, 80).replace(/[^a-zA-Z0-9\-_]/g, "")
+      : "";
 
     if (!sequence_id || !email) {
       return new Response(JSON.stringify({ error: "sequence_id and email required" }), {
@@ -232,8 +235,12 @@ serve(async (req: Request) => {
       if (step.type === "send_email") {
         if (!hitWait && resend) {
           // Send immediately
-          const personalizedContent = (step.content || "").replace(/\{\{first_name\}\}/g, firstName);
-          const personalizedSubject = (step.subject || "").replace(/\{\{first_name\}\}/g, firstName);
+          const personalizedContent = (step.content || "")
+            .replace(/\{\{first_name\}\}/g, firstName)
+            .replace(/\{\{ref_code\}\}/g, safeRefCode);
+          const personalizedSubject = (step.subject || "")
+            .replace(/\{\{first_name\}\}/g, firstName)
+            .replace(/\{\{ref_code\}\}/g, safeRefCode);
 
           try {
             const sendResult = await resend.emails.send({
@@ -274,14 +281,19 @@ serve(async (req: Request) => {
             console.error(`Failed to send sequence email to ${email}:`, sendErr);
           }
         } else {
-          // Queue for later
+          // Queue for later — bake ref_code into step_data snapshot (pass-through, per-prospect)
           const sendAt = new Date(Date.now() + cumulativeDelayHours * 60 * 60 * 1000).toISOString();
+          const stepSnapshot = {
+            ...step,
+            content: (step.content || "").replace(/\{\{ref_code\}\}/g, safeRefCode),
+            subject: (step.subject || "").replace(/\{\{ref_code\}\}/g, safeRefCode),
+          };
           await adminClient.from("automation_queue").insert({
             automation_id: sequence_id,
             email,
             first_name: firstName,
             step_index: i,
-            step_data: step,
+            step_data: stepSnapshot,
             send_at: sendAt,
             status: "pending",
           });

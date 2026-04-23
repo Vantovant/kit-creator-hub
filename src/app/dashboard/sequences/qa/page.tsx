@@ -221,27 +221,23 @@ export default function SequenceQAPage() {
     setValidationError(null);
     setValidation(null);
     try {
-      // Validate both bridge sequences (one call each, merged)
+      const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+      const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+      const { data: { session } } = await supabase.auth.getSession();
+      const authToken = session?.access_token ?? anonKey;
+
       const responses = await Promise.all(
-        BRIDGE_SEQUENCE_NAMES.map((name) =>
-          supabase.functions.invoke("validate-lead-magnets", {
-            body: null,
-            method: "GET" as any,
-          }).then(async () => {
-            // functions.invoke doesn't pass query strings — call via fetch instead
-            const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
-            const url = `https://${projectId}.supabase.co/functions/v1/validate-lead-magnets?sequence_name=${encodeURIComponent(name)}`;
-            const { data: { session } } = await supabase.auth.getSession();
-            const r = await fetch(url, {
-              headers: {
-                Authorization: `Bearer ${session?.access_token ?? import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-                apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-              },
-            });
-            if (!r.ok) throw new Error(`Validator returned ${r.status}`);
-            return (await r.json()) as ValidatorResponse;
-          })
-        )
+        BRIDGE_SEQUENCE_NAMES.map(async (name) => {
+          const url = `https://${projectId}.supabase.co/functions/v1/validate-lead-magnets?sequence_name=${encodeURIComponent(name)}`;
+          const r = await fetch(url, {
+            headers: {
+              Authorization: `Bearer ${authToken}`,
+              apikey: anonKey,
+            },
+          });
+          if (!r.ok) throw new Error(`Validator returned ${r.status}`);
+          return (await r.json()) as ValidatorResponse;
+        })
       );
 
       const merged: ValidatorResponse = {
@@ -296,14 +292,22 @@ export default function SequenceQAPage() {
                   onKeyDown={(e) => e.key === "Enter" && runLookup()}
                 />
               </div>
-              <Button onClick={runLookup} disabled={loading || !email.trim()}>
+              <button
+                type="button"
+                onClick={runLookup}
+                disabled={loading || !email.trim()}
+                className={cn(
+                  "inline-flex items-center justify-center px-4 py-2 rounded-md text-sm font-medium",
+                  "bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                )}
+              >
                 {loading ? (
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                 ) : (
                   <Search className="w-4 h-4 mr-2" />
                 )}
                 Lookup
-              </Button>
+              </button>
             </div>
             {error && (
               <p className="text-sm text-destructive flex items-center gap-2">

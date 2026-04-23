@@ -235,8 +235,12 @@ serve(async (req: Request) => {
       if (step.type === "send_email") {
         if (!hitWait && resend) {
           // Send immediately
-          const personalizedContent = (step.content || "").replace(/\{\{first_name\}\}/g, firstName);
-          const personalizedSubject = (step.subject || "").replace(/\{\{first_name\}\}/g, firstName);
+          const personalizedContent = (step.content || "")
+            .replace(/\{\{first_name\}\}/g, firstName)
+            .replace(/\{\{ref_code\}\}/g, safeRefCode);
+          const personalizedSubject = (step.subject || "")
+            .replace(/\{\{first_name\}\}/g, firstName)
+            .replace(/\{\{ref_code\}\}/g, safeRefCode);
 
           try {
             const sendResult = await resend.emails.send({

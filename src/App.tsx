@@ -14,6 +14,7 @@ import SegmentsPage from "@/app/dashboard/segments/page";
 import IntegrationsPage from "@/app/dashboard/integrations/page";
 import AnalyticsPage from "@/app/dashboard/analytics/page";
 import SequencesPage from "@/app/dashboard/sequences/page";
+import SequenceQAPage from "@/app/dashboard/sequences/qa/page";
 import SettingsPage from "@/app/dashboard/settings/page";
 import KnowledgeBasePage from "@/app/dashboard/knowledge-base/page";
 import PlanPage from "@/app/dashboard/plan/page";
@@ -47,6 +48,7 @@ function App() {
           <Route path="templates" element={<TemplatesPage />} />
           <Route path="segments" element={<SegmentsPage />} />
           <Route path="sequences" element={<SequencesPage />} />
+          <Route path="sequences/qa" element={<SequenceQAPage />} />
           <Route path="integrations" element={<IntegrationsPage />} />
           <Route path="analytics" element={<AnalyticsPage />} />
           <Route path="knowledge-base" element={<KnowledgeBasePage />} />

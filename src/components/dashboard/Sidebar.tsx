@@ -15,6 +15,7 @@ import {
   BookOpen,
   Target,
   MessageSquareReply,
+  Search,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import logo from "@/assets/logo.jpg";
@@ -26,6 +27,7 @@ const navigation = [
   { name: "Broadcasts", href: "/dashboard/broadcasts", icon: Mail },
   { name: "Automations", href: "/dashboard/automations", icon: Zap },
   { name: "Sequences", href: "/dashboard/sequences", icon: ListOrdered },
+  { name: "Sequence QA", href: "/dashboard/sequences/qa", icon: Search },
   { name: "Forms", href: "/dashboard/forms", icon: FormInput },
   { name: "Templates", href: "/dashboard/templates", icon: Mail },
   { name: "Segments", href: "/dashboard/segments", icon: Users },

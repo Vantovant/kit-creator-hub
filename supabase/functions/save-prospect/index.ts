@@ -141,6 +141,7 @@ serve(async (req: Request) => {
               sequence_id: seq.id,
               email: trimmedEmail,
               first_name: sanitizedName,
+              ref_code: sanitizedRefCode,
             }),
           });
           console.log(`Enrolled ${trimmedEmail} in sequence ${seq.id}`);

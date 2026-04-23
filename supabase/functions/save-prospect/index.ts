@@ -16,7 +16,12 @@ serve(async (req: Request) => {
   try {
     // Simple in-memory rate limiting (resets on cold start)
     const body = await req.json();
-    const { email, first_name, source, sequence_id } = body;
+    const { email, first_name, source, sequence_id, ref_code } = body;
+
+    // Sanitize ref_code (pass-through only, not persisted) — alphanumeric + - _ up to 80 chars
+    const sanitizedRefCode = ref_code && typeof ref_code === "string"
+      ? ref_code.trim().slice(0, 80).replace(/[^a-zA-Z0-9\-_]/g, "")
+      : null;
 
     // Server-side validation
     if (!email || typeof email !== "string") {

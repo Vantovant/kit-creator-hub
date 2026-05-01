@@ -1,6 +1,6 @@
 /**
  * CLUSTER_BRIDGE — Parameterized 5-email / 8-day bridge for the Daily Range.
- * Used by IMMUNITY_BRIDGE, ENERGY_BRIDGE, DETOX_BRIDGE.
+ * Used by IMMUNITY_BRIDGE, ENERGY_BRIDGE, COMFORT_MOBILITY_BRIDGE.
  *
  * Same RLX/NRM tone (educational, soft pitch on Day 8).
  * NO medical claims. NO buy link before Day 8.
@@ -8,6 +8,16 @@
  *
  * Cluster forms post `source = "{product}_bridge_section"` to /save-prospect.
  * The router maps source → cluster sequence_id; per-prospect ref_code is baked in by execute-sequence.
+ *
+ * FINAL ROUTING (2026-05-01):
+ *   grw_bridge_section          → IMMUNITY_BRIDGE          (GRW only)
+ *   gts_bridge_section          → ENERGY_BRIDGE            (GTS, PWR Lemon, PWR Apricot)
+ *   pwr-lemon_bridge_section    → ENERGY_BRIDGE
+ *   pwr-apricot_bridge_section  → ENERGY_BRIDGE
+ *   sld_bridge_section          → COMFORT_MOBILITY_BRIDGE  (SLD, STP)
+ *   stp_bridge_section          → COMFORT_MOBILITY_BRIDGE
+ *
+ * SLD is NOT detox. STP is NOT energy. PWR is never used as a generic label.
  */
 
 // Mail-side hosts the cluster PDFs (per user confirmation 2026-05-01).
@@ -156,8 +166,7 @@ export const IMMUNITY_BRIDGE = buildClusterBridge({
     "I'm not catching every cold in the office anymore — and when I do feel something, it passes in a day instead of a week.",
   day6Outcome: "That's the goal: a steadier baseline, not a quick fix.",
   day8Products: [
-    { code: "grw", label: "GRW", oneLiner: "designed to support immune health and vitality" },
-    { code: "gts", label: "GTS", oneLiner: "helps support strength and stamina" },
+    { code: "grw", label: "GRW", oneLiner: "immune health and vitality support" },
   ],
 });
 
@@ -183,35 +192,35 @@ export const ENERGY_BRIDGE = buildClusterBridge({
     "I'm not relying on a 3pm coffee anymore — and I'm getting more done between 2 and 5 than I used to do all morning.",
   day6Outcome: "That's the goal: steady focus, not a chemical rollercoaster.",
   day8Products: [
-    { code: "stp", label: "STP", oneLiner: "comfort and circulation support" },
+    { code: "gts", label: "GTS", oneLiner: "strength and stamina support" },
     { code: "pwr-lemon", label: "PWR Lemon", oneLiner: "men's energy, vigor, and stamina support" },
     { code: "pwr-apricot", label: "PWR Apricot", oneLiner: "women's vitality, balance, and overall wellness support" },
   ],
 });
 
-export const DETOX_BRIDGE = buildClusterBridge({
-  cluster: "Detox",
-  pdfFilename: "5-Day-Detox-and-Cleanse-v1.pdf",
-  pdfDisplayName: "5-Day Detox & Cleanse",
-  emoji: "🌿",
-  day2Question: "What's been weighing you down?",
+export const COMFORT_MOBILITY_BRIDGE = buildClusterBridge({
+  cluster: "Comfort & Mobility",
+  pdfFilename: "5-Day-Comfort-and-Mobility-Reset-v1.pdf",
+  pdfDisplayName: "5-Day Comfort & Mobility Reset",
+  emoji: "🧘",
+  day2Question: "What's been holding you back most?",
   day2Options: [
-    "Bloating or heaviness after meals",
-    "Sluggish digestion that throws off the day",
-    "Skin or breath that says my system is overloaded",
+    "Stiffness when I get up in the morning",
+    "Joints that ache after a long day",
+    "Heavy or tired legs by evening",
     "Something else",
   ],
-  day4Subject: "The cleanse trick most people get wrong",
+  day4Subject: "The 5-minute mobility window most people miss",
   day4Lead:
-    "Most people think a cleanse means cutting everything out. The real lever is <strong>what you add in the first hour of the day</strong>.",
+    "Most people try to fix stiffness by stretching harder. The real lever is what you do in the <strong>first 5 minutes after you stand up</strong> — morning, and after every long sit.",
   day4Tip:
-    "<strong>500ml of warm water with lemon, before coffee.</strong> Wakes up the digestive tract gently, supports the liver's morning detox window, and cuts mid-morning bloat.",
-  day6Subject: "What Lerato felt after one week",
+    "<strong>5 slow joint circles per major joint, before you walk anywhere.</strong> Ankles, hips, shoulders, neck. It primes synovial fluid so the first 1,000 steps of the day don't grind on cold joints.",
+  day6Subject: "What Naledi noticed after one week",
   day6Quote:
-    "I'm not bloated by lunchtime anymore — and my skin actually changed in 5 days.",
-  day6Outcome:
-    "That's the goal: a system that's clearing properly, every day — not a once-a-month reset.",
+    "My knees aren't talking to me on the stairs anymore, and my legs don't feel like bricks at the end of the day.",
+  day6Outcome: "That's the goal: comfortable movement that lasts the whole day, not just the first hour.",
   day8Products: [
     { code: "sld", label: "SLD", oneLiner: "joint comfort and flexibility support" },
+    { code: "stp", label: "STP", oneLiner: "comfort and circulation support" },
   ],
 });

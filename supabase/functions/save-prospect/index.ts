@@ -44,8 +44,30 @@ serve(async (req: Request) => {
       ? String(first_name).trim().slice(0, 100).replace(/[<>]/g, "")
       : null;
 
-    const allowedSources = ["welcome_form", "website_embed", "csv_import", "sequence_form", "vantoos_beta_form", "nrm_bridge", "nrm_bridge_section", "rlx_bridge", "rlx_bridge_section", "nrm_gut_bridge", "nrm_gut_bridge_section"];
+    const allowedSources = [
+      "welcome_form", "website_embed", "csv_import", "sequence_form", "vantoos_beta_form",
+      "nrm_bridge", "nrm_bridge_section", "rlx_bridge", "rlx_bridge_section",
+      "nrm_gut_bridge", "nrm_gut_bridge_section",
+      // Daily Range cluster bridges (Immunity / Energy / Detox)
+      "grw_bridge_section", "gts_bridge_section",
+      "sld_bridge_section", "stp_bridge_section",
+      "pwr-lemon_bridge_section", "pwr-apricot_bridge_section",
+    ];
     const sanitizedSource = allowedSources.includes(source) ? source : "welcome_form";
+
+    // Cluster source → sequence_id mapping. If the form posts a cluster source
+    // and no explicit sequence_id, route to the matching cluster bridge.
+    const CLUSTER_SEQUENCE_MAP: Record<string, string> = {
+      grw_bridge_section: "__IMMUNITY_BRIDGE_ID__",
+      gts_bridge_section: "__IMMUNITY_BRIDGE_ID__",
+      sld_bridge_section: "__ENERGY_BRIDGE_ID__",
+      stp_bridge_section: "__ENERGY_BRIDGE_ID__",
+      "pwr-lemon_bridge_section": "__DETOX_BRIDGE_ID__",
+      "pwr-apricot_bridge_section": "__DETOX_BRIDGE_ID__",
+    };
+    const resolvedSequenceId = (sequence_id && typeof sequence_id === "string")
+      ? sequence_id
+      : (CLUSTER_SEQUENCE_MAP[sanitizedSource] || null);
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;

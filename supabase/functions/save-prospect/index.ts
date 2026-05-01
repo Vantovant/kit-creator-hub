@@ -55,17 +55,20 @@ serve(async (req: Request) => {
     ];
     const sanitizedSource = allowedSources.includes(source) ? source : "welcome_form";
 
-    // Cluster source → sequence_id mapping. If the form posts a cluster source
-    // and no explicit sequence_id, route to the matching cluster bridge.
+    // Cluster source → sequence_id mapping (final routing 2026-05-01).
+    // SLD is NOT detox; SLD + STP go to the Comfort & Mobility bridge.
+    // GTS moves to Energy alongside PWR Lemon and PWR Apricot.
+    // GRW is the only product in the Immunity bridge.
+    const IMMUNITY_BRIDGE_ID = "462db47a-7d6e-47f1-92d2-640e13683cbd";
+    const ENERGY_BRIDGE_ID = "d9f83f1f-eb64-47fd-ae87-26c65821e4c9";
+    const COMFORT_MOBILITY_BRIDGE_ID = "5738da89-3a6e-45e9-8db9-4aadb48e507f"; // repurposed from old Detox row
     const CLUSTER_SEQUENCE_MAP: Record<string, string> = {
-      grw_bridge_section: "462db47a-7d6e-47f1-92d2-640e13683cbd",
-      gts_bridge_section: "462db47a-7d6e-47f1-92d2-640e13683cbd",
-      // SLD → Detox bridge (joint comfort & flexibility)
-      sld_bridge_section: "5738da89-3a6e-45e9-8db9-4aadb48e507f",
-      // STP, PWR Lemon, PWR Apricot → Energy bridge
-      stp_bridge_section: "d9f83f1f-eb64-47fd-ae87-26c65821e4c9",
-      "pwr-lemon_bridge_section": "d9f83f1f-eb64-47fd-ae87-26c65821e4c9",
-      "pwr-apricot_bridge_section": "d9f83f1f-eb64-47fd-ae87-26c65821e4c9",
+      grw_bridge_section: IMMUNITY_BRIDGE_ID,
+      gts_bridge_section: ENERGY_BRIDGE_ID,
+      "pwr-lemon_bridge_section": ENERGY_BRIDGE_ID,
+      "pwr-apricot_bridge_section": ENERGY_BRIDGE_ID,
+      sld_bridge_section: COMFORT_MOBILITY_BRIDGE_ID,
+      stp_bridge_section: COMFORT_MOBILITY_BRIDGE_ID,
     };
     const resolvedSequenceId = (sequence_id && typeof sequence_id === "string")
       ? sequence_id

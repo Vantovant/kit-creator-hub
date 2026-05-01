@@ -156,8 +156,8 @@ export const IMMUNITY_BRIDGE = buildClusterBridge({
     "I'm not catching every cold in the office anymore — and when I do feel something, it passes in a day instead of a week.",
   day6Outcome: "That's the goal: a steadier baseline, not a quick fix.",
   day8Products: [
-    { code: "grw", label: "GRW", oneLiner: "daily immune support" },
-    { code: "gts", label: "GTS", oneLiner: "everyday wellness" },
+    { code: "grw", label: "GRW", oneLiner: "designed to support immune health and vitality" },
+    { code: "gts", label: "GTS", oneLiner: "helps support strength and stamina" },
   ],
 });
 
@@ -183,8 +183,8 @@ export const ENERGY_BRIDGE = buildClusterBridge({
     "I'm not relying on a 3pm coffee anymore — and I'm getting more done between 2 and 5 than I used to do all morning.",
   day6Outcome: "That's the goal: steady focus, not a chemical rollercoaster.",
   day8Products: [
-    { code: "sld", label: "SLD", oneLiner: "natural energy & focus" },
-    { code: "stp", label: "STP", oneLiner: "performance support" },
+    { code: "sld", label: "SLD", oneLiner: "designed to support joint comfort and flexibility" },
+    { code: "stp", label: "STP", oneLiner: "helps support comfort and circulation" },
   ],
 });
 
@@ -211,7 +211,7 @@ export const DETOX_BRIDGE = buildClusterBridge({
   day6Outcome:
     "That's the goal: a system that's clearing properly, every day — not a once-a-month reset.",
   day8Products: [
-    { code: "pwr-lemon", label: "PWR Lemon", oneLiner: "daily cleanse & balance" },
-    { code: "pwr-apricot", label: "PWR Apricot", oneLiner: "gentle detox support" },
+    { code: "pwr-lemon", label: "PWR Lemon", oneLiner: "designed to support male vitality and energy" },
+    { code: "pwr-apricot", label: "PWR Apricot", oneLiner: "designed to support female vitality and balance" },
   ],
 });

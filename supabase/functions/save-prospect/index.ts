@@ -58,12 +58,12 @@ serve(async (req: Request) => {
     // Cluster source → sequence_id mapping. If the form posts a cluster source
     // and no explicit sequence_id, route to the matching cluster bridge.
     const CLUSTER_SEQUENCE_MAP: Record<string, string> = {
-      grw_bridge_section: "__IMMUNITY_BRIDGE_ID__",
-      gts_bridge_section: "__IMMUNITY_BRIDGE_ID__",
-      sld_bridge_section: "__ENERGY_BRIDGE_ID__",
-      stp_bridge_section: "__ENERGY_BRIDGE_ID__",
-      "pwr-lemon_bridge_section": "__DETOX_BRIDGE_ID__",
-      "pwr-apricot_bridge_section": "__DETOX_BRIDGE_ID__",
+      grw_bridge_section: "462db47a-7d6e-47f1-92d2-640e13683cbd",
+      gts_bridge_section: "462db47a-7d6e-47f1-92d2-640e13683cbd",
+      sld_bridge_section: "d9f83f1f-eb64-47fd-ae87-26c65821e4c9",
+      stp_bridge_section: "d9f83f1f-eb64-47fd-ae87-26c65821e4c9",
+      "pwr-lemon_bridge_section": "5738da89-3a6e-45e9-8db9-4aadb48e507f",
+      "pwr-apricot_bridge_section": "5738da89-3a6e-45e9-8db9-4aadb48e507f",
     };
     const resolvedSequenceId = (sequence_id && typeof sequence_id === "string")
       ? sequence_id

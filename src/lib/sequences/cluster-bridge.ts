@@ -123,7 +123,7 @@ export function buildClusterBridge(cfg: ClusterConfig) {
       subject: "One more option (only if you want it)",
       from_name: "Vanto Zazi",
       content: `<p>Hey {{first_name}},</p>
-<p>Some readers add a small lozenge from the APLGO ${cfg.cluster} family to their daily routine. Plant-based blends, not medication — just one more tool.</p>
+<p>Some readers add a small APLGO lozenge to their daily routine alongside the guide. Plant-based blends, not medication — each one designed to support a specific area of wellness.</p>
 <p>If you're curious, here are the options:</p>
 ${productButtons}
 <p>If not, no problem — keep using the guide. Either way, <strong>look after yourself</strong>.</p>

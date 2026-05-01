@@ -41,12 +41,12 @@ export interface ClusterConfig {
 }
 
 export function buildClusterBridge(cfg: ClusterConfig) {
-  const PDF_URL = `${APP_BASE}/lead-magnets/${cfg.pdfFilename}`;
+  const PDF_URL = `${PDF_BASE}/lead-magnets/${cfg.pdfFilename}`;
 
   const productButtons = cfg.day8Products
     .map(
       (p) => `<p style="margin: 16px 0;">
-  <a href="${APP_BASE}/shop/${p.code}?ref={{ref_code}}" style="display:inline-block; background:#1a3a8a; color:#fff; padding:12px 22px; border-radius:8px; text-decoration:none; font-weight:600;">🌿 ${p.label} — ${p.oneLiner}</a>
+  <a href="${SHOP_BASE}/shop/${p.code}?ref={{ref_code}}" style="display:inline-block; background:#1a3a8a; color:#fff; padding:12px 22px; border-radius:8px; text-decoration:none; font-weight:600;">🌿 ${p.label} — ${p.oneLiner}</a>
 </p>`,
     )
     .join("\n");

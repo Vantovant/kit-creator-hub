@@ -106,7 +106,7 @@ serve(async (req: Request) => {
     // Send generic welcome email via Resend — ONLY when not enrolling in a specific sequence.
     // Bridge sequences send their own product-specific Day 1 email.
     const resendKey = Deno.env.get("RESEND_API_KEY");
-    if (resendKey && !sequence_id) {
+    if (resendKey && !resolvedSequenceId) {
       try {
         const resend = new Resend(resendKey);
         await resend.emails.send({
@@ -130,10 +130,8 @@ serve(async (req: Request) => {
       }
     }
 
-    // Trigger 'subscribe' automations — but ONLY when the lead is NOT being enrolled
-    // into a specific sequence. Bridge sequences (RLX, NRM, etc.) are self-contained
-    // welcome flows; firing the generic Welcome Series on top would double-send.
-    if (!sequence_id) {
+    // Trigger 'subscribe' automations — only when NOT enrolled into a specific sequence.
+    if (!resolvedSequenceId) {
       try {
         await fetch(`${supabaseUrl}/functions/v1/execute-automation`, {
           method: "POST",
@@ -147,22 +145,20 @@ serve(async (req: Request) => {
         console.error("Automation trigger error (non-fatal):", triggerErr);
       }
     } else {
-      console.log(`Skipping generic 'subscribe' automation for ${trimmedEmail} — enrolled in sequence ${sequence_id}`);
+      console.log(`Skipping generic 'subscribe' automation for ${trimmedEmail} — enrolled in sequence ${resolvedSequenceId} (source=${sanitizedSource})`);
     }
 
-    // If a sequence_id was provided, enroll the subscriber into that sequence
-    if (sequence_id && typeof sequence_id === "string") {
+    // If a sequence_id was resolved (explicit or via cluster source map), enroll into it.
+    if (resolvedSequenceId) {
       try {
         const { data: seq } = await supabase
           .from("email_sequences")
           .select("id, steps")
-          .eq("id", sequence_id)
+          .eq("id", resolvedSequenceId)
           .eq("status", "active")
           .maybeSingle();
 
         if (seq && Array.isArray(seq.steps) && seq.steps.length > 0) {
-          // Trigger sequence enrollment via execute-automation style logic
-          // We'll call the dedicated sequence executor
           await fetch(`${supabaseUrl}/functions/v1/execute-sequence`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -173,7 +169,9 @@ serve(async (req: Request) => {
               ref_code: sanitizedRefCode,
             }),
           });
-          console.log(`Enrolled ${trimmedEmail} in sequence ${seq.id}`);
+          console.log(`Enrolled ${trimmedEmail} in sequence ${seq.id} (source=${sanitizedSource})`);
+        } else {
+          console.warn(`Cluster source ${sanitizedSource} mapped to ${resolvedSequenceId} but sequence not found/inactive`);
         }
       } catch (seqErr) {
         console.error("Sequence enrollment error (non-fatal):", seqErr);

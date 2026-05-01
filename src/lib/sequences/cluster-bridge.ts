@@ -183,8 +183,9 @@ export const ENERGY_BRIDGE = buildClusterBridge({
     "I'm not relying on a 3pm coffee anymore — and I'm getting more done between 2 and 5 than I used to do all morning.",
   day6Outcome: "That's the goal: steady focus, not a chemical rollercoaster.",
   day8Products: [
-    { code: "sld", label: "SLD", oneLiner: "designed to support joint comfort and flexibility" },
-    { code: "stp", label: "STP", oneLiner: "helps support comfort and circulation" },
+    { code: "stp", label: "STP", oneLiner: "comfort and circulation support" },
+    { code: "pwr-lemon", label: "PWR Lemon", oneLiner: "men's energy, vigor, and stamina support" },
+    { code: "pwr-apricot", label: "PWR Apricot", oneLiner: "women's vitality, balance, and overall wellness support" },
   ],
 });
 
@@ -211,7 +212,6 @@ export const DETOX_BRIDGE = buildClusterBridge({
   day6Outcome:
     "That's the goal: a system that's clearing properly, every day — not a once-a-month reset.",
   day8Products: [
-    { code: "pwr-lemon", label: "PWR Lemon", oneLiner: "designed to support male vitality and energy" },
-    { code: "pwr-apricot", label: "PWR Apricot", oneLiner: "designed to support female vitality and balance" },
+    { code: "sld", label: "SLD", oneLiner: "joint comfort and flexibility support" },
   ],
 });

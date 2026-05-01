@@ -20,9 +20,9 @@
  * SLD is NOT detox. STP is NOT energy. PWR is never used as a generic label.
  */
 
-// Mail-side hosts the cluster PDFs (per user confirmation 2026-05-01).
+// Mail-side hosts the cluster PDFs on the branded custom domain (no Lovable domain in customer-facing emails).
 // Shop links still point at the website team's /shop/{product} routes.
-const PDF_BASE = "https://kit-clone-dashboard.lovable.app";
+const PDF_BASE = "https://dashboard.onlinecourseformlm.com";
 const SHOP_BASE = "https://onlinecourseformlm.com";
 
 export interface ClusterConfig {

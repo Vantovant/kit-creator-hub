@@ -10,7 +10,10 @@
  * The router maps source → cluster sequence_id; per-prospect ref_code is baked in by execute-sequence.
  */
 
-const APP_BASE = "https://onlinecourseformlm.com";
+// Mail-side hosts the cluster PDFs (per user confirmation 2026-05-01).
+// Shop links still point at the website team's /shop/{product} routes.
+const PDF_BASE = "https://kit-clone-dashboard.lovable.app";
+const SHOP_BASE = "https://onlinecourseformlm.com";
 
 export interface ClusterConfig {
   /** Cluster slug for sequence name, e.g. "Immunity" */

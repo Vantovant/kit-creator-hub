@@ -52,6 +52,12 @@ serve(async (req: Request) => {
       "grw_bridge_section", "gts_bridge_section",
       "sld_bridge_section", "stp_bridge_section",
       "pwr-lemon_bridge_section", "pwr-apricot_bridge_section",
+      // Premium bridges
+      "alt_premium_bridge_section", "hpr_premium_bridge_section", "hrt_premium_bridge_section",
+      "ice_premium_bridge_section", "mls_premium_bridge_section", "lft_premium_bridge_section",
+      // Elite bridges
+      "bty_elite_bridge_section", "air_elite_bridge_section", "hpy_elite_bridge_section",
+      "brn_elite_bridge_section", "pft_elite_bridge_section", "terra_elite_bridge_section",
     ];
     const sanitizedSource = allowedSources.includes(source) ? source : "welcome_form";
 
@@ -69,6 +75,20 @@ serve(async (req: Request) => {
       "pwr-apricot_bridge_section": ENERGY_BRIDGE_ID,
       sld_bridge_section: COMFORT_MOBILITY_BRIDGE_ID,
       stp_bridge_section: COMFORT_MOBILITY_BRIDGE_ID,
+      // Premium bridges (inactive sequences — routing only)
+      alt_premium_bridge_section: "6c644e0c-bba1-4906-8683-b1318f6b63a9",
+      hpr_premium_bridge_section: "47ea2586-81e3-4b6f-8ca8-ca0beaa27aa1",
+      hrt_premium_bridge_section: "67ae03f4-bbfb-4650-b2d9-54ee194273ce",
+      ice_premium_bridge_section: "651e15c8-ac5c-4d2e-890e-bca01593e425",
+      mls_premium_bridge_section: "651e15c8-ac5c-4d2e-890e-bca01593e425",
+      lft_premium_bridge_section: "48b02f66-caf0-4f4b-b4de-3aad57fabb3c",
+      // Elite bridges (inactive sequences — routing only)
+      bty_elite_bridge_section: "68aab669-b8d3-4b2e-ba8e-7a25d36f0dd5",
+      air_elite_bridge_section: "e1128694-18c8-4093-9364-216f801b7243",
+      hpy_elite_bridge_section: "de459cb2-2c4a-4c97-9851-e2d367244d4d",
+      brn_elite_bridge_section: "d0988d2d-5840-4f30-b89d-37c27c5e0afb",
+      pft_elite_bridge_section: "5874d98f-69e0-465a-8f48-9ec0564894a1",
+      terra_elite_bridge_section: "5874d98f-69e0-465a-8f48-9ec0564894a1",
     };
     const resolvedSequenceId = (sequence_id && typeof sequence_id === "string")
       ? sequence_id

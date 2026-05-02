@@ -52,6 +52,12 @@ serve(async (req: Request) => {
       "grw_bridge_section", "gts_bridge_section",
       "sld_bridge_section", "stp_bridge_section",
       "pwr-lemon_bridge_section", "pwr-apricot_bridge_section",
+      // Premium bridges
+      "alt_premium_bridge_section", "hpr_premium_bridge_section", "hrt_premium_bridge_section",
+      "ice_premium_bridge_section", "mls_premium_bridge_section", "lft_premium_bridge_section",
+      // Elite bridges
+      "bty_elite_bridge_section", "air_elite_bridge_section", "hpy_elite_bridge_section",
+      "brn_elite_bridge_section", "pft_elite_bridge_section", "terra_elite_bridge_section",
     ];
     const sanitizedSource = allowedSources.includes(source) ? source : "welcome_form";
 

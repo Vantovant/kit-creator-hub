@@ -203,7 +203,7 @@ serve(async (req: Request) => {
 
     const resendKey = Deno.env.get("RESEND_API_KEY");
     const resend = resendKey ? new Resend(resendKey) : null;
-    const firstName = first_name || "there";
+    const firstName = `Leader ${first_name || "Friend"}`;
 
     // Get prospect info
     const { data: prospect } = await adminClient

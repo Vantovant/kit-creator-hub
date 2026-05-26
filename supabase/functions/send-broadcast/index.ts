@@ -211,7 +211,7 @@ serve(async (req: Request) => {
       }
       const resend = new Resend(resendKey);
       const { header, signature } = getBranding(body.brand || "aplgo");
-      const personalizedContent = (body.content || "").replace(/\{\{first_name\}\}/g, "Test User");
+      const personalizedContent = (body.content || "").replace(/\{\{first_name\}\}/g, "Leader Test User");
 
       await resend.emails.send({
         from: `${body.from_name || "Vanto Zazi"} <vanto@onlinecourseformlm.com>`,
@@ -333,7 +333,7 @@ serve(async (req: Request) => {
       try {
         const unsubscribeUrl = `${APP_URL}/unsubscribe?token=${sub.unsubscribe_token || ""}`;
         const personalizedContent = broadcast.content
-          .replace(/\{\{first_name\}\}/g, sub.first_name || "there");
+          .replace(/\{\{first_name\}\}/g, `Leader ${sub.first_name || "Friend"}`);
 
         const sendResult = await sendWithRetry(resend, {
           from: `${broadcast.from_name} <${replyToEmail}>`,

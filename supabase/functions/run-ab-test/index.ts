@@ -171,7 +171,7 @@ async function startABTest(body: any, adminClient: any, userId: string) {
       const promises = batch.map(async (sub) => {
         try {
           const unsubUrl = `${appUrl}/unsubscribe?token=${sub.unsubscribe_token || ""}`;
-          const content = (broadcast_content || "").replace(/\{\{first_name\}\}/g, sub.first_name || "there");
+          const content = (broadcast_content || "").replace(/\{\{first_name\}\}/g, `Leader ${sub.first_name || "Friend"}`);
           await resend.emails.send({
             from: `${from_name || "Vanto Zazi"} <vanto@onlinecourseformlm.com>`,
             to: [sub.email],

@@ -174,7 +174,7 @@ serve(async (req: Request) => {
       }
 
       const email = trigger_data?.email;
-      const firstName = trigger_data?.first_name || "there";
+      const firstName = `Leader ${trigger_data?.first_name || "Friend"}`;
       if (!email) continue;
 
       const { data: existing } = await adminClient

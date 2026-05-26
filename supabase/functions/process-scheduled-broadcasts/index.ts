@@ -206,7 +206,7 @@ serve(async (req: Request) => {
             try {
               const unsubscribeUrl = `${APP_URL}/unsubscribe?token=${sub.unsubscribe_token || ""}`;
               const personalizedContent = broadcast.content
-                .replace(/\{\{first_name\}\}/g, sub.first_name || "there");
+                .replace(/\{\{first_name\}\}/g, `Leader ${sub.first_name || "Friend"}`);
 
               const sendResult = await sendWithRetry(resend, {
                 from: `${broadcast.from_name} <${replyToEmail}>`,
@@ -274,7 +274,7 @@ serve(async (req: Request) => {
 
           const step = item.step_data as any;
           const email = item.email;
-          const firstName = item.first_name || "there";
+          const firstName = `Leader ${item.first_name || "Friend"}`;
 
           if (step.type === "send_email") {
             const { data: prospect } = await adminClient

@@ -27,7 +27,7 @@ export const EMAIL_SIGNATURE_HTML = `
             <span style="font-size: 12px; color: #666;">🌐</span>
           </td>
           <td style="padding-top: 4px;">
-            <a href="https://onlinecourseformlm.com" style="font-size: 13px; color: #1a3a8a; text-decoration: none; font-weight: 500;">onlinecourseformlm.com</a>
+            <a href="https://getwellafrica.com" style="font-size: 13px; color: #1a3a8a; text-decoration: none; font-weight: 500;">getwellafrica.com</a>
           </td>
         </tr>
       </table>
@@ -107,7 +107,7 @@ export const REENGAGEMENT_SEQUENCE = [
 </ul>
 <p>Since then, our ecosystem has expanded.</p>
 <p>You can explore everything here:</p>
-<p>👉 <a href="https://onlinecourseformlm.com">onlinecourseformlm.com</a></p>
+<p>👉 <a href="https://getwellafrica.com">getwellafrica.com</a></p>
 <p>If your goals still include income growth, business ownership, or wellness-based entrepreneurship — then your account is still waiting for activation.</p>
 <p>Reply <strong>"Let's talk"</strong> if you'd like clarity on next steps.</p>
 <p>Warm regards,</p>`,
@@ -133,7 +133,7 @@ export const REENGAGEMENT_SEQUENCE = [
 <li>Online branding education</li>
 </ul>
 <p>You can see the full business ecosystem here:</p>
-<p>👉 <a href="https://onlinecourseformlm.com">onlinecourseformlm.com</a></p>
+<p>👉 <a href="https://getwellafrica.com">getwellafrica.com</a></p>
 <p>If you're serious about building a structured income stream — this isn't a side hobby. It's a scalable model.</p>
 <p>If you're still curious, reply <strong>"Info."</strong></p>
 <p>If not, you can unsubscribe below — no hard feelings at all.</p>`,
@@ -453,7 +453,7 @@ export const VANTOOS_SIGNATURE_HTML = `
         </tr>
         <tr>
           <td style="padding-right: 6px; padding-top: 4px;"><span style="font-size: 12px; color: #666;">🌐</span></td>
-          <td style="padding-top: 4px;"><a href="https://onlinecourseformlm.com" style="font-size: 13px; color: #2d3a4a; text-decoration: none; font-weight: 500;">onlinecourseformlm.com</a></td>
+          <td style="padding-top: 4px;"><a href="https://getwellafrica.com" style="font-size: 13px; color: #2d3a4a; text-decoration: none; font-weight: 500;">getwellafrica.com</a></td>
         </tr>
       </table>
     </td>

@@ -5,8 +5,8 @@
  * Lifestyle copy only. NO medical claims. NO buy link before Day 8.
  * All buy links MUST preserve ?ref={{ref_code}}.
  */
-const PDF_URL = "https://onlinecourseformlm.com/lead-magnets/5-Day-Sugar-and-Gut-Reset-v1.pdf";
-const SHOP_URL = "https://onlinecourseformlm.com/shop/nrm";
+const PDF_URL = "https://getwellafrica.com/lead-magnets/5-Day-Sugar-and-Gut-Reset-v1.pdf";
+const SHOP_URL = "https://getwellafrica.com/shop/nrm";
 
 export const NRM_GUT_BRIDGE_SEQUENCE = [
   // DAY 1 — Deliver the PDF

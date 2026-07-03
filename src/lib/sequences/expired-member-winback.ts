@@ -16,7 +16,7 @@ export const EXPIRED_MEMBER_WINBACK_SEQUENCE = [
 <li>🎓 New training modules and business tools</li>
 <li>📈 Updated compensation structure</li>
 <li>🤝 A growing support community</li>
-<li>🧠 Free resources at <a href="https://onlinecourseformlm.com">onlinecourseformlm.com</a></li>
+<li>🧠 Free resources at <a href="https://getwellafrica.com">getwellafrica.com</a></li>
 </ul>
 <p>I'm not here to pressure you — just to let you know the door is still open.</p>
 <p>Reply <strong>"Tell me more"</strong> and I'll bring you up to speed.</p>
@@ -39,7 +39,7 @@ export const EXPIRED_MEMBER_WINBACK_SEQUENCE = [
 <li>✅ Your account history is preserved</li>
 <li>✅ Your previous rank and achievements are on record</li>
 <li>✅ Reactivation is simpler than starting from scratch</li>
-<li>✅ Free business training at <a href="https://onlinecourseformlm.com">onlinecourseformlm.com</a></li>
+<li>✅ Free business training at <a href="https://getwellafrica.com">getwellafrica.com</a></li>
 </ul>
 <p>If you're even slightly curious about picking up where you left off, reply <strong>"I'm curious"</strong> — no commitment needed.</p>`,
   },
@@ -55,13 +55,13 @@ export const EXPIRED_MEMBER_WINBACK_SEQUENCE = [
 <p>Since you've been away, we've invested heavily in making success more accessible for every distributor.</p>
 <p><strong>Here's what's new:</strong></p>
 <ol>
-<li><strong>Online Course for MLM</strong> — A complete training platform covering sales, recruitment, leadership, and personal branding. It's free for active distributors: <a href="https://onlinecourseformlm.com">onlinecourseformlm.com</a></li>
+<li><strong>Online Course for MLM</strong> — A complete training platform covering sales, recruitment, leadership, and personal branding. It's free for active distributors: <a href="https://getwellafrica.com">getwellafrica.com</a></li>
 <li><strong>AI-Powered Support</strong> — Personalised guidance to help you grow your network smarter</li>
 <li><strong>Stronger Community</strong> — Weekly team calls, mentorship matching, and recognition programmes</li>
 <li><strong>Simplified Compensation</strong> — Clearer paths to earning at every rank</li>
 </ol>
 <p>The ecosystem has evolved — and it's designed to help people exactly like you succeed.</p>
-<p>Take a look around: 👉 <a href="https://onlinecourseformlm.com">onlinecourseformlm.com</a></p>
+<p>Take a look around: 👉 <a href="https://getwellafrica.com">getwellafrica.com</a></p>
 <p>Reply <strong>"What's my next step?"</strong> and I'll create a personalised re-entry plan for you.</p>`,
   },
   {
@@ -82,7 +82,7 @@ export const EXPIRED_MEMBER_WINBACK_SEQUENCE = [
 <li>💰 Unlocking the income potential you originally saw</li>
 </ul>
 <p>The best part? You don't have to figure it out alone. Our entire training library is at your fingertips:</p>
-<p>👉 <a href="https://onlinecourseformlm.com">onlinecourseformlm.com</a></p>
+<p>👉 <a href="https://getwellafrica.com">getwellafrica.com</a></p>
 <p>I've helped dozens of expired members come back stronger. Let me do the same for you.</p>
 <p>Reply <strong>"Let's reconnect"</strong> and I'll walk you through the reactivation process personally.</p>`,
   },
@@ -100,7 +100,7 @@ export const EXPIRED_MEMBER_WINBACK_SEQUENCE = [
 <p><strong>Here's a quick summary of what you'd get by reactivating:</strong></p>
 <ul>
 <li>🔄 Restored account with your history intact</li>
-<li>📚 Full access to <a href="https://onlinecourseformlm.com">onlinecourseformlm.com</a> training</li>
+<li>📚 Full access to <a href="https://getwellafrica.com">getwellafrica.com</a> training</li>
 <li>💼 A clear, step-by-step plan to rebuild momentum</li>
 <li>🤝 Personal mentorship from our leadership team</li>
 </ul>

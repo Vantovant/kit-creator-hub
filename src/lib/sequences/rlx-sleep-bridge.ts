@@ -5,8 +5,8 @@
  * Lifestyle copy only. NO medical claims. NO buy link before Day 8.
  * All buy links MUST preserve ?ref={{ref_code}}.
  */
-const PDF_URL = "https://onlinecourseformlm.com/lead-magnets/5-Day-Calm-and-Sleep-Reset-v1.pdf";
-const SHOP_URL = "https://onlinecourseformlm.com/shop/rlx";
+const PDF_URL = "https://getwellafrica.com/lead-magnets/5-Day-Calm-and-Sleep-Reset-v1.pdf";
+const SHOP_URL = "https://getwellafrica.com/shop/rlx";
 
 export const RLX_SLEEP_BRIDGE_SEQUENCE = [
   // DAY 1 — Deliver the PDF (no product, no pitch)

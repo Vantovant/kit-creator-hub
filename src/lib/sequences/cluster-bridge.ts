@@ -23,7 +23,7 @@
 // Mail-side hosts the cluster PDFs on the branded custom domain (no Lovable domain in customer-facing emails).
 // Shop links still point at the website team's /shop/{product} routes.
 const PDF_BASE = "https://dashboard.onlinecourseformlm.com";
-const SHOP_BASE = "https://onlinecourseformlm.com";
+const SHOP_BASE = "https://getwellafrica.com";
 
 export interface ClusterConfig {
   /** Cluster slug for sequence name, e.g. "Immunity" */

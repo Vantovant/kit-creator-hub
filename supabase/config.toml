@@ -50,3 +50,6 @@ verify_jwt = false
 
 [functions.integration-webhook]
 verify_jwt = false
+
+[functions.suite-bridge-spoke]
+verify_jwt = false

@@ -200,10 +200,15 @@ Deno.serve(async (req) => {
   // ---------------- PULL ----------------
   if (action === "pull") {
     const since = params?.since ?? state.last_pulled_at ?? null;
+    // Contract §3.2 — send last_seen_version so hub returns deltas only.
+    const { data: verRow } = await supabase.from("hub_sync_state").select("*").eq("app_key", APP_KEY).maybeSingle();
+    const lastSeenVersion = (verRow as any)?.last_seen_version ?? null;
     const hubResp = await postToHub(secret, hubUrl, {
+      action: "contacts_pull",
       kind: "contacts_pull",
       app_key: APP_KEY,
       since,
+      last_seen_version: lastSeenVersion,
       limit: batchSize,
     });
     if (hubResp.status >= 400) {
@@ -217,19 +222,24 @@ Deno.serve(async (req) => {
 
     let contacts: any[] = [];
     let nextSince: string | null = null;
+    let maxVersion: number | null = null;
     try {
       const parsed = JSON.parse(hubResp.text);
-      contacts = parsed?.contacts ?? parsed?.body?.contacts ?? [];
+      contacts = parsed?.contacts ?? parsed?.records ?? parsed?.body?.contacts ?? parsed?.body?.records ?? [];
       nextSince = parsed?.next_since ?? parsed?.body?.next_since ?? null;
     } catch { /* empty */ }
 
     let merged = 0;
     for (const c of contacts) {
-      const email = c?.identity?.email?.toLowerCase() ?? null;
-      const phone = c?.identity?.phone_normalized ?? null;
-      if (!email && !phone) continue;
+      // Accept both envelope shape (identity/attributes) and flat contract shape.
+      const flat = c?.identity ? { ...(c.identity), ...(c.attributes ?? {}) } : c;
+      const email = (flat.primary_email ?? flat.email ?? c?.identity?.email ?? "")?.toString().toLowerCase() || null;
+      const phone = flat.primary_phone ?? flat.phone_normalized ?? c?.identity?.phone_normalized ?? null;
+      const version = c.version ?? c.hub_version ?? flat.version ?? null;
+      if (version != null && (maxVersion == null || version > maxVersion)) maxVersion = version;
+      if (!email && !phone && !c?.hub_contact_id) continue;
 
-      // Match existing prospect by email OR phone_normalized OR hub_contact_id
+      // Match existing prospect by hub_contact_id → email → phone_normalized.
       let existing: any = null;
       if (c?.hub_contact_id) {
         const { data } = await supabase.from("prospects").select("*").eq("hub_contact_id", c.hub_contact_id).maybeSingle();
@@ -244,27 +254,30 @@ Deno.serve(async (req) => {
         existing = data;
       }
 
-      // Null-safe merge: never blank out non-null local fields with null remote.
+      // Contract §3.2 — hub is authoritative for identity. Always overwrite.
       const patch: Record<string, unknown> = {
         hub_contact_id: c.hub_contact_id ?? existing?.hub_contact_id ?? null,
-        hub_version: c.hub_version ?? existing?.hub_version ?? null,
+        hub_version: version ?? existing?.hub_version ?? null,
+        hub_last_seen_version: version ?? existing?.hub_last_seen_version ?? null,
       };
-      const id = c.identity ?? {};
-      const at = c.attributes ?? {};
-      const setIf = (k: string, v: any) => { if (v != null && v !== "") patch[k] = v; };
-      setIf("full_name", id.name);
-      setIf("first_name", id.first_name);
-      setIf("last_name", id.last_name);
-      setIf("whatsapp_display_name", id.whatsapp_display_name);
-      setIf("email", email);
-      setIf("phone_normalized", phone);
-      setIf("phone_raw", phone);
-      setIf("lead_type", at.lead_type);
-      setIf("lead_temperature", at.temperature);
-      setIf("contact_source", at.contact_source);
-      setIf("contact_confidence", at.contact_confidence);
-      setIf("aplgo_id", at.aplgo_id);
-      setIf("additional_notes", at.notes);
+      const setAlways = (k: string, v: any) => { if (v !== undefined) patch[k] = v; };
+      setAlways("full_name", flat.full_name ?? c?.identity?.name);
+      setAlways("first_name", flat.first_name);
+      setAlways("last_name", flat.last_name);
+      setAlways("email", email);
+      setAlways("phone_normalized", phone);
+      setAlways("phone_raw", phone);
+      setAlways("contact_type", flat.contact_type);
+      setAlways("lead_type", flat.lead_type);
+      setAlways("lead_temperature", flat.temperature ?? flat.lifecycle_stage);
+      // Merge shared arrays as append-only union locally.
+      const mergeArr = (localArr: any, remoteArr: any) => {
+        const l = Array.isArray(localArr) ? localArr : [];
+        const r = Array.isArray(remoteArr) ? remoteArr : [];
+        return Array.from(new Set([...l, ...r]));
+      };
+      if (flat.secondary_emails) patch.secondary_emails = mergeArr(existing?.secondary_emails, flat.secondary_emails);
+      if (flat.secondary_phones) patch.secondary_phones = mergeArr(existing?.secondary_phones, flat.secondary_phones);
 
       if (existing) {
         await supabase.from("prospects").update(patch).eq("id", existing.id);
@@ -274,6 +287,7 @@ Deno.serve(async (req) => {
           email: email ?? `hub-${crypto.randomUUID()}@placeholder.local`,
           source: "vantoos_hub",
           unsubscribed: false,
+          hub_bootstrapped_at: new Date().toISOString(),
         });
       }
       merged++;
@@ -282,13 +296,15 @@ Deno.serve(async (req) => {
     await supabase.from("hub_sync_state").upsert({
       app_key: APP_KEY,
       last_pulled_at: nextSince ?? new Date().toISOString(),
+      last_seen_version: maxVersion ?? lastSeenVersion,
       pulled_count: (state.pulled_count ?? 0) + merged,
       last_error: null,
       updated_at: new Date().toISOString(),
     }, { onConflict: "app_key" });
 
-    return json({ ok: true, action, pulled: contacts.length, merged, next_since: nextSince });
+    return json({ ok: true, action, pulled: contacts.length, merged, next_since: nextSince, last_seen_version: maxVersion });
   }
+
 
   return json({ error: "unknown_action" }, 400);
 });

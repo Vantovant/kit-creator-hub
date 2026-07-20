@@ -12,7 +12,9 @@ import { InboxCommandPalette } from "@/components/inbox/InboxCommandPalette";
 import { SnoozeMenu } from "@/components/inbox/SnoozeMenu";
 import { WaitingPrompt } from "@/components/inbox/WaitingPrompt";
 import { BulkActionBar } from "@/components/inbox/BulkActionBar";
-import { Inbox, Star, Archive, Clock, CheckCircle2, RefreshCw, Plus, Keyboard, Layers, Rows2, Rows3, PanelRightClose, PanelRight } from "lucide-react";
+import { LearnedRulesPanel } from "@/components/inbox/LearnedRulesPanel";
+import { Inbox, Star, Archive, Clock, CheckCircle2, RefreshCw, Plus, Keyboard, Layers, Rows2, Rows3, PanelRightClose, PanelRight, Brain } from "lucide-react";
+
 import { cn } from "@/lib/utils";
 
 const filters: { key: InboxFilter; label: string; icon: React.ReactNode }[] = [
@@ -38,6 +40,8 @@ export default function InboxPage() {
   const [snoozeOpen, setSnoozeOpen] = useState(false);
   const [waitingOpen, setWaitingOpen] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
+  const [rulesOpen, setRulesOpen] = useState(false);
+
   const [density, setDensity] = useState<Density>(() => (localStorage.getItem("inbox-density") as Density) || "compact");
   const [showContact, setShowContact] = useState(() => localStorage.getItem("inbox-showContact") !== "0");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -272,11 +276,19 @@ export default function InboxPage() {
               </button>
             </div>
             <button
+              onClick={() => setRulesOpen(true)}
+              className="w-full flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground px-2 py-1.5 rounded hover:bg-muted"
+              title="View sender rules Zazi has learned from your Delete / Star actions"
+            >
+              <Brain className="w-3.5 h-3.5" /> Learned rules
+            </button>
+            <button
               onClick={() => setHelpOpen(true)}
               className="w-full flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground px-2 py-1.5 rounded hover:bg-muted"
             >
               <Keyboard className="w-3.5 h-3.5" /> Shortcuts <kbd className="ml-auto font-mono border rounded px-1">?</kbd>
             </button>
+
             <button
               onClick={() => setPaletteOpen(true)}
               className="w-full flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground px-2 py-1.5 rounded hover:bg-muted"
@@ -367,6 +379,7 @@ export default function InboxPage() {
         onAdd={async (email, label) => { await addAccount(email, label); await refreshAccounts(); }}
       />
       <HelpOverlay open={helpOpen} onClose={() => setHelpOpen(false)} />
+      <LearnedRulesPanel open={rulesOpen} onClose={() => setRulesOpen(false)} />
       <InboxCommandPalette
         open={paletteOpen}
         onClose={() => setPaletteOpen(false)}
@@ -379,3 +392,4 @@ export default function InboxPage() {
     </div>
   );
 }
+

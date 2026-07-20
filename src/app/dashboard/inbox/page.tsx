@@ -156,8 +156,34 @@ export default function InboxPage() {
         subtitle="Superhuman triage + Nimble contact intelligence for your Gmail."
       />
 
-      <div className="flex-1 flex overflow-hidden">
-        <aside className="w-60 shrink-0 border-r flex flex-col">
+      {/* Mobile toolbar */}
+      <div className="md:hidden flex items-center gap-2 px-3 py-2 border-b bg-background">
+        <button onClick={() => setMobileMailboxesOpen(true)} className="p-2 rounded hover:bg-muted" aria-label="Mailboxes">
+          <Menu className="w-4 h-4" />
+        </button>
+        <span className="text-xs font-medium truncate flex-1">
+          {scope === "all" ? "All Inboxes" : accounts.find((a) => a.id === scope)?.email_address || "Inbox"} · <span className="capitalize">{filter}</span>
+        </span>
+        <button
+          onClick={handleSync}
+          disabled={syncing || !scope}
+          className="p-2 rounded hover:bg-muted disabled:opacity-50"
+          aria-label="Sync"
+        >
+          <RefreshCw className={cn("w-4 h-4", syncing && "animate-spin")} />
+        </button>
+      </div>
+
+      <div className="flex-1 flex overflow-hidden relative">
+        {mobileMailboxesOpen && (
+          <div className="md:hidden fixed inset-0 z-30 bg-black/40" onClick={() => setMobileMailboxesOpen(false)} />
+        )}
+        <aside className={cn(
+          "shrink-0 border-r flex flex-col bg-background transition-transform",
+          "md:w-60 md:static md:translate-x-0",
+          "fixed top-0 left-0 z-40 h-full w-72",
+          mobileMailboxesOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0",
+        )}>
           <div className="p-3 border-b space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Mailboxes</span>

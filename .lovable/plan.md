@@ -1,193 +1,131 @@
+
 Context loaded. Here's the plan.
 
-# Zazi Mail — Superhuman + Nimble CRM Upgrade
+Category: UI + backend (contacts editor, schema alignment, hub sync).
 
-Bring your VantoOS Email Module (Superhuman-style triage) and Nimble-style contact intelligence into Zazi Mail, so your personal Gmail becomes a live source that feeds prospects, sequences, tags, and Plan Hub tasks.
+# Contact Drawer v1 — parity with Vanto CRM
 
-## Goals
+Today the right pane in `/dashboard/contacts` is **read-only** (name/email/phone shown as static text; only notes, tags, sequence enroll work). The Spec Kit v1 says the drawer must be the **single canonical editor** for a contact, with identical fields and payloads across every spoke so bidirectional hub sync stays lossless. This plan brings Zazi Mail into that contract.
 
-1. **Superhuman layer** — a `/dashboard/inbox` workspace with keyboard-driven triage, AI smart extract, snooze/waiting/handled states — mirroring your VantoOS EmailPage.
-2. **Nimble CRM layer** — every Gmail sender/reply is auto-matched to a `prospect`. If none exists, one is created. Contact card shows full history (emails, sequences, tags, activities).
-3. **Registration harvester** — Gmail messages that look like "new registration" notifications are parsed → prospect created/updated → auto-enrolled into the correct email sequence.
-4. **Reply harvester** — replies to any of your Gmail conversations (not just Zazi outbound) → tag prospect (`Replied_YYYY_MM`), create a Plan Hub task, surface in Reply Inbox.
+## 1. Schema alignment (single migration)
 
-## Categories & Scope
+Add the Spec Kit fields missing from `prospects`, keep everything else backwards compatible.
 
-| Layer | Category | Change type |
-|-------|----------|-------------|
-| Gmail OAuth + sync | Backend / infra | New |
-| Inbox UI (Superhuman) | UI | New page |
-| Contact 360 panel (Nimble) | UI | New component |
-| Registration → sequence rules | Backend + Email delivery | New engine |
-| Reply → tag + task | Backend + Permissions/RLS | New engine |
-| Existing Reply Inbox (`/dashboard/replies`) | UI | Kept — becomes "Campaign replies" tab of new Inbox |
+| Column | Type | Notes |
+|---|---|---|
+| `last_name` | text null | Split from `full_name` if empty |
+| `whatsapp_display_name` | text null | Triggers "confirm name" banner if != name |
+| `contact_source` | enum | `unknown\|facebook\|twilio\|maytapi\|manual\|google\|email` |
+| `contact_confidence` | enum | `confirmed\|guessed\|unknown` |
+| `name_needs_confirmation` | boolean default false | Surfaces the composer nudge |
+| `phone_raw` | text null | Kept alongside `phone_normalized` |
+| `stage_id` | uuid null | FK → new `pipeline_stages` (nullable = Unassigned) |
+| `assigned_to` | uuid null | FK → `auth.users`; permission-gated |
+| `temperature` | enum | Reuse existing `lead_temperature` (map `hot/warm/cold`) |
+| `hub_contact_id` | uuid null | Set after first hub push |
+| `hub_version` | int null | For 409-conflict last-writer-wins |
+| `updated_at` | timestamptz | Already exists — becomes the merge tiebreaker |
 
-Nothing in the Zazi Mail broadcast / sequence sending path changes. Existing `zazi_inbound_replies` (campaign replies) is preserved.
+Plus new `pipeline_stages(id, name, sort_order, is_default)` with 3 seed rows (New / Working / Won) and full RLS + GRANTs to `authenticated` + `service_role`.
 
-## Architecture
+`phone_normalized` stays derived (E.164, default `+27`) via a `BEFORE INSERT/UPDATE` trigger on `phone_raw`.
 
-```text
-   ┌────────────────┐    OAuth      ┌──────────────────────┐
-   │  Your Gmail    │──────────────▶│ gmail-auth-start /   │
-   │  (any account) │               │ gmail-auth-callback  │
-   └────────┬───────┘               └──────────┬───────────┘
-            │ Gmail API                        │ store tokens
-            ▼                                  ▼
-   ┌────────────────┐  every 2 min   ┌──────────────────────┐
-   │ gmail-sync     │◀───pg_cron─────│ inbox_accounts       │
-   │ (edge fn)      │                │ inbox_oauth_tokens   │
-   └────────┬───────┘                └──────────────────────┘
-            │ upsert
-            ▼
-   ┌────────────────────────────────────────────────────────┐
-   │ inbox_messages (metadata, snippet, is_read, category)  │
-   └────────┬───────────────────────────────────────────────┘
-            │ classify (AI)
-            ▼
-   ┌────────────────────────┐   registration?     ┌───────────────────────┐
-   │ inbox-classify         │────────────────────▶│ save-prospect +       │
-   │  detects:              │                     │ auto-enroll sequence  │
-   │  - registration        │                     └───────────────────────┘
-   │  - reply               │   reply?            ┌───────────────────────┐
-   │  - general             │────────────────────▶│ tag prospect +        │
-   │  → inbox_extracts      │                     │ create plan_task      │
-   └────────────────────────┘                     └───────────────────────┘
-            │
-            ▼
-   ┌────────────────────────────────────────────────────────┐
-   │ /dashboard/inbox   (Superhuman-style UI)               │
-   │  ├─ EmailList  ├─ EmailDetail  ├─ SmartExtractPanel    │
-   │  ├─ Contact360 (Nimble side-panel)                     │
-   │  └─ CommandBar (⌘K), keyboard shortcuts                │
-   └────────────────────────────────────────────────────────┘
-```
+## 2. Drawer UI (right-side slide-over, 448px, backdrop blur)
 
-## Database (new tables — all admin-only RLS + GRANTs)
+Replace the current fixed right column with a portal drawer opened from:
+- Contacts list row click
+- Contact 360 panel in `/dashboard/inbox` ("Open in drawer")
+- Command bar ⌘K → "Open contact…"
 
-| Table | Purpose | Key columns |
-|-------|---------|-------------|
-| `inbox_accounts` | Connected Gmail accounts | `email_address`, `status`, `history_id`, `last_sync_at`, `label` |
-| `inbox_oauth_tokens` | Token vault | `access_token_encrypted`, `refresh_token_encrypted`, `expires_at`, `scopes` |
-| `inbox_messages` | Synced Gmail metadata | `message_id`, `thread_id`, `sender`, `subject`, `snippet`, `is_read`, `is_starred`, `snoozed_until`, `waiting_on`, `category`, `urgency`, `intent`, `handled_at`, `prospect_id` |
-| `inbox_extracts` | AI classification cache | `detected_type` (registration/reply/general), `confidence`, `entities_json`, `suggested_actions_json`, `prompt_version` |
-| `inbox_action_log` | Audit trail | `message_id`, `action_type` (enrolled/tagged/task_created/handled/snoozed), `related_id` |
-| `inbox_registration_rules` | Detection rules | `source_pattern` (from address / subject regex), `sequence_id`, `default_tag`, `is_active` |
-
-## Edge Functions (new)
-
-| Function | Job |
-|----------|-----|
-| `gmail-auth-start` | Build Google OAuth URL, return to UI |
-| `gmail-auth-callback` | Exchange code → store tokens, create `inbox_accounts` row |
-| `gmail-sync` | Incremental history sync (idempotent upsert). Runs via pg_cron every 2 min per active account |
-| `gmail-get` | On-demand full body fetch |
-| `gmail-disconnect` | Revoke tokens, soft-delete account |
-| `inbox-classify` | AI smart-extract: registration / reply / general. Writes `inbox_extracts`. Applies auto-actions per `inbox_registration_rules` |
-| `inbox-auto-enroll` | Called by `inbox-classify` when a registration is detected: idempotent `save-prospect` + sequence enrollment via existing `execute-sequence` path |
-| `inbox-reply-router` | Called by `inbox-classify` for replies: matches prospect by sender email, applies `Replied_YYYY_MM` tag, inserts a `plan_task` row referencing the message |
-
-Existing `ingest-reply` (Zazi Mail campaign replies) stays untouched — it still owns the `zazi_inbound_replies` table.
-
-## Registration Detection
-
-Rules table `inbox_registration_rules` seeded with your APLGO/VantoOS patterns, e.g.:
-- `from ILIKE '%registration@aplgo%'` → sequence `Registered_not_activated`
-- `subject ILIKE '%new registration%'` → sequence `Welcome_APLGO`
-- Free-text catch-all handled by AI classifier with confidence ≥ 0.8, else surfaces as "Suggested actions" in SmartExtractPanel for one-click confirm.
-
-Parser extracts email, first_name, phone (E.164), level/rank from the Gmail body → sends to existing `save-prospect` edge function → sequence auto-enroll happens through the current pipeline. No duplicate prospects (phone_normalized dedupe key already in place).
-
-## Reply Handling (Nimble-style)
-
-For any inbound Gmail message where sender email matches an existing prospect OR replies to a thread we sent from Gmail:
-1. Upsert prospect (create if new).
-2. Tag: `Replied_YYYY_MM` + optional `intent_tag` (interested / objection / question) from AI.
-3. Create `plan_task` — title: "Reply from {name}: {subject}" — linked to `inbox_messages.id`.
-4. Log `inbox_action_log` → visible as HandledStamp in EmailDetail.
-5. Reply surfaces both in `/dashboard/inbox` (all replies) and `/dashboard/replies` (campaign-only, existing behavior).
-
-## Frontend
-
-New pages/components:
+Eight stacked sections top → bottom, matching spec exactly:
 
 ```text
-src/app/dashboard/inbox/page.tsx           # Superhuman-style orchestrator
-src/components/inbox/
-  ├─ AccountSwitcher.tsx                   # Multi-Gmail dropdown, unified view
-  ├─ EmailList.tsx                         # Rows w/ star, badges, handled stamp
-  ├─ EmailDetail.tsx                       # Body + toolbar + SmartExtractPanel
-  ├─ SmartExtractPanel.tsx                 # AI actions: enroll, tag, create task
-  ├─ Contact360.tsx                        # NIMBLE side panel: prospect card,
-  │                                        #   tags, sequences, past emails,
-  │                                        #   activities, engagement score
-  ├─ CommandBar.tsx                        # ⌘K palette (archive/snooze/task/…)
-  ├─ CheatSheet.tsx                        # Keyboard shortcuts modal
-  ├─ HandledStamp.tsx                      # Audit chip (reads inbox_action_log)
-  └─ KeyCoach.tsx                          # Context hint strip
-src/hooks/useInbox.ts                      # fetch/filter/realtime/mutations
-src/hooks/useInboxAccounts.ts              # OAuth account CRUD
-src/services/inboxService.ts               # DB layer (mirrors emailService.ts)
+┌──────────────────────────────────────┐
+│ 1. Header  ● VP  Vanto Phiri     [×] │
+│    +27 82 … / vanto@x.com            │
+├──────────────────────────────────────┤
+│ 2. Core Identity   [edit inline]     │
+│    Full name · Phone · Email         │
+├──────────────────────────────────────┤
+│ 3. Identity Bridge                   │
+│    First/Last · WhatsApp name        │
+│    Source · Confidence · confirm ☐   │
+├──────────────────────────────────────┤
+│ 4. Classification (Lead / Temp)      │
+├──────────────────────────────────────┤
+│ 5. Pipeline & Ownership              │
+│    Stage · Assigned to  (RBAC gate)  │
+├──────────────────────────────────────┤
+│ 6. Notes & Tags (freeform + chips)   │
+├──────────────────────────────────────┤
+│ 7. Activity Timeline (last 50, RO)   │
+├──────────────────────────────────────┤
+│ 8. Footer  [Save] [Delete] [Next-Best]│
+└──────────────────────────────────────┘
 ```
 
-Sidebar gets one new entry: **Inbox** (with unread badge). `/dashboard/replies` renamed to "Campaign Replies" — kept as-is for reply-only surface.
+Rules baked in:
+- Every field is inline-editable; save-on-blur (debounced 400ms) + explicit **Save** in footer.
+- Validation matches spec: email lowercased on save; `phone_raw` required if email empty and vice versa; enums enforced client-side and server-side.
+- Confirm-name banner appears whenever `whatsapp_display_name && whatsapp_display_name !== full_name`.
+- Delete guarded by a typed-confirmation modal + only allowed if `has_role(auth.uid(),'admin')`.
+- `Assigned to` dropdown gated by role — non-admins see it read-only.
 
-Keyboard shortcuts (single-key, from your VantoOS spec): `J/K` navigate, `Enter` open, `E` archive, `S` snooze, `T` task, `M` meeting, `R` reminder, `H` handled, `?` cheat sheet, `⌘K` command bar.
+New file: `src/components/contacts/ContactDrawer.tsx` (~450 lines). Retire the in-page `ContactDetail` block in `src/app/dashboard/contacts/page.tsx`; the page shrinks to filters + list only and opens the drawer.
 
-## Secrets Needed
+## 3. Hub sync (Vantoos bridge)
 
-- `GOOGLE_OAUTH_CLIENT_ID`
-- `GOOGLE_OAUTH_CLIENT_SECRET`
-- `GOOGLE_OAUTH_REDIRECT_URI` = `https://dashboard.onlinecourseformlm.com/inbox/callback`
-- `INBOX_TOKEN_ENCRYPTION_KEY` (AES-GCM for token vault)
+Every save triggers a signed push through `suite-bridge-spoke` → hub, using the exact payload shape from image 4:
 
-I'll request them via `add_secret` when we start Phase 1.
+```json
+{
+  "app_key": "zazi_email",
+  "local_id": "<spoke prospect uuid>",
+  "hub_contact_id": "<uuid or null>",
+  "hub_version": <int or null>,
+  "identity": { "name":"…", "first_name":"…", "last_name":"…",
+                "whatsapp_display_name":"…",
+                "phone_normalized":"+27…", "email":"lowercase@x.com" },
+  "attributes": { "lead_type":"…", "temperature":"…",
+                  "contact_source":"…", "contact_confidence":"…",
+                  "name_needs_confirmation": true|false,
+                  "tags":[…], "notes":"…" },
+  "updated_at": "ISO8601"
+}
+```
 
-## Rollout Plan (phased, each independently shippable)
+Wiring:
+- New edge function `contact-hub-push` — takes prospect id, builds payload, calls `suite-bridge-spoke` locally (which already signs+forwards to `VANTOOS_HUB_URL`).
+- On hub `409 conflict`: pull hub's newer version, overwrite local, bump `hub_version`, **do not** re-emit.
+- Null-safe merge: never overwrite a non-null field with null unless the drawer explicitly sends `op:"clear"`.
+- Inbound (hub → spoke) already routed through `suite-bridge-spoke`; add a new `kind: "contact_upsert"` handler that applies the same merge rule locally.
 
-**Phase 0 — Foundations (½ day)**
-- Create tables + RLS + GRANTs
-- Add Sidebar "Inbox" nav (empty state)
-- Register secrets
+## 4. Cross-app wiring (Contact 360 in inbox)
 
-**Phase 1 — Gmail Connect + Sync (1 day)**
-- `gmail-auth-start` / `gmail-auth-callback` / `gmail-sync` / `gmail-disconnect`
-- AccountSwitcher UI + connect flow
-- pg_cron every 2 min
+`src/components/inbox/Contact360Panel.tsx` gets an **Open drawer** button that mounts the same `ContactDrawer` — one editor, everywhere, as the spec requires. The existing "Add to Contacts" and "Needs enrichment" nudges stay as entry points.
 
-**Phase 2 — Superhuman UI (1–1.5 days)**
-- EmailList + EmailDetail + CommandBar + shortcuts + snooze/waiting/handled
-- HandledStamp + inbox_action_log
-- CheatSheet + KeyCoach
+## 5. Files touched
 
-**Phase 3 — Nimble Contact 360 (½ day)**
-- Contact360 side panel: prospect data, tags, active sequences, engagement score, past `zazi_outbound_sends` + `email_events`, activities
-- One-click "Enroll in sequence", "Add tag", "Log activity"
+- `supabase/migrations/xxxx_contact_drawer_v1.sql` (schema + triggers + RLS + GRANTs + seed stages)
+- `supabase/functions/contact-hub-push/index.ts` (new)
+- `supabase/functions/suite-bridge-spoke/index.ts` (add `contact_upsert` handler)
+- `src/components/contacts/ContactDrawer.tsx` (new)
+- `src/components/contacts/ContactDrawerFields/*.tsx` (8 section subcomponents)
+- `src/app/dashboard/contacts/page.tsx` (strip right pane, open drawer)
+- `src/components/inbox/Contact360Panel.tsx` (Open drawer button)
 
-**Phase 4 — Registration harvester (½ day)**
-- `inbox-classify` + `inbox-auto-enroll`
-- Seed `inbox_registration_rules` for APLGO + VantoOS
-- SmartExtractPanel confirm UI for low-confidence hits
+## 6. Out of scope (intentionally)
 
-**Phase 5 — Reply harvester + Plan Hub bridge (½ day)**
-- `inbox-reply-router`
-- Auto-tag + create `plan_task`
-- Show tasks inline in EmailDetail
+- Pipeline board UI (only the `stage_id` selector ships now)
+- Bulk edit from list
+- Merge / dedupe tool
+- WhatsApp / Twilio / Maytapi ingestion — `contact_source` accepts the values, ingestion arrives with those spokes
 
-**Phase 6 — QA + go-live (½ day)**
-- Static harness (mirrors your existing save-prospect QA pattern)
-- Live gate test with .test leads
-- Enable pg_cron sync
+## 7. Verification
 
-**Total: ~5 working days**, shippable end of Phase 2 for immediate Superhuman value.
+- Static: TypeScript build + `tsgo` on new components.
+- Playwright: open contacts, edit name/phone/email in drawer, assert row updates + toast shows "Synced to hub".
+- Curl `contact-hub-push` locally, assert 200 + hub echoes back with `hub_contact_id`.
+- Conflict test: bump `hub_version` from hub mock, save from drawer, assert local overwritten and no re-emit loop.
 
-## Guardrails
-
-- Gmail sync is **read-only** (`gmail.readonly` scope). No send/modify from this module — sending stays with Resend + Zazi Mail.
-- Auto-enroll runs only when detection confidence ≥ 0.85 AND source matches a seeded rule; otherwise it's a one-click suggestion.
-- All auto-enrollments write to `inbox_action_log` for full audit.
-- Bounces/complaints suppression pipeline (already live in Zazi Mail) is honored before any auto-enroll fires.
-- No changes to existing `zazi_*` tables or the Reply Inbox routing.
-
-## Approve to proceed
-
-Reply with **APPROVE PHASE 0-1** and I'll start with the DB migration + Gmail OAuth wiring. If you want to trim scope (e.g., skip multi-account for v1, or defer Contact360 to phase 7), tell me and I'll adjust before writing any code.
+Approve and I'll ship it in one pass.

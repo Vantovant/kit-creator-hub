@@ -31,13 +31,18 @@ export type InboxMessage = {
 
 export type InboxFilter = "inbox" | "starred" | "sent" | "archive" | "snoozed" | "waiting" | "handled";
 
-export function useInbox(accountId: string | null, filter: InboxFilter = "inbox") {
+/**
+ * accountScope: a single account id, an array of account ids, or "all".
+ */
+export function useInbox(accountScope: string | string[] | "all" | null, filter: InboxFilter = "inbox") {
   const [messages, setMessages] = useState<InboxMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
+  const scopeKey = Array.isArray(accountScope) ? accountScope.join(",") : accountScope ?? "";
+
   const fetchMessages = useCallback(async () => {
-    if (!accountId) {
+    if (!accountScope) {
       setMessages([]);
       setLoading(false);
       return;
@@ -46,34 +51,48 @@ export function useInbox(accountId: string | null, filter: InboxFilter = "inbox"
     let query = supabase
       .from("inbox_messages")
       .select("*")
-      .eq("account_id", accountId)
       .is("deleted_at", null)
-      .order("date", { ascending: false });
+      .order("date", { ascending: false })
+      .limit(200);
 
-    if (filter === "inbox") query = query.eq("is_archived", false);
-    else if (filter === "starred") query = query.eq("is_starred", true);
+    if (accountScope !== "all") {
+      const ids = Array.isArray(accountScope) ? accountScope : [accountScope];
+      if (ids.length === 1) query = query.eq("account_id", ids[0]);
+      else query = query.in("account_id", ids);
+    }
+
+    const nowIso = new Date().toISOString();
+    if (filter === "inbox") {
+      query = query
+        .eq("is_archived", false)
+        .or(`snoozed_until.is.null,snoozed_until.lte.${nowIso}`);
+    } else if (filter === "starred") query = query.eq("is_starred", true);
     else if (filter === "archive") query = query.eq("is_archived", true);
-    else if (filter === "snoozed") query = query.not("snoozed_until", "is", null);
+    else if (filter === "snoozed") query = query.gt("snoozed_until", nowIso);
     else if (filter === "waiting") query = query.not("waiting_on", "is", null);
     else if (filter === "handled") query = query.not("handled_at", "is", null);
 
     const { data } = await query;
     setMessages((data as InboxMessage[]) || []);
     setLoading(false);
-  }, [accountId, filter]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scopeKey, filter]);
 
   useEffect(() => { fetchMessages(); }, [fetchMessages]);
 
   useEffect(() => {
-    if (!accountId) return;
+    if (!accountScope || accountScope === "all") return;
+    const ids = Array.isArray(accountScope) ? accountScope : [accountScope];
+    if (ids.length !== 1) return;
     const channel = supabase
-      .channel(`inbox-messages-${accountId}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "inbox_messages", filter: `account_id=eq.${accountId}` }, () => {
+      .channel(`inbox-messages-${ids[0]}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "inbox_messages", filter: `account_id=eq.${ids[0]}` }, () => {
         fetchMessages();
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [accountId, fetchMessages]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scopeKey, fetchMessages]);
 
   const doAction = async (messageId: string, action: string, actionData?: any) => {
     const { data, error } = await supabase.functions.invoke("gmail-action", {

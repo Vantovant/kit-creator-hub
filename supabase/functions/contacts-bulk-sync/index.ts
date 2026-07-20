@@ -119,32 +119,63 @@ Deno.serve(async (req) => {
       return json({ ok: true, action, pushed: 0, done: true });
     }
 
-    const contacts = prospects.map(toHubContact);
-    const hubResp = await postToHub(secret, hubUrl, {
-      kind: "contacts_upsert",
-      app_key: APP_KEY,
-      contacts,
+    const bootstrapIds: string[] = [];
+    const records = prospects.map((p) => {
+      const isBootstrap = !p.hub_bootstrapped_at && !p.hub_contact_id;
+      if (isBootstrap) bootstrapIds.push(p.id);
+      return isBootstrap ? toBootstrapRecord(p) : toOngoingRecord(p);
     });
 
-    // Try to apply returned hub_contact_id / hub_version if hub echoed them
+    // Contract §4 envelope. Keep legacy `kind`/`contacts` for hub back-compat.
+    const hubResp = await postToHub(secret, hubUrl, {
+      action: "contacts_upsert",
+      kind: "contacts_upsert",
+      app_key: APP_KEY,
+      records,
+      contacts: records,
+    });
+
+    // Try to apply returned hub_contact_id / hub_version + log violations.
     let applied = 0;
+    let violations = 0;
     try {
       const parsed = JSON.parse(hubResp.text);
       const results = parsed?.results ?? parsed?.body?.results ?? [];
       if (Array.isArray(results)) {
         for (const r of results) {
-          const localId = r?.local_id;
+          const localId = r?.local_id ?? r?.source_ref;
           if (!localId) continue;
           const patch: Record<string, unknown> = {};
           if (r.hub_contact_id) patch.hub_contact_id = r.hub_contact_id;
-          if (r.hub_version != null) patch.hub_version = r.hub_version;
+          const ver = r.version ?? r.hub_version;
+          if (ver != null) { patch.hub_version = ver; patch.hub_last_seen_version = ver; }
           if (Object.keys(patch).length) {
             await supabase.from("prospects").update(patch).eq("id", localId);
             applied++;
           }
+          const vs = r.field_ownership_violations ?? r.violations ?? [];
+          if (Array.isArray(vs) && vs.length) {
+            await supabase.from("hub_field_violations").insert(
+              vs.map((v: any) => ({
+                prospect_id: localId,
+                field: v.field ?? v.name ?? "unknown",
+                attempted_value: v.value ?? null,
+                hub_reason: v.reason ?? "field_ownership_violation",
+              })),
+            );
+            violations += vs.length;
+          }
         }
       }
     } catch { /* hub may not echo per-row results yet */ }
+
+    // Mark bootstrapped prospects so future pushes send ongoing payload only.
+    if (hubResp.status < 400 && bootstrapIds.length) {
+      await supabase.from("prospects")
+        .update({ hub_bootstrapped_at: new Date().toISOString() })
+        .in("id", bootstrapIds);
+    }
+
 
     const lastUpdated = prospects[prospects.length - 1].updated_at;
     const newPushedCount = (state.pushed_count ?? 0) + prospects.length;

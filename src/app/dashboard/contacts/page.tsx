@@ -2,15 +2,12 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   Search, Mail, Phone, MapPin, Tag as TagIcon, Activity, Send,
-  ListOrdered, User, Filter, Plus, Star, Flame, Snowflake,
+  User, Filter, Plus, Star, Flame, Snowflake,
 } from "lucide-react";
-import { toast } from "sonner";
 
 type Prospect = {
   id: string;
@@ -37,6 +34,9 @@ const TEMP_ICON: Record<string, JSX.Element> = {
   warm: <Star className="w-3 h-3 text-yellow-500" />,
   cold: <Snowflake className="w-3 h-3 text-blue-400" />,
 };
+
+const btnBase = "inline-flex items-center gap-1 px-3 py-1.5 text-sm rounded-md border border-input hover:bg-accent transition-colors";
+const btnPrimary = "inline-flex items-center gap-1 px-3 py-1.5 text-sm rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors";
 
 export default function ContactsPage() {
   const [prospects, setProspects] = useState<Prospect[]>([]);
@@ -118,21 +118,19 @@ export default function ContactsPage() {
           <h3 className="text-xs font-semibold uppercase text-muted-foreground mb-2 flex items-center gap-2">
             <TagIcon className="w-3 h-3" /> Tags
           </h3>
-          <ScrollArea className="h-64">
-            <div className="space-y-1 pr-2">
-              {allTags.map((t) => (
-                <button
-                  key={t.id}
-                  onClick={() => setTagFilter(tagFilter === t.id ? null : t.id)}
-                  className={`w-full text-left px-2 py-1 text-xs rounded hover:bg-accent truncate ${
-                    tagFilter === t.id ? "bg-accent font-medium" : ""
-                  }`}
-                >
-                  {t.name}
-                </button>
-              ))}
-            </div>
-          </ScrollArea>
+          <div className="space-y-1 max-h-96 overflow-y-auto pr-1">
+            {allTags.map((t) => (
+              <button
+                key={t.id}
+                onClick={() => setTagFilter(tagFilter === t.id ? null : t.id)}
+                className={`w-full text-left px-2 py-1 text-xs rounded hover:bg-accent truncate ${
+                  tagFilter === t.id ? "bg-accent font-medium" : ""
+                }`}
+              >
+                {t.name}
+              </button>
+            ))}
+          </div>
         </div>
       </aside>
 
@@ -148,55 +146,53 @@ export default function ContactsPage() {
               className="pl-9"
             />
           </div>
-          <Button size="sm" variant="outline">
-            <Plus className="w-4 h-4 mr-1" /> Add
-          </Button>
+          <button className={btnBase}>
+            <Plus className="w-4 h-4" /> Add
+          </button>
         </div>
         <div className="px-4 py-2 text-xs text-muted-foreground border-b">
           {loading ? "Loading..." : `${filtered.length} contact${filtered.length === 1 ? "" : "s"}`}
         </div>
-        <ScrollArea className="flex-1">
-          <ul className="divide-y">
-            {filtered.map((p) => {
-              const tags = tagsByProspect[p.id] || [];
-              const isSel = selected?.id === p.id;
-              return (
-                <li
-                  key={p.id}
-                  onClick={() => setSelectedId(p.id)}
-                  className={`px-4 py-3 cursor-pointer hover:bg-accent ${isSel ? "bg-accent" : ""}`}
-                >
-                  <div className="flex items-start gap-3">
-                    <div className="w-9 h-9 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-semibold shrink-0">
-                      {(p.full_name || p.first_name || p.email || "?").charAt(0).toUpperCase()}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="text-sm font-medium truncate">
-                          {p.full_name || p.first_name || p.email}
-                        </p>
-                        {p.lead_temperature && TEMP_ICON[p.lead_temperature]}
-                      </div>
-                      <p className="text-xs text-muted-foreground truncate">{p.email}</p>
-                      {tags.length > 0 && (
-                        <div className="flex flex-wrap gap-1 mt-1">
-                          {tags.slice(0, 3).map((t) => (
-                            <Badge key={t.id} variant="outline" className="text-[10px] px-1 py-0">
-                              {t.name}
-                            </Badge>
-                          ))}
-                          {tags.length > 3 && (
-                            <span className="text-[10px] text-muted-foreground">+{tags.length - 3}</span>
-                          )}
-                        </div>
-                      )}
-                    </div>
+        <ul className="divide-y flex-1 overflow-y-auto">
+          {filtered.map((p) => {
+            const tags = tagsByProspect[p.id] || [];
+            const isSel = selected?.id === p.id;
+            return (
+              <li
+                key={p.id}
+                onClick={() => setSelectedId(p.id)}
+                className={`px-4 py-3 cursor-pointer hover:bg-accent ${isSel ? "bg-accent" : ""}`}
+              >
+                <div className="flex items-start gap-3">
+                  <div className="w-9 h-9 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-semibold shrink-0">
+                    {(p.full_name || p.first_name || p.email || "?").charAt(0).toUpperCase()}
                   </div>
-                </li>
-              );
-            })}
-          </ul>
-        </ScrollArea>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-sm font-medium truncate">
+                        {p.full_name || p.first_name || p.email}
+                      </p>
+                      {p.lead_temperature && TEMP_ICON[p.lead_temperature]}
+                    </div>
+                    <p className="text-xs text-muted-foreground truncate">{p.email}</p>
+                    {tags.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {tags.slice(0, 3).map((t) => (
+                          <Badge key={t.id} variant="outline" className="text-[10px] px-1 py-0">
+                            {t.name}
+                          </Badge>
+                        ))}
+                        {tags.length > 3 && (
+                          <span className="text-[10px] text-muted-foreground">+{tags.length - 3}</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
       </div>
 
       {/* Right: detail */}
@@ -215,33 +211,36 @@ function ContactDetail({ prospect, tags }: { prospect: Prospect; tags: Tag[] }) 
   const [inboxMsgs, setInboxMsgs] = useState<any[]>([]);
   const [note, setNote] = useState("");
 
+  const loadActivities = async () => {
+    const { data } = await supabase.from("contact_activities").select("*").eq("prospect_id", prospect.id).order("created_at", { ascending: false }).limit(20);
+    setActivities(data || []);
+  };
+
   useEffect(() => {
     (async () => {
-      const [aRes, eRes, iRes] = await Promise.all([
-        supabase.from("contact_activities").select("*").eq("prospect_id", prospect.id).order("created_at", { ascending: false }).limit(20),
+      const [eRes, iRes] = await Promise.all([
         supabase.from("zazi_outbound_sends").select("id, subject, sent_at, status").eq("prospect_id", prospect.id).order("sent_at", { ascending: false }).limit(10),
         supabase.from("inbox_messages").select("id, subject, sender, date").eq("prospect_id", prospect.id).order("date", { ascending: false }).limit(10),
       ]);
-      setActivities(aRes.data || []);
       setEmails(eRes.data || []);
       setInboxMsgs(iRes.data || []);
+      loadActivities();
     })();
   }, [prospect.id]);
 
   const logNote = async () => {
     if (!note.trim()) return;
     const user = (await supabase.auth.getUser()).data.user;
+    if (!user) return;
     const { error } = await supabase.from("contact_activities").insert({
       prospect_id: prospect.id,
       activity_type: "note",
       notes: note.trim(),
-      created_by: user?.id,
+      user_id: user.id,
     });
-    if (error) { toast.error(error.message); return; }
+    if (error) { console.error(error); return; }
     setNote("");
-    toast.success("Note added");
-    const { data } = await supabase.from("contact_activities").select("*").eq("prospect_id", prospect.id).order("created_at", { ascending: false }).limit(20);
-    setActivities(data || []);
+    loadActivities();
   };
 
   return (
@@ -258,18 +257,18 @@ function ContactDetail({ prospect, tags }: { prospect: Prospect; tags: Tag[] }) 
         </div>
       </div>
 
-      <div className="flex gap-2">
-        <Button size="sm" asChild>
-          <a href={`mailto:${prospect.email}`}><Mail className="w-4 h-4 mr-1" /> Email</a>
-        </Button>
+      <div className="flex gap-2 flex-wrap">
+        <a href={`mailto:${prospect.email}`} className={btnPrimary}>
+          <Mail className="w-4 h-4" /> Email
+        </a>
         {prospect.phone_number && (
-          <Button size="sm" variant="outline" asChild>
-            <a href={`tel:${prospect.phone_number}`}><Phone className="w-4 h-4 mr-1" /> Call</a>
-          </Button>
+          <a href={`tel:${prospect.phone_number}`} className={btnBase}>
+            <Phone className="w-4 h-4" /> Call
+          </a>
         )}
-        <Button size="sm" variant="outline">
-          <Send className="w-4 h-4 mr-1" /> Enroll
-        </Button>
+        <button className={btnBase}>
+          <Send className="w-4 h-4" /> Enroll
+        </button>
       </div>
 
       <Card>
@@ -310,7 +309,7 @@ function ContactDetail({ prospect, tags }: { prospect: Prospect; tags: Tag[] }) 
           <div className="flex gap-2">
             <Input placeholder="Add a note..." value={note} onChange={(e) => setNote(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && logNote()} />
-            <Button size="sm" onClick={logNote}>Log</Button>
+            <button className={btnPrimary} onClick={logNote}>Log</button>
           </div>
           {activities.length ? activities.map((a) => (
             <div key={a.id} className="text-xs border-l-2 border-primary/40 pl-3 py-1">

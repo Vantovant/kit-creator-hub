@@ -101,8 +101,8 @@ function stripHtml(html: string): string {
 }
 
 function bodyPreview(text: string | null, html: string | null): string | null {
-  if (text) return text.replace(/\s+/g, " ").trim().slice(0, 400);
   if (html) return stripHtml(html).replace(/\s+/g, " ").trim().slice(0, 400);
+  if (text) return text.replace(/\s+/g, " ").trim().slice(0, 400);
   return null;
 }
 

@@ -57,7 +57,11 @@ function stripHtml(html: string): string {
 }
 
 function messageBody(msg: any): string {
-  return String(msg.body_text || (msg.body_html ? stripHtml(msg.body_html) : "") || msg.body_preview || msg.snippet || "");
+  const text = String(msg.body_text || "").trim();
+  const htmlText = msg.body_html ? stripHtml(msg.body_html) : "";
+  const textLooksLikeFallback = /^this is the body in plain text for non-html mail clients\.?$/i.test(text);
+  if (htmlText && (textLooksLikeFallback || htmlText.length > text.length)) return htmlText;
+  return String(text || htmlText || msg.body_preview || msg.snippet || "");
 }
 
 function matchesRule(msg: any, rule: any): boolean {

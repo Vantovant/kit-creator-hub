@@ -116,6 +116,20 @@ Deno.serve(async (req) => {
       updates.handled_at = new Date().toISOString();
       logAction = "handled";
       break;
+    case "unsnooze":
+      updates.snoozed_until = null;
+      updates.waiting_on = null;
+      // if archived, restore INBOX label so it shows up again
+      if (msg.is_archived) {
+        addLabels.push("INBOX");
+        updates.is_archived = false;
+      }
+      logAction = "unsnooze";
+      break;
+    case "clear_waiting":
+      updates.waiting_on = null;
+      logAction = "clear_waiting";
+      break;
     case "label_add":
       if (action_data.label) addLabels.push(action_data.label);
       logAction = "label_add";

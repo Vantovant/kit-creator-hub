@@ -56,3 +56,6 @@ verify_jwt = false
 
 [functions.inbox-classify]
 verify_jwt = false
+
+[functions.inbox-unsnooze]
+verify_jwt = false

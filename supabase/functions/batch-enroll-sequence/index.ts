@@ -165,6 +165,22 @@ serve(async (req: Request) => {
         const firstName = sub.first_name || "there";
         let cumulativeDelayHours = 0;
 
+        try {
+          const tagName = `Sequence:${sequence_id}`;
+          const { data: tag } = await adminClient
+            .from("tags")
+            .upsert({ name: tagName }, { onConflict: "name" })
+            .select("id")
+            .single();
+          if (sub.id && tag?.id) {
+            await adminClient
+              .from("prospect_tags")
+              .upsert({ prospect_id: sub.id, tag_id: tag.id }, { onConflict: "prospect_id,tag_id" });
+          }
+        } catch (tagErr) {
+          console.error("Batch sequence tag sync failed:", tagErr);
+        }
+
         for (let i = 0; i < steps.length; i++) {
           const step = steps[i];
 

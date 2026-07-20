@@ -144,10 +144,11 @@ Deno.serve(async (req) => {
     } catch { /* hub may not echo per-row results yet */ }
 
     const lastUpdated = prospects[prospects.length - 1].updated_at;
+    const newPushedCount = (state.pushed_count ?? 0) + prospects.length;
     await supabase.from("hub_sync_state").upsert({
       app_key: APP_KEY,
-      last_pushed_at: lastUpdated,
-      pushed_count: (state.pushed_count ?? 0) + prospects.length,
+      last_pushed_at: usedOffset ? state.last_pushed_at : lastUpdated,
+      pushed_count: newPushedCount,
       last_error: hubResp.status >= 400 ? `push http ${hubResp.status}` : null,
       updated_at: new Date().toISOString(),
     }, { onConflict: "app_key" });
@@ -157,6 +158,7 @@ Deno.serve(async (req) => {
       action, pushed: prospects.length, applied_hub_ids: applied,
       hub_status: hubResp.status,
       done: prospects.length < batchSize,
+      next_offset: usedOffset ? newPushedCount : undefined,
       cursor: lastUpdated,
     });
   }

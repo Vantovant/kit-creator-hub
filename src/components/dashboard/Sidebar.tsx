@@ -26,6 +26,7 @@ import { useAuth } from "@/hooks/useAuth";
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { name: "Subscribers", href: "/dashboard/subscribers", icon: Users },
+  { name: "Contacts", href: "/dashboard/contacts", icon: Users },
   { name: "Broadcasts", href: "/dashboard/broadcasts", icon: Mail },
   { name: "Automations", href: "/dashboard/automations", icon: Zap },
   { name: "Sequences", href: "/dashboard/sequences", icon: ListOrdered },

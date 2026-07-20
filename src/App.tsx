@@ -20,6 +20,7 @@ import KnowledgeBasePage from "@/app/dashboard/knowledge-base/page";
 import PlanPage from "@/app/dashboard/plan/page";
 import RepliesPage from "@/app/dashboard/replies/page";
 import InboxPage from "@/app/dashboard/inbox/page";
+import ContactsPage from "@/app/dashboard/contacts/page";
 import WelcomeForm from "@/pages/WelcomeForm";
 import SequenceForm from "@/pages/SequenceForm";
 import VantoOSBetaForm from "@/pages/VantoOSBetaForm";
@@ -59,6 +60,7 @@ function App() {
           <Route path="replies" element={<RepliesPage />} />
           <Route path="email" element={<RepliesPage />} />
           <Route path="inbox" element={<InboxPage />} />
+          <Route path="contacts" element={<ContactsPage />} />
           <Route path="settings" element={<SettingsPage />} />
         </Route>
       </Routes>

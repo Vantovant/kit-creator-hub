@@ -3,6 +3,8 @@ import { Badge } from "@/components/ui/badge";
 import { Archive, Star, Clock, CheckCircle2, Reply, Trash2, MailOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+const iconBtn = "p-2 rounded-md hover:bg-muted transition-colors text-muted-foreground hover:text-foreground";
+
 export function InboxMessageDetail({
   message,
   onAction,
@@ -20,38 +22,38 @@ export function InboxMessageDetail({
 
   return (
     <div className="h-full flex flex-col bg-background">
-      <div className="flex items-center justify-between px-6 py-4 border-b">
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon" onClick={() => onAction(message.is_archived ? "unarchive" : "archive")}>
+      <div className="flex items-center justify-between px-4 py-3 border-b">
+        <div className="flex items-center gap-1">
+          <button className={iconBtn} onClick={() => onAction(message.is_archived ? "unarchive" : "archive")}>
             <Archive className={cn("w-4 h-4", message.is_archived && "text-primary")} />
-          </Button>
-          <Button variant="ghost" size="icon" onClick={() => onAction(message.is_starred ? "unstar" : "star")}>
+          </button>
+          <button className={iconBtn} onClick={() => onAction(message.is_starred ? "unstar" : "star")}>
             <Star className={cn("w-4 h-4", message.is_starred && "fill-yellow-400 text-yellow-400")} />
-          </Button>
-          <Button variant="ghost" size="icon" onClick={() => onAction("snooze")}>
+          </button>
+          <button className={iconBtn} onClick={() => onAction("snooze")}>
             <Clock className="w-4 h-4" />
-          </Button>
-          <Button variant="ghost" size="icon" onClick={() => onAction("waiting_on")}>
+          </button>
+          <button className={iconBtn} onClick={() => onAction("waiting_on")}>
             <CheckCircle2 className="w-4 h-4" />
-          </Button>
-          <Button variant="ghost" size="icon" onClick={() => onAction("handled")}>
+          </button>
+          <button className={iconBtn} onClick={() => onAction("handled")}>
             <MailOpen className="w-4 h-4" />
-          </Button>
+          </button>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon" onClick={() => onAction("reply")}>
+        <div className="flex items-center gap-1">
+          <button className={iconBtn} onClick={() => onAction("reply")}>
             <Reply className="w-4 h-4" />
-          </Button>
-          <Button variant="ghost" size="icon" onClick={() => onAction("trash")}>
+          </button>
+          <button className={iconBtn} onClick={() => onAction("trash")}>
             <Trash2 className="w-4 h-4" />
-          </Button>
+          </button>
         </div>
       </div>
 
       <div className="flex-1 overflow-y-auto p-6 space-y-4">
         <div>
           <h2 className="text-xl font-semibold">{message.subject || "(no subject)"}</h2>
-          <div className="flex items-center gap-2 mt-2 text-sm text-muted-foreground">
+          <div className="flex items-center gap-2 mt-2 text-sm text-muted-foreground flex-wrap">
             <span className="font-medium text-foreground">{message.sender_name || message.sender}</span>
             <span>&lt;{message.sender}&gt;</span>
             <span>•</span>
@@ -76,5 +78,3 @@ export function InboxMessageDetail({
     </div>
   );
 }
-
-import { cn } from "@/lib/utils";

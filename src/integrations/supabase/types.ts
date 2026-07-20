@@ -1176,6 +1176,7 @@ export type Database = {
           lead_temperature: string | null
           lead_type: string | null
           meeting_time: string | null
+          needs_enrichment: boolean
           next_action: string | null
           phone_normalized: string | null
           phone_number: string | null
@@ -1212,6 +1213,7 @@ export type Database = {
           lead_temperature?: string | null
           lead_type?: string | null
           meeting_time?: string | null
+          needs_enrichment?: boolean
           next_action?: string | null
           phone_normalized?: string | null
           phone_number?: string | null
@@ -1248,6 +1250,7 @@ export type Database = {
           lead_temperature?: string | null
           lead_type?: string | null
           meeting_time?: string | null
+          needs_enrichment?: boolean
           next_action?: string | null
           phone_normalized?: string | null
           phone_number?: string | null
@@ -1654,6 +1657,7 @@ export type Database = {
           lead_temperature: string | null
           lead_type: string | null
           meeting_time: string | null
+          needs_enrichment: boolean
           next_action: string | null
           phone_normalized: string | null
           phone_number: string | null

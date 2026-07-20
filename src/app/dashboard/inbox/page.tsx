@@ -152,51 +152,83 @@ export default function InboxPage() {
       />
 
       <div className="flex-1 flex overflow-hidden">
-        <aside className="w-56 shrink-0 border-r flex flex-col">
-          <div className="p-4 border-b space-y-3">
-            {accountsLoading ? (
-              <p className="text-sm text-muted-foreground">Loading accounts...</p>
-            ) : (
-              <select
-                className="w-full text-sm bg-background border rounded-md px-2 py-1.5"
-                value={scope || ""}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  setScope(v as any);
-                  if (v !== "all") setSelectedId(v);
-                }}
-              >
-                <option value="all">📥 All Inboxes</option>
-                {accounts.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.label || a.email_address}
-                  </option>
-                ))}
-              </select>
-            )}
-            <div className="flex gap-2">
-              <button
-                onClick={handleSync}
-                disabled={syncing || !scope}
-                className="flex-1 flex items-center justify-center gap-1.5 text-xs px-2 py-1.5 rounded-md border hover:bg-muted disabled:opacity-50"
-              >
-                <RefreshCw className={cn("w-3.5 h-3.5", syncing && "animate-spin")} />
-                Sync
-              </button>
+        <aside className="w-60 shrink-0 border-r flex flex-col">
+          <div className="p-3 border-b space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Mailboxes</span>
               <button
                 onClick={() => setAddOpen(true)}
-                className="flex items-center justify-center gap-1.5 text-xs px-2 py-1.5 rounded-md border hover:bg-muted"
+                className="flex items-center gap-1 text-[11px] px-1.5 py-1 rounded hover:bg-muted"
                 title="Add another Gmail account"
               >
-                <Plus className="w-3.5 h-3.5" />
-                Add
+                <Plus className="w-3 h-3" /> Add
               </button>
             </div>
-            {scope === "all" ? (
-              <p className="text-xs text-muted-foreground flex items-center gap-1"><Layers className="w-3 h-3" /> Merged view of {accounts.length} accounts</p>
-            ) : selected?.last_sync_at ? (
-              <p className="text-xs text-muted-foreground">Last sync: {new Date(selected.last_sync_at).toLocaleString()}</p>
-            ) : null}
+
+            {accountsLoading ? (
+              <p className="text-xs text-muted-foreground">Loading…</p>
+            ) : (
+              <div className="space-y-1">
+                <button
+                  onClick={() => setScope("all")}
+                  className={cn(
+                    "w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-sm transition-colors",
+                    scope === "all" ? "bg-muted font-medium" : "hover:bg-muted/50",
+                  )}
+                >
+                  <Layers className="w-3.5 h-3.5" />
+                  <span className="truncate flex-1 text-left">All Inboxes</span>
+                  <span className="text-[10px] text-muted-foreground">{accounts.length}</span>
+                </button>
+                {accounts.map((a) => {
+                  const active = scope === a.id;
+                  const needsAuth = a.status === "needs_authorization";
+                  return (
+                    <div
+                      key={a.id}
+                      className={cn(
+                        "group rounded-md border transition-colors",
+                        active ? "border-primary/40 bg-muted" : "border-transparent hover:bg-muted/50",
+                      )}
+                    >
+                      <button
+                        onClick={() => { setScope(a.id); setSelectedId(a.id); }}
+                        className="w-full flex items-center gap-2 px-2 py-1.5 text-left"
+                      >
+                        <Inbox className="w-3.5 h-3.5 shrink-0" />
+                        <span className="truncate flex-1 text-sm">{a.label || a.email_address}</span>
+                        {needsAuth && (
+                          <span className="text-[9px] px-1 rounded bg-amber-500/20 text-amber-600 dark:text-amber-400">AUTH</span>
+                        )}
+                      </button>
+                      {active && (
+                        <div className="flex items-center gap-1 px-2 pb-1.5 text-[10px] text-muted-foreground">
+                          <button
+                            onClick={() => syncAccount(a.id).then(() => refresh())}
+                            className="flex items-center gap-1 px-1.5 py-0.5 rounded border hover:bg-background"
+                            title="Sync this mailbox"
+                          >
+                            <RefreshCw className="w-3 h-3" /> Sync
+                          </button>
+                          <span className="truncate">
+                            {a.last_sync_at ? `Last: ${new Date(a.last_sync_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : "Not synced"}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            <button
+              onClick={handleSync}
+              disabled={syncing || !scope}
+              className="w-full flex items-center justify-center gap-1.5 text-xs px-2 py-1.5 rounded-md border hover:bg-muted disabled:opacity-50"
+            >
+              <RefreshCw className={cn("w-3.5 h-3.5", syncing && "animate-spin")} />
+              {scope === "all" ? "Sync all" : "Sync selected"}
+            </button>
           </div>
 
           <nav className="flex-1 p-2 space-y-0.5">

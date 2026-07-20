@@ -14,6 +14,8 @@ export type ProspectDetail = {
   first_name: string | null;
   full_name: string | null;
   phone_number: string | null;
+  aplgo_id: string | null;
+  needs_enrichment: boolean;
   lead_type: string | null;
   registration_status: string | null;
   go_status: string | null;
@@ -65,7 +67,10 @@ export function Contact360Panel({ message }: { message: InboxMessage | null }) {
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-base">{prospect.full_name || prospect.first_name || "Unknown"}</CardTitle>
-              <p className="text-xs text-muted-foreground">{prospect.email}</p>
+              <p className="text-xs text-muted-foreground">
+                {prospect.email.endsWith("@aplgo.enrollment.pending") ? "— (no real email yet) —" : prospect.email}
+              </p>
+              {prospect.aplgo_id && <p className="text-xs text-muted-foreground">APLGO ID: {prospect.aplgo_id}</p>}
             </CardHeader>
             <CardContent className="space-y-2 text-sm">
               {prospect.phone_number && <p>Phone: {prospect.phone_number}</p>}
@@ -74,6 +79,11 @@ export function Contact360Panel({ message }: { message: InboxMessage | null }) {
               <p>Engagement: {prospect.engagement_score ?? 0}</p>
             </CardContent>
           </Card>
+
+          {prospect.needs_enrichment && (
+            <EnrichmentNudge prospect={prospect} onSaved={() => window.location.reload()} />
+          )}
+
 
           <Card>
             <CardHeader className="pb-2">

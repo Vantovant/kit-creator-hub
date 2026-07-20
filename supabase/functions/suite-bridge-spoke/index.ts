@@ -34,7 +34,7 @@
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 
-const APP_KEY = "mlm_course"; // <-- change this per app
+const APP_KEY = "zazi_email"; // <-- change this per app
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",

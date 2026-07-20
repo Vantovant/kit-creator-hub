@@ -16,7 +16,7 @@ serve(async (req: Request) => {
   try {
     // Simple in-memory rate limiting (resets on cold start)
     const body = await req.json();
-    const { email, first_name, source, sequence_id, ref_code } = body;
+    const { email, first_name, source, sequence_id, ref_code, phone_number, aplgo_id, needs_enrichment } = body;
 
     // Sanitize ref_code (pass-through only, not persisted) — alphanumeric + - _ up to 80 chars
     const sanitizedRefCode = ref_code && typeof ref_code === "string"
@@ -104,6 +104,9 @@ serve(async (req: Request) => {
         first_name: sanitizedName,
         source: sanitizedSource,
         last_activity_at: new Date().toISOString(),
+        ...(phone_number ? { phone_number: String(phone_number).slice(0, 40) } : {}),
+        ...(aplgo_id ? { aplgo_id: String(aplgo_id).slice(0, 40) } : {}),
+        ...(needs_enrichment === true ? { needs_enrichment: true } : {}),
       },
       { onConflict: "email" }
     );

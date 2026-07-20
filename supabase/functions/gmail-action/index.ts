@@ -35,6 +35,41 @@ async function gatewayModify(messageId: string, add: string[], remove: string[],
   return JSON.parse(text);
 }
 
+function normalizeEmail(raw: string): string {
+  return raw.toLowerCase().replace(/\s/g, "").replace(/<|>/g, "");
+}
+
+function getGmailConnectionKeys() {
+  const keys: { envName: string; key: string }[] = [];
+  const primary = Deno.env.get("GOOGLE_MAIL_API_KEY");
+  if (primary) keys.push({ envName: "GOOGLE_MAIL_API_KEY", key: primary });
+  for (let i = 2; i <= 10; i += 1) {
+    const envName = `GOOGLE_MAIL_API_KEY_${i}`;
+    const key = Deno.env.get(envName);
+    if (key) keys.push({ envName, key });
+  }
+  return keys;
+}
+
+async function resolveConnectionKeyForEmail(email: string, lovableKey: string): Promise<string> {
+  const expectedEmail = normalizeEmail(email);
+  for (const connection of getGmailConnectionKeys()) {
+    try {
+      const res = await fetch(`${GATEWAY_URL}/users/me/profile`, {
+        headers: {
+          "Authorization": `Bearer ${lovableKey}`,
+          "X-Connection-Api-Key": connection.key,
+        },
+      });
+      if (!res.ok) continue;
+      const profile = await res.json();
+      if (normalizeEmail(profile?.emailAddress || "") === expectedEmail) return connection.key;
+    } catch { /* try next linked Gmail connection */ }
+  }
+
+  throw new Error(`No linked Gmail authorization matches ${email}. Authorize that mailbox in Settings, then refresh authorized accounts.`);
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
@@ -45,8 +80,7 @@ Deno.serve(async (req) => {
   );
 
   const lovableKey = Deno.env.get("LOVABLE_API_KEY");
-  const connectionKey = Deno.env.get("GOOGLE_MAIL_API_KEY");
-  if (!lovableKey || !connectionKey) {
+  if (!lovableKey || getGmailConnectionKeys().length === 0) {
     return json({ error: "missing_gateway_keys" }, 500);
   }
 
@@ -64,6 +98,20 @@ Deno.serve(async (req) => {
     .single();
 
   if (msgErr || !msg) return json({ error: "message_not_found" }, 404);
+
+  const { data: account } = await supabase
+    .from("inbox_accounts")
+    .select("email_address")
+    .eq("id", msg.account_id)
+    .maybeSingle();
+  if (!account?.email_address) return json({ error: "account_not_found" }, 404);
+
+  let connectionKey: string;
+  try {
+    connectionKey = await resolveConnectionKeyForEmail(account.email_address, lovableKey);
+  } catch (e: any) {
+    return json({ error: "gmail_authorization_required", detail: e.message }, 409);
+  }
 
   const updates: any = {};
   const addLabels: string[] = [];

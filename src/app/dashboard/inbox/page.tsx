@@ -245,6 +245,7 @@ export default function InboxPage() {
       <AddAccountModal
         open={addOpen}
         onClose={() => setAddOpen(false)}
+        onOpenSettings={() => { window.location.href = "/dashboard/settings?tab=email"; }}
         onAdd={async (email, label) => { await addAccount(email, label); await refreshAccounts(); }}
       />
       <HelpOverlay open={helpOpen} onClose={() => setHelpOpen(false)} />

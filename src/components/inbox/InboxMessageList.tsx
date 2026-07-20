@@ -55,7 +55,7 @@ export function InboxMessageList({
                     {msg.sender_name || msg.sender}
                   </p>
                   <span className="text-xs text-muted-foreground whitespace-nowrap">
-                    {formatDistanceToNow(new Date(msg.date), { addSuffix: true })}
+                    {shortRelative(new Date(msg.date))}
                   </span>
                 </div>
                 <p className={cn("text-sm truncate", !msg.is_read && "font-medium")}>

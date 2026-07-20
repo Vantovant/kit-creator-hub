@@ -1,7 +1,7 @@
 import { InboxMessage } from "@/hooks/useInbox";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Archive, Star, Clock, CheckCircle2, Reply, Trash2, MailOpen } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 export function InboxMessageDetail({
   message,

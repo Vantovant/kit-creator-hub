@@ -122,7 +122,7 @@ function getGmailConnectionKeys() {
   const primary = Deno.env.get("GOOGLE_MAIL_API_KEY");
   if (primary) keys.push({ envName: "GOOGLE_MAIL_API_KEY", key: primary });
 
-  for (let i = 2; i <= 10; i += 1) {
+  for (let i = 1; i <= 10; i += 1) {
     const envName = `GOOGLE_MAIL_API_KEY_${i}`;
     const key = Deno.env.get(envName);
     if (key) keys.push({ envName, key });

@@ -52,16 +52,6 @@ function matchesRule(msg: any, rule: any): boolean {
   return tests.length > 0 && tests.every(Boolean);
 }
 
-async function aiClassify(msg: any, lovableKey: string) {
-  const prompt = `You classify inbound Gmail messages for a CRM.
-Return STRICT JSON: {"type":"registration|reply|general","confidence":0.0-1.0,"summary":"1 line","entities":{"email":"","first_name":"","phone":"","level":"","intent":""}}
-- "registration" = a system/business notification that a new person signed up, registered, ordered, or joined.
-- "reply" = a human replying to a prior conversation (interest, question, objection, unsubscribe request).
-- "general" = anything else (newsletter, receipt, spam).
-
-FROM: ${msg.sender}
-SUBJECT: ${msg.subject}
-BODY: ${(msg.body_preview || msg.snippet || "").slice(0, 1200)}`;
 
 async function aiClassify(msg: any, lovableKey: string) {
   const robot = isRobotSender(msg.sender);

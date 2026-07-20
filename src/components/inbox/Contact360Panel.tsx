@@ -3,9 +3,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { InboxMessage } from "@/hooks/useInbox";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Mail, Tag, ListOrdered, UserPlus, Bot, Loader2, AlertTriangle, RefreshCw } from "lucide-react";
+import { Mail, Tag, ListOrdered, UserPlus, Bot, Loader2, AlertTriangle, RefreshCw, Pencil } from "lucide-react";
 import { TimelineCard } from "./TimelineCard";
 import { NextBestActionCard } from "./NextBestActionCard";
+import { ContactDrawer } from "@/components/contacts/ContactDrawer";
 
 
 const ROBOT_PATTERNS = [/^robot@/i, /^no-?reply@/i, /^donotreply@/i, /^notifications?@/i, /^mailer-daemon@/i, /^postmaster@/i, /^system@/i, /^bounce@/i];
@@ -30,6 +31,7 @@ export type ProspectDetail = {
 
 export function Contact360Panel({ message }: { message: InboxMessage | null }) {
   const [prospect, setProspect] = useState<ProspectDetail | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -69,11 +71,22 @@ export function Contact360Panel({ message }: { message: InboxMessage | null }) {
         <>
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-base">{prospect.full_name || prospect.first_name || "Unknown"}</CardTitle>
-              <p className="text-xs text-muted-foreground">
-                {prospect.email.endsWith("@aplgo.enrollment.pending") ? "— (no real email yet) —" : prospect.email}
-              </p>
-              {prospect.aplgo_id && <p className="text-xs text-muted-foreground">APLGO ID: {prospect.aplgo_id}</p>}
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <CardTitle className="text-base truncate">{prospect.full_name || prospect.first_name || "Unknown"}</CardTitle>
+                  <p className="text-xs text-muted-foreground truncate">
+                    {prospect.email.endsWith("@aplgo.enrollment.pending") ? "— (no real email yet) —" : prospect.email}
+                  </p>
+                  {prospect.aplgo_id && <p className="text-xs text-muted-foreground">APLGO ID: {prospect.aplgo_id}</p>}
+                </div>
+                <button
+                  onClick={() => setDrawerOpen(true)}
+                  className="shrink-0 inline-flex items-center gap-1 px-2 py-1 text-xs rounded border hover:bg-accent"
+                  title="Open unified contact drawer"
+                >
+                  <Pencil className="w-3 h-3" /> Edit
+                </button>
+              </div>
             </CardHeader>
             <CardContent className="space-y-2 text-sm">
               {prospect.phone_number && <p>Phone: {prospect.phone_number}</p>}
@@ -82,6 +95,13 @@ export function Contact360Panel({ message }: { message: InboxMessage | null }) {
               <p>Engagement: {prospect.engagement_score ?? 0}</p>
             </CardContent>
           </Card>
+          {drawerOpen && (
+            <ContactDrawer
+              prospectId={prospect.id}
+              onClose={() => setDrawerOpen(false)}
+              onSaved={() => { /* keep panel data in place; user can refresh */ }}
+            />
+          )}
 
           {prospect.needs_enrichment && (
             <EnrichmentNudge prospect={prospect} onSaved={() => window.location.reload()} />

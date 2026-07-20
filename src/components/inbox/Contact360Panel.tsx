@@ -267,3 +267,52 @@ function EnrichmentNudge({ prospect, onSaved }: { prospect: ProspectDetail; onSa
     </Card>
   );
 }
+
+function GoogleContactsSyncCard() {
+  const [running, setRunning] = useState(false);
+  const [result, setResult] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  const run = async () => {
+    setRunning(true); setErr(null); setResult(null);
+    try {
+      const { data, error } = await supabase.functions.invoke("google-contacts-sync", { body: {} });
+      if (error) throw error;
+      if (data?.needs_setup) {
+        setErr(data.detail || "Google Contacts connector not configured. Ask an admin to connect google_contacts in App User Connectors.");
+      } else {
+        setResult(`Matched ${data?.matched ?? 0} • Updated ${data?.updated ?? 0} • Scanned ${data?.scanned ?? 0}`);
+      }
+    } catch (e: any) {
+      setErr(e.message || "Sync failed");
+    }
+    setRunning(false);
+  };
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <div className="flex items-center gap-2">
+          <RefreshCw className="w-4 h-4" />
+          <CardTitle className="text-sm">Google Contacts sync</CardTitle>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        <p className="text-xs text-muted-foreground">
+          Pull Google People API contacts and auto-fill missing email/phone for APLGO enrollees.
+        </p>
+        <button
+          onClick={run}
+          disabled={running}
+          className="w-full text-xs border rounded py-1.5 font-medium hover:bg-muted disabled:opacity-50 inline-flex items-center justify-center gap-1"
+        >
+          {running ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+          {running ? "Syncing…" : "Sync now"}
+        </button>
+        {result && <p className="text-xs text-emerald-500">{result}</p>}
+        {err && <p className="text-xs text-destructive">{err}</p>}
+      </CardContent>
+    </Card>
+  );
+}
+

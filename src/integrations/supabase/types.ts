@@ -397,6 +397,359 @@ export type Database = {
         }
         Relationships: []
       }
+      inbox_accounts: {
+        Row: {
+          created_at: string
+          deleted_at: string | null
+          display_name: string | null
+          email_address: string
+          history_id: string | null
+          id: string
+          is_active: boolean
+          label: string | null
+          last_sync_at: string | null
+          provider: string
+          status: string
+          sync_error: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          deleted_at?: string | null
+          display_name?: string | null
+          email_address: string
+          history_id?: string | null
+          id?: string
+          is_active?: boolean
+          label?: string | null
+          last_sync_at?: string | null
+          provider?: string
+          status?: string
+          sync_error?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          deleted_at?: string | null
+          display_name?: string | null
+          email_address?: string
+          history_id?: string | null
+          id?: string
+          is_active?: boolean
+          label?: string | null
+          last_sync_at?: string | null
+          provider?: string
+          status?: string
+          sync_error?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      inbox_action_log: {
+        Row: {
+          action_data: Json
+          action_type: string
+          created_at: string
+          id: string
+          message_id: string
+          related_id: string | null
+          user_id: string
+        }
+        Insert: {
+          action_data?: Json
+          action_type: string
+          created_at?: string
+          id?: string
+          message_id: string
+          related_id?: string | null
+          user_id: string
+        }
+        Update: {
+          action_data?: Json
+          action_type?: string
+          created_at?: string
+          id?: string
+          message_id?: string
+          related_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inbox_action_log_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "inbox_messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inbox_extracts: {
+        Row: {
+          confidence: number
+          created_at: string
+          detected_type: string
+          entities_json: Json
+          id: string
+          message_id: string
+          prompt_version: string
+          requires_user_confirmation: boolean
+          suggested_actions_json: Json
+          summary: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          confidence?: number
+          created_at?: string
+          detected_type: string
+          entities_json?: Json
+          id?: string
+          message_id: string
+          prompt_version?: string
+          requires_user_confirmation?: boolean
+          suggested_actions_json?: Json
+          summary?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          confidence?: number
+          created_at?: string
+          detected_type?: string
+          entities_json?: Json
+          id?: string
+          message_id?: string
+          prompt_version?: string
+          requires_user_confirmation?: boolean
+          suggested_actions_json?: Json
+          summary?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inbox_extracts_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: true
+            referencedRelation: "inbox_messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inbox_messages: {
+        Row: {
+          account_id: string
+          body_preview: string | null
+          category: string | null
+          cc: string[] | null
+          created_at: string
+          date: string
+          deleted_at: string | null
+          handled_at: string | null
+          id: string
+          intent: string | null
+          is_archived: boolean
+          is_read: boolean
+          is_starred: boolean
+          label_ids: string[] | null
+          message_id: string
+          prospect_id: string | null
+          recipients: string[] | null
+          sender: string
+          sender_name: string | null
+          snippet: string | null
+          snoozed_until: string | null
+          subject: string | null
+          thread_id: string | null
+          updated_at: string
+          urgency: string | null
+          user_id: string
+          waiting_on: string | null
+        }
+        Insert: {
+          account_id: string
+          body_preview?: string | null
+          category?: string | null
+          cc?: string[] | null
+          created_at?: string
+          date: string
+          deleted_at?: string | null
+          handled_at?: string | null
+          id?: string
+          intent?: string | null
+          is_archived?: boolean
+          is_read?: boolean
+          is_starred?: boolean
+          label_ids?: string[] | null
+          message_id: string
+          prospect_id?: string | null
+          recipients?: string[] | null
+          sender: string
+          sender_name?: string | null
+          snippet?: string | null
+          snoozed_until?: string | null
+          subject?: string | null
+          thread_id?: string | null
+          updated_at?: string
+          urgency?: string | null
+          user_id: string
+          waiting_on?: string | null
+        }
+        Update: {
+          account_id?: string
+          body_preview?: string | null
+          category?: string | null
+          cc?: string[] | null
+          created_at?: string
+          date?: string
+          deleted_at?: string | null
+          handled_at?: string | null
+          id?: string
+          intent?: string | null
+          is_archived?: boolean
+          is_read?: boolean
+          is_starred?: boolean
+          label_ids?: string[] | null
+          message_id?: string
+          prospect_id?: string | null
+          recipients?: string[] | null
+          sender?: string
+          sender_name?: string | null
+          snippet?: string | null
+          snoozed_until?: string | null
+          subject?: string | null
+          thread_id?: string | null
+          updated_at?: string
+          urgency?: string | null
+          user_id?: string
+          waiting_on?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inbox_messages_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "inbox_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inbox_messages_prospect_id_fkey"
+            columns: ["prospect_id"]
+            isOneToOne: false
+            referencedRelation: "prospects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inbox_oauth_tokens: {
+        Row: {
+          access_token_encrypted: string
+          account_id: string
+          created_at: string
+          expires_at: string | null
+          id: string
+          refresh_token_encrypted: string | null
+          scopes: string[]
+          token_type: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          access_token_encrypted: string
+          account_id: string
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          refresh_token_encrypted?: string | null
+          scopes?: string[]
+          token_type?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          access_token_encrypted?: string
+          account_id?: string
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          refresh_token_encrypted?: string | null
+          scopes?: string[]
+          token_type?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inbox_oauth_tokens_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: true
+            referencedRelation: "inbox_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inbox_registration_rules: {
+        Row: {
+          body_pattern: string | null
+          brand: string | null
+          created_at: string
+          default_tag: string | null
+          from_pattern: string | null
+          id: string
+          is_active: boolean
+          min_confidence: number
+          priority: number
+          rule_name: string
+          sequence_id: string | null
+          subject_pattern: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          body_pattern?: string | null
+          brand?: string | null
+          created_at?: string
+          default_tag?: string | null
+          from_pattern?: string | null
+          id?: string
+          is_active?: boolean
+          min_confidence?: number
+          priority?: number
+          rule_name: string
+          sequence_id?: string | null
+          subject_pattern?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          body_pattern?: string | null
+          brand?: string | null
+          created_at?: string
+          default_tag?: string | null
+          from_pattern?: string | null
+          id?: string
+          is_active?: boolean
+          min_confidence?: number
+          priority?: number
+          rule_name?: string
+          sequence_id?: string | null
+          subject_pattern?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inbox_registration_rules_sequence_id_fkey"
+            columns: ["sequence_id"]
+            isOneToOne: false
+            referencedRelation: "email_sequences"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       kb_chunks: {
         Row: {
           chunk_index: number

@@ -181,12 +181,23 @@ Deno.serve(async (req) => {
         intent: null,
       };
 
-      const { error: upsertErr } = await supabase
+      const { data: upserted, error: upsertErr } = await supabase
         .from("inbox_messages")
-        .upsert(upsert, { onConflict: "account_id, message_id" });
+        .upsert(upsert, { onConflict: "account_id, message_id" })
+        .select("id")
+        .single();
 
       if (upsertErr) throw upsertErr;
       stored.push(full.id);
+
+      // Fire-and-forget AI classify
+      if (upserted?.id) {
+        fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/inbox-classify`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "apikey": Deno.env.get("SUPABASE_ANON_KEY")! },
+          body: JSON.stringify({ message_id: upserted.id }),
+        }).catch(() => {});
+      }
     } catch (e: any) {
       errors.push(`${m.id}: ${e.message}`);
     }

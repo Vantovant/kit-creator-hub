@@ -180,6 +180,69 @@ Deno.serve(async (req) => {
     return json({ ok: true, app: APP_KEY, received: "directive", posted_back: postResult });
   }
 
+  // ---- contact_upsert (hub → spoke): merge one or more contacts locally ----
+  if (body?.kind === "contact_upsert" || body?.kind === "contacts_upsert") {
+    const sb = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    );
+    const list: any[] = Array.isArray(body.contacts) ? body.contacts : [body];
+    let merged = 0;
+    for (const c of list) {
+      const id = c?.identity ?? {};
+      const at = c?.attributes ?? {};
+      const email = (id.email ?? "").toLowerCase() || null;
+      const phone = id.phone_normalized ?? null;
+      if (!email && !phone && !c?.hub_contact_id) continue;
+
+      let existing: any = null;
+      if (c?.hub_contact_id) {
+        const { data } = await sb.from("prospects").select("*").eq("hub_contact_id", c.hub_contact_id).maybeSingle();
+        existing = data;
+      }
+      if (!existing && email) {
+        const { data } = await sb.from("prospects").select("*").eq("email", email).maybeSingle();
+        existing = data;
+      }
+      if (!existing && phone) {
+        const { data } = await sb.from("prospects").select("*").eq("phone_normalized", phone).maybeSingle();
+        existing = data;
+      }
+
+      const patch: Record<string, unknown> = {
+        hub_contact_id: c.hub_contact_id ?? existing?.hub_contact_id ?? null,
+        hub_version: c.hub_version ?? existing?.hub_version ?? null,
+      };
+      const setIf = (k: string, v: any) => { if (v != null && v !== "") patch[k] = v; };
+      setIf("full_name", id.name);
+      setIf("first_name", id.first_name);
+      setIf("last_name", id.last_name);
+      setIf("whatsapp_display_name", id.whatsapp_display_name);
+      setIf("email", email);
+      setIf("phone_normalized", phone);
+      setIf("phone_raw", phone);
+      setIf("lead_type", at.lead_type);
+      setIf("lead_temperature", at.temperature);
+      setIf("contact_source", at.contact_source);
+      setIf("contact_confidence", at.contact_confidence);
+      setIf("aplgo_id", at.aplgo_id);
+      setIf("additional_notes", at.notes);
+
+      if (existing) {
+        await sb.from("prospects").update(patch).eq("id", existing.id);
+      } else {
+        await sb.from("prospects").insert({
+          ...patch,
+          email: email ?? `hub-${crypto.randomUUID()}@placeholder.local`,
+          source: "vantoos_hub",
+          unsubscribed: false,
+        });
+      }
+      merged++;
+    }
+    return json({ ok: true, app: APP_KEY, received: "contact_upsert", merged });
+  }
+
   // ---- snapshot_request → post a snapshot back to hub ----
   if (body?.kind === "snapshot_request") {
     if (!hubUrl) return json({ error: "spoke_missing_hub_url" }, 500);

@@ -397,6 +397,36 @@ export type Database = {
         }
         Relationships: []
       }
+      hub_sync_state: {
+        Row: {
+          app_key: string
+          last_error: string | null
+          last_pulled_at: string | null
+          last_pushed_at: string | null
+          pulled_count: number
+          pushed_count: number
+          updated_at: string
+        }
+        Insert: {
+          app_key: string
+          last_error?: string | null
+          last_pulled_at?: string | null
+          last_pushed_at?: string | null
+          pulled_count?: number
+          pushed_count?: number
+          updated_at?: string
+        }
+        Update: {
+          app_key?: string
+          last_error?: string | null
+          last_pulled_at?: string | null
+          last_pushed_at?: string | null
+          pulled_count?: number
+          pushed_count?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       inbox_accounts: {
         Row: {
           created_at: string

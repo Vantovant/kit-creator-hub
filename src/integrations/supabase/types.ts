@@ -397,6 +397,41 @@ export type Database = {
         }
         Relationships: []
       }
+      hub_field_violations: {
+        Row: {
+          attempted_value: Json | null
+          created_at: string
+          field: string
+          hub_reason: string | null
+          id: string
+          prospect_id: string | null
+        }
+        Insert: {
+          attempted_value?: Json | null
+          created_at?: string
+          field: string
+          hub_reason?: string | null
+          id?: string
+          prospect_id?: string | null
+        }
+        Update: {
+          attempted_value?: Json | null
+          created_at?: string
+          field?: string
+          hub_reason?: string | null
+          id?: string
+          prospect_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hub_field_violations_prospect_id_fkey"
+            columns: ["prospect_id"]
+            isOneToOne: false
+            referencedRelation: "prospects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       hub_sync_state: {
         Row: {
           app_key: string
@@ -1246,8 +1281,11 @@ export type Database = {
           associate_status: string | null
           city: string | null
           communication_status: string | null
+          consent_marketing: boolean | null
+          consent_updated_at: string | null
           contact_confidence: string | null
           contact_source: string | null
+          contact_type: string | null
           country: string | null
           created_at: string
           date_captured: string | null
@@ -1258,7 +1296,9 @@ export type Database = {
           focus_area: string | null
           full_name: string | null
           go_status: string | null
+          hub_bootstrapped_at: string | null
           hub_contact_id: string | null
+          hub_last_seen_version: number | null
           hub_version: number | null
           id: string
           interest_level: string | null
@@ -1276,6 +1316,8 @@ export type Database = {
           phone_raw: string | null
           province: string | null
           registration_status: string | null
+          secondary_emails: string[] | null
+          secondary_phones: string[] | null
           source: string | null
           sponsor_name: string | null
           stage_id: string | null
@@ -1293,8 +1335,11 @@ export type Database = {
           associate_status?: string | null
           city?: string | null
           communication_status?: string | null
+          consent_marketing?: boolean | null
+          consent_updated_at?: string | null
           contact_confidence?: string | null
           contact_source?: string | null
+          contact_type?: string | null
           country?: string | null
           created_at?: string
           date_captured?: string | null
@@ -1305,7 +1350,9 @@ export type Database = {
           focus_area?: string | null
           full_name?: string | null
           go_status?: string | null
+          hub_bootstrapped_at?: string | null
           hub_contact_id?: string | null
+          hub_last_seen_version?: number | null
           hub_version?: number | null
           id?: string
           interest_level?: string | null
@@ -1323,6 +1370,8 @@ export type Database = {
           phone_raw?: string | null
           province?: string | null
           registration_status?: string | null
+          secondary_emails?: string[] | null
+          secondary_phones?: string[] | null
           source?: string | null
           sponsor_name?: string | null
           stage_id?: string | null
@@ -1340,8 +1389,11 @@ export type Database = {
           associate_status?: string | null
           city?: string | null
           communication_status?: string | null
+          consent_marketing?: boolean | null
+          consent_updated_at?: string | null
           contact_confidence?: string | null
           contact_source?: string | null
+          contact_type?: string | null
           country?: string | null
           created_at?: string
           date_captured?: string | null
@@ -1352,7 +1404,9 @@ export type Database = {
           focus_area?: string | null
           full_name?: string | null
           go_status?: string | null
+          hub_bootstrapped_at?: string | null
           hub_contact_id?: string | null
+          hub_last_seen_version?: number | null
           hub_version?: number | null
           id?: string
           interest_level?: string | null
@@ -1370,6 +1424,8 @@ export type Database = {
           phone_raw?: string | null
           province?: string | null
           registration_status?: string | null
+          secondary_emails?: string[] | null
+          secondary_phones?: string[] | null
           source?: string | null
           sponsor_name?: string | null
           stage_id?: string | null
@@ -1765,8 +1821,11 @@ export type Database = {
           associate_status: string | null
           city: string | null
           communication_status: string | null
+          consent_marketing: boolean | null
+          consent_updated_at: string | null
           contact_confidence: string | null
           contact_source: string | null
+          contact_type: string | null
           country: string | null
           created_at: string
           date_captured: string | null
@@ -1777,7 +1836,9 @@ export type Database = {
           focus_area: string | null
           full_name: string | null
           go_status: string | null
+          hub_bootstrapped_at: string | null
           hub_contact_id: string | null
+          hub_last_seen_version: number | null
           hub_version: number | null
           id: string
           interest_level: string | null
@@ -1795,6 +1856,8 @@ export type Database = {
           phone_raw: string | null
           province: string | null
           registration_status: string | null
+          secondary_emails: string[] | null
+          secondary_phones: string[] | null
           source: string | null
           sponsor_name: string | null
           stage_id: string | null

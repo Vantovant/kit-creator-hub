@@ -91,12 +91,27 @@ Deno.serve(async (req) => {
 
   // ---------------- PUSH ----------------
   if (action === "push" || action === "bootstrap") {
-    const since = action === "bootstrap" ? null : (state.last_pushed_at as string | null);
-    let query = supabase.from("prospects").select("*").order("updated_at", { ascending: true }).limit(batchSize);
-    if (since) query = query.gt("updated_at", since);
-
-    const { data: prospects, error } = await query;
-    if (error) return json({ error: "query_failed", detail: error.message }, 500);
+    let prospects: any[] | null = null;
+    let usedOffset = false;
+    if (action === "bootstrap") {
+      // Offset-based, safe against updated_at ties (mass imports share timestamps).
+      const offset = Number(params?.offset ?? state.pushed_count ?? 0);
+      const { data, error } = await supabase
+        .from("prospects")
+        .select("*")
+        .order("id", { ascending: true })
+        .range(offset, offset + batchSize - 1);
+      if (error) return json({ error: "query_failed", detail: error.message }, 500);
+      prospects = data;
+      usedOffset = true;
+    } else {
+      const since = state.last_pushed_at as string | null;
+      let query = supabase.from("prospects").select("*").order("updated_at", { ascending: true }).limit(batchSize);
+      if (since) query = query.gt("updated_at", since);
+      const { data, error } = await query;
+      if (error) return json({ error: "query_failed", detail: error.message }, 500);
+      prospects = data;
+    }
     if (!prospects?.length) {
       return json({ ok: true, action, pushed: 0, done: true });
     }

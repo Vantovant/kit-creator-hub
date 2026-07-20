@@ -13,7 +13,7 @@ import { SnoozeMenu } from "@/components/inbox/SnoozeMenu";
 import { WaitingPrompt } from "@/components/inbox/WaitingPrompt";
 import { BulkActionBar } from "@/components/inbox/BulkActionBar";
 import { LearnedRulesPanel } from "@/components/inbox/LearnedRulesPanel";
-import { Inbox, Star, Archive, Clock, CheckCircle2, RefreshCw, Plus, Keyboard, Layers, Rows2, Rows3, PanelRightClose, PanelRight, Brain } from "lucide-react";
+import { Inbox, Star, Archive, Clock, CheckCircle2, RefreshCw, Plus, Keyboard, Layers, Rows2, Rows3, PanelRightClose, PanelRight, Brain, Menu, ArrowLeft, X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
@@ -41,6 +41,7 @@ export default function InboxPage() {
   const [waitingOpen, setWaitingOpen] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
   const [rulesOpen, setRulesOpen] = useState(false);
+  const [mobileMailboxesOpen, setMobileMailboxesOpen] = useState(false);
 
   const [density, setDensity] = useState<Density>(() => (localStorage.getItem("inbox-density") as Density) || "compact");
   const [showContact, setShowContact] = useState(() => localStorage.getItem("inbox-showContact") !== "0");

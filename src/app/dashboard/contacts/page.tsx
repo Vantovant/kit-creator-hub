@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
-  Search, Tag as TagIcon, Filter, Plus, Star, Flame, Snowflake,
+  Search, Tag as TagIcon, Filter, Plus, Star, Flame, Snowflake, X,
 } from "lucide-react";
 import { ContactDrawer } from "@/components/contacts/ContactDrawer";
 
@@ -49,6 +49,7 @@ export default function ContactsPage() {
   const [newEmail, setNewEmail] = useState("");
   const [newName, setNewName] = useState("");
   const [addError, setAddError] = useState<string | null>(null);
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -117,9 +118,25 @@ export default function ContactsPage() {
   };
 
   return (
-    <div className="flex h-[calc(100vh-4rem)] bg-background">
-      {/* Left rail: filters */}
-      <aside className="w-56 border-r p-4 space-y-4 overflow-y-auto shrink-0">
+    <div className="flex h-[calc(100vh-4rem)] bg-background relative">
+      {/* Left rail: filters — drawer on mobile, static on md+ */}
+      {filtersOpen && (
+        <div
+          className="md:hidden fixed inset-0 z-30 bg-black/40"
+          onClick={() => setFiltersOpen(false)}
+        />
+      )}
+      <aside
+        className={`${
+          filtersOpen ? "translate-x-0" : "-translate-x-full"
+        } md:translate-x-0 fixed md:static left-0 top-0 md:top-auto z-40 md:z-auto h-full w-64 md:w-56 border-r p-4 space-y-4 overflow-y-auto shrink-0 bg-background transition-transform`}
+      >
+        <div className="flex items-center justify-between md:hidden">
+          <span className="text-sm font-semibold">Filters</span>
+          <button onClick={() => setFiltersOpen(false)} className="p-1 rounded hover:bg-accent">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
         <div>
           <h3 className="text-xs font-semibold uppercase text-muted-foreground mb-2 flex items-center gap-2">
             <Filter className="w-3 h-3" /> Temperature
@@ -160,18 +177,25 @@ export default function ContactsPage() {
 
       {/* Middle: list */}
       <div className="flex-1 flex flex-col min-w-0 border-r">
-        <div className="p-4 border-b flex items-center gap-2">
-          <div className="relative flex-1">
+        <div className="p-3 sm:p-4 border-b flex items-center gap-2">
+          <button
+            className={`${btnBase} md:hidden`}
+            onClick={() => setFiltersOpen(true)}
+            aria-label="Filters"
+          >
+            <Filter className="w-4 h-4" />
+          </button>
+          <div className="relative flex-1 min-w-0">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <Input
-              placeholder="Search name, email, phone, city..."
+              placeholder="Search name, email, phone..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-9"
             />
           </div>
           <button className={btnBase} onClick={() => setAddOpen((v) => !v)}>
-            <Plus className="w-4 h-4" /> Add
+            <Plus className="w-4 h-4" /> <span className="hidden sm:inline">Add</span>
           </button>
         </div>
         {addOpen && (

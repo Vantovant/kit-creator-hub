@@ -71,7 +71,7 @@ export default function InboxPage() {
   useEffect(() => { localStorage.setItem("inbox-showContact", showContact ? "1" : "0"); }, [showContact]);
 
   // Reset selection when filter/scope changes
-  useEffect(() => { setSelectedIds(new Set()); }, [filter, scope]);
+  useEffect(() => { setSelectedIds(new Set()); setMobileMailboxesOpen(false); }, [filter, scope]);
 
   const handleSync = useCallback(async () => {
     setSyncing(true);

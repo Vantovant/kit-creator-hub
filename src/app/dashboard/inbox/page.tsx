@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
 import { useInboxAccounts } from "@/hooks/useInboxAccounts";
 import { useInbox, InboxFilter } from "@/hooks/useInbox";
-import { InboxMessageList } from "@/components/inbox/InboxMessageList";
+import { useResizablePanels, ResizeHandle } from "@/hooks/useResizablePanels";
+import { InboxMessageList, Density } from "@/components/inbox/InboxMessageList";
 import { InboxMessageDetail } from "@/components/inbox/InboxMessageDetail";
 import { Contact360Panel } from "@/components/inbox/Contact360Panel";
 import { AddAccountModal } from "@/components/inbox/AddAccountModal";
@@ -10,7 +11,8 @@ import { HelpOverlay } from "@/components/inbox/HelpOverlay";
 import { InboxCommandPalette } from "@/components/inbox/InboxCommandPalette";
 import { SnoozeMenu } from "@/components/inbox/SnoozeMenu";
 import { WaitingPrompt } from "@/components/inbox/WaitingPrompt";
-import { Inbox, Star, Archive, Clock, CheckCircle2, RefreshCw, Plus, Keyboard, Layers } from "lucide-react";
+import { BulkActionBar } from "@/components/inbox/BulkActionBar";
+import { Inbox, Star, Archive, Clock, CheckCircle2, RefreshCw, Plus, Keyboard, Layers, Rows2, Rows3, PanelRightClose, PanelRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const filters: { key: InboxFilter; label: string; icon: React.ReactNode }[] = [
@@ -36,7 +38,12 @@ export default function InboxPage() {
   const [snoozeOpen, setSnoozeOpen] = useState(false);
   const [waitingOpen, setWaitingOpen] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
+  const [density, setDensity] = useState<Density>(() => (localStorage.getItem("inbox-density") as Density) || "compact");
+  const [showContact, setShowContact] = useState(() => localStorage.getItem("inbox-showContact") !== "0");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const menuAnchorRef = useRef<HTMLDivElement>(null);
+
+  const { widths, startDrag } = useResizablePanels("inbox-widths-v2", [420, 620]);
 
   const selectedMessage = messages.find((m) => m.id === msgId) || messages[0] || null;
 
@@ -46,6 +53,12 @@ export default function InboxPage() {
       if (accounts[0]?.id) setSelectedId(accounts[0].id);
     }
   }, [accounts, accountsLoading, scope, setSelectedId]);
+
+  useEffect(() => { localStorage.setItem("inbox-density", density); }, [density]);
+  useEffect(() => { localStorage.setItem("inbox-showContact", showContact ? "1" : "0"); }, [showContact]);
+
+  // Reset selection when filter/scope changes
+  useEffect(() => { setSelectedIds(new Set()); }, [filter, scope]);
 
   const handleSync = useCallback(async () => {
     setSyncing(true);
@@ -64,11 +77,33 @@ export default function InboxPage() {
     if (selectedMessage) doAction(selectedMessage.id, action, data);
   }, [selectedMessage, doAction]);
 
+  const toggleCheck = useCallback((id: string, checked: boolean) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(id); else next.delete(id);
+      return next;
+    });
+  }, []);
+
+  const toggleAll = useCallback((checked: boolean) => {
+    setSelectedIds(checked ? new Set(messages.map((m) => m.id)) : new Set());
+  }, [messages]);
+
+  const bulkRun = useCallback(async (action: string) => {
+    const ids = Array.from(selectedIds);
+    if (!ids.length) return;
+    // Run sequentially to avoid gateway rate spikes
+    for (const id of ids) {
+      try { await doAction(id, action); } catch (e) { console.error("bulk", action, id, e); }
+    }
+    setSelectedIds(new Set());
+    await refresh();
+  }, [selectedIds, doAction, refresh]);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
       const typing = target && ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName);
-      // Command palette works everywhere
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault(); setPaletteOpen((v) => !v); return;
       }
@@ -81,12 +116,16 @@ export default function InboxPage() {
         setMsgId(messages[Math.min(idx + 1, messages.length - 1)]?.id);
       } else if (e.key === "k" || e.key === "ArrowUp") {
         setMsgId(messages[Math.max(idx - 1, 0)]?.id);
+      } else if (e.key === "x" && selectedMessage) {
+        toggleCheck(selectedMessage.id, !selectedIds.has(selectedMessage.id));
       } else if (e.key === "e" && selectedMessage) {
         runAction(selectedMessage.is_archived ? "unarchive" : "archive");
       } else if (e.key === "s" && selectedMessage) {
         runAction(selectedMessage.is_starred ? "unstar" : "star");
       } else if (e.key === "h" && selectedMessage) {
         runAction("handled");
+      } else if (e.key === "#" && selectedMessage) {
+        runAction("trash");
       } else if (e.key === "r" && selectedMessage) {
         runAction("mark_read");
       } else if (e.key === "z" && selectedMessage) {
@@ -103,7 +142,7 @@ export default function InboxPage() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [messages, msgId, selectedMessage, runAction, setMsgId]);
+  }, [messages, msgId, selectedMessage, runAction, setMsgId, selectedIds, toggleCheck, fullscreen]);
 
   return (
     <div className="h-[calc(100vh-5rem)] flex flex-col">
@@ -113,7 +152,7 @@ export default function InboxPage() {
       />
 
       <div className="flex-1 flex overflow-hidden">
-        <aside className="w-56 border-r flex flex-col">
+        <aside className="w-56 shrink-0 border-r flex flex-col">
           <div className="p-4 border-b space-y-3">
             {accountsLoading ? (
               <p className="text-sm text-muted-foreground">Loading accounts...</p>
@@ -177,6 +216,23 @@ export default function InboxPage() {
           </nav>
 
           <div className="p-3 border-t space-y-2">
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setDensity(density === "compact" ? "comfortable" : "compact")}
+                className="flex-1 flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground px-2 py-1.5 rounded hover:bg-muted"
+                title="Toggle row density"
+              >
+                {density === "compact" ? <Rows3 className="w-3.5 h-3.5" /> : <Rows2 className="w-3.5 h-3.5" />}
+                {density === "compact" ? "Compact" : "Comfortable"}
+              </button>
+              <button
+                onClick={() => setShowContact((v) => !v)}
+                className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
+                title={showContact ? "Hide contact panel" : "Show contact panel"}
+              >
+                {showContact ? <PanelRightClose className="w-3.5 h-3.5" /> : <PanelRight className="w-3.5 h-3.5" />}
+              </button>
+            </div>
             <button
               onClick={() => setHelpOpen(true)}
               className="w-full flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground px-2 py-1.5 rounded hover:bg-muted"
@@ -194,20 +250,36 @@ export default function InboxPage() {
 
         <main className="flex-1 flex min-w-0">
           {!fullscreen && (
-            <div className="w-[340px] shrink-0 border-r flex flex-col">
-              <div className="px-4 py-2 border-b text-xs text-muted-foreground flex items-center justify-between">
-                <span>{loading ? "Loading..." : `${messages.length} messages`}</span>
-                <span className="text-[10px] uppercase tracking-wider">{scope === "all" ? "all • " : ""}{filter}</span>
+            <>
+              <div className="shrink-0 flex flex-col border-r" style={{ width: widths[0] }}>
+                <div className="px-4 py-2 border-b text-xs text-muted-foreground flex items-center justify-between shrink-0">
+                  <span>{loading ? "Loading..." : `${messages.length} messages`}</span>
+                  <span className="text-[10px] uppercase tracking-wider">{scope === "all" ? "all • " : ""}{filter}</span>
+                </div>
+                <BulkActionBar
+                  count={selectedIds.size}
+                  onClear={() => setSelectedIds(new Set())}
+                  onArchive={() => bulkRun("archive")}
+                  onTrash={() => bulkRun("trash")}
+                  onHandled={() => bulkRun("handled")}
+                  onMarkRead={() => bulkRun("mark_read")}
+                />
+                <InboxMessageList
+                  messages={messages}
+                  selectedId={msgId}
+                  selectedIds={selectedIds}
+                  onSelect={setMsgId}
+                  onToggleCheck={toggleCheck}
+                  onToggleAll={toggleAll}
+                  onQuickAction={(id, action) => doAction(id, action)}
+                  density={density}
+                />
               </div>
-              <InboxMessageList
-                messages={messages}
-                selectedId={msgId}
-                onSelect={setMsgId}
-              />
-            </div>
+              <ResizeHandle onPointerDown={startDrag(0)} />
+            </>
           )}
 
-          <div className="flex-1 min-w-0 border-r relative" ref={menuAnchorRef}>
+          <div className="flex-1 min-w-0 relative" ref={menuAnchorRef} style={fullscreen || !showContact ? undefined : { width: widths[1] }}>
             <InboxMessageDetail
               message={selectedMessage}
               onAction={(action, data) => selectedMessage && doAction(selectedMessage.id, action, data)}
@@ -216,7 +288,6 @@ export default function InboxPage() {
               onToggleFullscreen={() => setFullscreen((v) => !v)}
               onReplySent={refresh}
             />
-            {/* Global snooze/waiting menus triggered by keyboard */}
             {snoozeOpen && (
               <div className="absolute top-14 left-1/2 -translate-x-1/2 z-40">
                 <SnoozeMenu
@@ -238,7 +309,14 @@ export default function InboxPage() {
             )}
           </div>
 
-          {!fullscreen && <Contact360Panel message={selectedMessage} />}
+          {!fullscreen && showContact && (
+            <>
+              <ResizeHandle onPointerDown={startDrag(1)} />
+              <div className="shrink-0 min-w-[260px]" style={{ width: "auto", flex: "0 0 320px" }}>
+                <Contact360Panel message={selectedMessage} />
+              </div>
+            </>
+          )}
         </main>
       </div>
 

@@ -188,6 +188,20 @@ Deno.serve(async (req) => {
       logAction = "label_remove";
       logData = { label: action_data.label };
       break;
+    case "trash":
+      addLabels.push("TRASH");
+      removeLabels.push("INBOX");
+      updates.deleted_at = new Date().toISOString();
+      updates.is_archived = true;
+      logAction = "trash";
+      break;
+    case "untrash":
+      removeLabels.push("TRASH");
+      addLabels.push("INBOX");
+      updates.deleted_at = null;
+      updates.is_archived = false;
+      logAction = "untrash";
+      break;
     default:
       return json({ error: "unknown_action" }, 400);
   }

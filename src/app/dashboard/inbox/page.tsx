@@ -238,7 +238,7 @@ export default function InboxPage() {
             )}
           </div>
 
-          <Contact360Panel message={selectedMessage} />
+          {!fullscreen && <Contact360Panel message={selectedMessage} />}
         </main>
       </div>
 

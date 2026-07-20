@@ -41,10 +41,33 @@ function isRobotSender(email: string) {
   return ROBOT_PATTERNS.some((r) => r.test(String(email || "")));
 }
 
+function stripHtml(html: string): string {
+  return html
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function messageBody(msg: any): string {
+  const text = String(msg.body_text || "").trim();
+  const htmlText = msg.body_html ? stripHtml(msg.body_html) : "";
+  const textLooksLikeFallback = /^this is the body in plain text for non-html mail clients\.?$/i.test(text);
+  if (htmlText && (textLooksLikeFallback || htmlText.length > text.length)) return htmlText;
+  return String(text || htmlText || msg.body_preview || msg.snippet || "");
+}
+
 function matchesRule(msg: any, rule: any): boolean {
   const from = String(msg.sender || "").toLowerCase();
   const subject = String(msg.subject || "").toLowerCase();
-  const body = String(msg.body_preview || msg.snippet || "").toLowerCase();
+  const body = messageBody(msg).toLowerCase();
   const tests: boolean[] = [];
   if (rule.from_pattern) tests.push(from.includes(String(rule.from_pattern).toLowerCase()));
   if (rule.subject_pattern) tests.push(subject.includes(String(rule.subject_pattern).toLowerCase()));
@@ -55,6 +78,7 @@ function matchesRule(msg: any, rule: any): boolean {
 
 async function aiClassify(msg: any, lovableKey: string) {
   const robot = isRobotSender(msg.sender);
+  const body = messageBody(msg);
   const prompt = `You classify inbound Gmail messages for a CRM.
 Return STRICT JSON:
 {"type":"registration|reply|general","confidence":0.0-1.0,"summary":"1 line","entities":{"email":"","first_name":"","phone":"","level":"","intent":"","enrollee_name":"","enrollee_id":""}}
@@ -66,7 +90,7 @@ Return STRICT JSON:
 SENDER_IS_ROBOT: ${robot}
 FROM: ${msg.sender}
 SUBJECT: ${msg.subject}
-BODY: ${(msg.body_preview || msg.snippet || "").slice(0, 1500)}`;
+BODY: ${body.slice(0, 5000)}`;
 
   const r = await fetch(AI_URL, {
     method: "POST",
@@ -274,7 +298,7 @@ Deno.serve(async (req) => {
       await supabase.from("plan_tasks").insert({
         user_id: msg.user_id,
         title: `Reply from ${msg.sender_name || msg.sender}: ${msg.subject || "(no subject)"}`,
-        description: `${summary}\n\n${(msg.body_preview || msg.snippet || "").slice(0, 300)}`,
+        description: `${summary}\n\n${messageBody(msg).slice(0, 300)}`,
         source: "inbox_reply",
         priority: "high",
       });

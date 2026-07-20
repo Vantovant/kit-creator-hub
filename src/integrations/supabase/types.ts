@@ -544,6 +544,7 @@ export type Database = {
           account_id: string
           body_html: string | null
           body_preview: string | null
+          body_text: string | null
           category: string | null
           cc: string[] | null
           created_at: string
@@ -574,6 +575,7 @@ export type Database = {
           account_id: string
           body_html?: string | null
           body_preview?: string | null
+          body_text?: string | null
           category?: string | null
           cc?: string[] | null
           created_at?: string
@@ -604,6 +606,7 @@ export type Database = {
           account_id?: string
           body_html?: string | null
           body_preview?: string | null
+          body_text?: string | null
           category?: string | null
           cc?: string[] | null
           created_at?: string

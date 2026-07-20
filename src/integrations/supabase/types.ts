@@ -438,6 +438,7 @@ export type Database = {
           last_error: string | null
           last_pulled_at: string | null
           last_pushed_at: string | null
+          last_seen_version: number | null
           pulled_count: number
           pushed_count: number
           updated_at: string
@@ -447,6 +448,7 @@ export type Database = {
           last_error?: string | null
           last_pulled_at?: string | null
           last_pushed_at?: string | null
+          last_seen_version?: number | null
           pulled_count?: number
           pushed_count?: number
           updated_at?: string
@@ -456,6 +458,7 @@ export type Database = {
           last_error?: string | null
           last_pulled_at?: string | null
           last_pushed_at?: string | null
+          last_seen_version?: number | null
           pulled_count?: number
           pushed_count?: number
           updated_at?: string

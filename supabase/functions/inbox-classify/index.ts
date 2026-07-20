@@ -150,18 +150,27 @@ Deno.serve(async (req) => {
     }
   }
 
+  const senderIsRobot = isRobotSender(msg.sender);
+
   // Suggested actions (always attached, whether auto-acted or not)
   const suggested: any[] = [];
   if (detected_type === "registration") {
+    const enrolleeName = entities.enrollee_name || entities.first_name || null;
+    const label = enrolleeName
+      ? `Enroll ${enrolleeName} in "${matchedRule?.rule_name || "sequence"}"`
+      : (matchedRule ? `Enroll in "${matchedRule.rule_name}" sequence` : "Enroll in a sequence");
     suggested.push({
       kind: "enroll_sequence",
-      label: matchedRule ? `Enroll in "${matchedRule.rule_name}" sequence` : "Enroll in a sequence",
+      label,
       sequence_id: matchedRule?.sequence_id || null,
-      tag: matchedRule?.default_tag || null,
+      tag: matchedRule?.default_tag || "new_enrollment",
     });
   } else if (detected_type === "reply") {
     suggested.push({ kind: "tag_reply", label: `Tag Replied_${new Date().toISOString().slice(0, 7).replace("-", "_")}` });
     suggested.push({ kind: "create_task", label: `Create Plan task for this reply` });
+  }
+  if (!senderIsRobot && !msg.prospect_id) {
+    suggested.push({ kind: "add_contact", label: `Add ${msg.sender_name || msg.sender} to contacts` });
   }
 
   const { data: extract } = await supabase
@@ -175,7 +184,7 @@ Deno.serve(async (req) => {
       entities_json: entities,
       suggested_actions_json: suggested,
       requires_user_confirmation: confidence < 0.85,
-      prompt_version: "phase3-v1",
+      prompt_version: "phase5-v1",
     }, { onConflict: "message_id" })
     .select("*")
     .single();
@@ -186,27 +195,67 @@ Deno.serve(async (req) => {
 
   if (canAct && detected_type === "registration") {
     try {
-      const email = String(entities.email || msg.sender).toLowerCase();
+      // If the sender is a robot (e.g. robot@aplgo.com) the enrollee is NOT
+      // the sender. Use the extracted enrollee identity instead.
+      const enrolleeName = entities.enrollee_name || entities.first_name || null;
+      const enrolleeId = entities.enrollee_id || null;
+      let enrolleeEmail = entities.email && !isRobotSender(entities.email)
+        ? String(entities.email).toLowerCase()
+        : null;
+
+      if (senderIsRobot && !enrolleeEmail) {
+        // No real email — mint a stable placeholder so we can still track them.
+        const slug = enrolleeId
+          ? `id-${enrolleeId}`
+          : (enrolleeName ? enrolleeName.toLowerCase().replace(/[^a-z0-9]+/g, "-") : `unknown-${msg.id.slice(0,8)}`);
+        enrolleeEmail = `${slug}@aplgo.enrollment.pending`;
+      } else if (!enrolleeEmail) {
+        // Non-robot sender with no explicit email — fall back to the sender.
+        enrolleeEmail = String(msg.sender).toLowerCase();
+      }
+
       const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
       const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
       const spRes = await fetch(`${supabaseUrl}/functions/v1/save-prospect`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "apikey": anonKey },
         body: JSON.stringify({
-          email,
-          first_name: entities.first_name || null,
-          source: matchedRule?.rule_name || "inbox_ai_registration",
+          email: enrolleeEmail,
+          first_name: enrolleeName,
+          source: matchedRule?.rule_name || (senderIsRobot ? "aplgo_new_enrollment" : "inbox_ai_registration"),
           sequence_id: matchedRule?.sequence_id || null,
           phone_number: entities.phone || null,
-          additional_notes: `Auto-enrolled from Gmail: ${msg.subject}`,
+          additional_notes: `Auto-enrolled from Gmail: ${msg.subject}${enrolleeId ? ` (ID ${enrolleeId})` : ""}`,
         }),
       });
       const spBody = await spRes.text();
+
+      // Also apply a "new_enrollment" tag when we have a prospect id in the response
+      try {
+        const parsed = JSON.parse(spBody);
+        const pid = parsed?.prospect?.id || parsed?.id;
+        if (pid) {
+          const tagId = await ensureTag(supabase, "new_enrollment");
+          await supabase.from("prospect_tags").upsert(
+            { prospect_id: pid, tag_id: tagId },
+            { onConflict: "prospect_id, tag_id", ignoreDuplicates: true },
+          );
+        }
+      } catch { /* ignore */ }
+
       await supabase.from("inbox_action_log").insert({
         user_id: msg.user_id,
         message_id: msg.id,
         action_type: "enrolled",
-        action_data: { rule: matchedRule?.rule_name || null, sequence_id: matchedRule?.sequence_id || null, response: spBody.slice(0, 500) },
+        action_data: {
+          rule: matchedRule?.rule_name || null,
+          sequence_id: matchedRule?.sequence_id || null,
+          enrollee_email: enrolleeEmail,
+          enrollee_name: enrolleeName,
+          enrollee_id: enrolleeId,
+          sender_is_robot: senderIsRobot,
+          response: spBody.slice(0, 500),
+        },
       });
       actions.push("enrolled");
     } catch (e: any) {

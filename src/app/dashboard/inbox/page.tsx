@@ -35,6 +35,7 @@ export default function InboxPage() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [snoozeOpen, setSnoozeOpen] = useState(false);
   const [waitingOpen, setWaitingOpen] = useState(false);
+  const [fullscreen, setFullscreen] = useState(false);
   const menuAnchorRef = useRef<HTMLDivElement>(null);
 
   const selectedMessage = messages.find((m) => m.id === msgId) || messages[0] || null;

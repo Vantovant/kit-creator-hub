@@ -58,6 +58,7 @@ function App() {
           <Route path="plan" element={<PlanPage />} />
           <Route path="replies" element={<RepliesPage />} />
           <Route path="email" element={<RepliesPage />} />
+          <Route path="inbox" element={<InboxPage />} />
           <Route path="settings" element={<SettingsPage />} />
         </Route>
       </Routes>

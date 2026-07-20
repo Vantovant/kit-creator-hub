@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import DOMPurify from "dompurify";
 
 function escapeHtml(s: string) {
@@ -28,12 +28,15 @@ function linkifyPlain(text: string): string {
  * Falls back to linkified plain text.
  */
 export function EmailBody({ html, text }: { html?: string | null; text?: string | null }) {
+  const frameRef = useRef<HTMLIFrameElement>(null);
+  const [height, setHeight] = useState(520);
+
   const sanitized = useMemo(() => {
     if (html && html.trim()) {
       const clean = DOMPurify.sanitize(html, {
         USE_PROFILES: { html: true },
         ADD_ATTR: ["target", "rel"],
-        FORBID_TAGS: ["style", "script", "iframe", "object", "embed", "form"],
+        FORBID_TAGS: ["script", "iframe", "object", "embed", "form"],
         FORBID_ATTR: ["onerror", "onclick", "onload", "onmouseover"],
       });
       // Force links open in new tab
@@ -42,6 +45,61 @@ export function EmailBody({ html, text }: { html?: string | null; text?: string 
     if (text) return linkifyPlain(text);
     return "<em class='text-muted-foreground'>No body available.</em>";
   }, [html, text]);
+
+  const srcDoc = useMemo(() => {
+    if (!html?.trim()) return "";
+    return `<!doctype html>
+<html>
+  <head>
+    <base target="_blank" />
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      html, body { margin: 0; padding: 0; background: #ffffff; color: #111827; }
+      body { overflow-wrap: anywhere; }
+      img { max-width: 100%; height: auto; }
+      table { max-width: 100%; }
+      a { color: #2563eb; }
+    </style>
+  </head>
+  <body>${sanitized}</body>
+</html>`;
+  }, [html, sanitized]);
+
+  useEffect(() => {
+    if (!html?.trim()) return;
+    const frame = frameRef.current;
+    if (!frame) return;
+    const resize = () => {
+      const doc = frame.contentDocument;
+      if (!doc) return;
+      const nextHeight = Math.max(
+        520,
+        doc.documentElement.scrollHeight,
+        doc.body?.scrollHeight || 0,
+      );
+      setHeight(Math.min(nextHeight + 24, 6000));
+    };
+    frame.addEventListener("load", resize);
+    const timer = window.setTimeout(resize, 350);
+    return () => {
+      frame.removeEventListener("load", resize);
+      window.clearTimeout(timer);
+    };
+  }, [html, srcDoc]);
+
+  if (html?.trim()) {
+    return (
+      <iframe
+        ref={frameRef}
+        title="Email body"
+        srcDoc={srcDoc}
+        sandbox="allow-popups allow-popups-to-escape-sandbox"
+        className="w-full rounded-md border bg-background"
+        style={{ height }}
+      />
+    );
+  }
 
   return (
     <div

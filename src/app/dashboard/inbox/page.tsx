@@ -263,6 +263,8 @@ export default function InboxPage() {
                   onTrash={() => bulkRun("trash")}
                   onHandled={() => bulkRun("handled")}
                   onMarkRead={() => bulkRun("mark_read")}
+                  onStar={() => bulkRun("star")}
+                  onUnstar={() => bulkRun("unstar")}
                 />
                 <InboxMessageList
                   messages={messages}

@@ -109,7 +109,6 @@ export function EmailBody({ html, text }: { html?: string | null; text?: string 
                  [&_a]:text-primary [&_a]:underline
                  [&_img]:max-w-full [&_table]:max-w-full
                  [&_blockquote]:border-l-2 [&_blockquote]:border-muted-foreground/30 [&_blockquote]:pl-3 [&_blockquote]:text-muted-foreground"
-      dangerouslySetInnerHTML={{ __html: sanitized }}
       dangerouslySetInnerHTML={{ __html: sanitizedText }}
     />
   );

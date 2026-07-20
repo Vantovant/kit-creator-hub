@@ -44,30 +44,33 @@ async function postToHub(secret: string, hubUrl: string, body: Record<string, un
   return { status: resp.status, text: await resp.text() };
 }
 
-function toHubContact(p: any) {
+// Field Ownership Contract v1 — bootstrap record (first push per prospect).
+function toBootstrapRecord(p: any) {
   return {
-    local_id: p.id,
-    hub_contact_id: p.hub_contact_id ?? null,
-    hub_version: p.hub_version ?? null,
-    identity: {
-      name: p.full_name ?? p.first_name ?? null,
-      first_name: p.first_name ?? null,
-      last_name: p.last_name ?? null,
-      whatsapp_display_name: p.whatsapp_display_name ?? null,
-      phone_normalized: p.phone_normalized ?? null,
-      email: p.email ?? null,
-    },
-    attributes: {
-      lead_type: p.lead_type ?? null,
-      temperature: p.lead_temperature ?? null,
-      contact_source: p.contact_source ?? null,
-      contact_confidence: p.contact_confidence ?? null,
-      name_needs_confirmation: p.name_needs_confirmation ?? false,
-      unsubscribed: p.unsubscribed ?? false,
-      aplgo_id: p.aplgo_id ?? null,
-      notes: p.additional_notes ?? null,
-    },
-    updated_at: p.updated_at,
+    source_app: APP_KEY,
+    source_ref: p.id,
+    full_name: p.full_name ?? null,
+    first_name: p.first_name ?? null,
+    last_name: p.last_name ?? null,
+    primary_email: p.email ? String(p.email).toLowerCase() : null,
+    primary_phone: p.phone_normalized ?? null,
+    contact_type: p.contact_type ?? p.lead_type ?? "subscriber",
+    consent_marketing: p.consent_marketing ?? !p.unsubscribed,
+    consent_updated_at: p.consent_updated_at ?? p.updated_at,
+    secondary_emails: p.secondary_emails ?? [],
+    secondary_phones: p.secondary_phones ?? [],
+  };
+}
+
+// Ongoing record — strips hub-owned identity fields (Contract §3.1).
+function toOngoingRecord(p: any) {
+  return {
+    source_app: APP_KEY,
+    source_ref: p.id,
+    consent_marketing: p.consent_marketing ?? !p.unsubscribed,
+    consent_updated_at: p.consent_updated_at ?? p.updated_at,
+    secondary_emails: p.secondary_emails ?? [],
+    secondary_phones: p.secondary_phones ?? [],
   };
 }
 

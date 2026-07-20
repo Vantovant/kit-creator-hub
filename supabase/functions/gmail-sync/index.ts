@@ -34,19 +34,35 @@ function parseSender(sender: string): { email: string; name: string | null } {
   return { email: normalizeEmail(sender), name: null };
 }
 
-function bodyPreview(payload: any): string | null {
-  if (!payload) return null;
-  const parts: any[] = [];
+function decodeB64(data: string): string {
+  try {
+    const bin = atob(data.replace(/-/g, "+").replace(/_/g, "/"));
+    // handle utf-8
+    return decodeURIComponent(escape(bin));
+  } catch {
+    try { return atob(data.replace(/-/g, "+").replace(/_/g, "/")); } catch { return ""; }
+  }
+}
+
+function extractBodies(payload: any): { text: string | null; html: string | null } {
+  if (!payload) return { text: null, html: null };
+  let text: string | null = null;
+  let html: string | null = null;
   const walk = (p: any) => {
     if (!p) return;
-    if (p.mimeType === "text/plain" && p.body?.data) parts.push(p);
+    if (p.mimeType === "text/plain" && p.body?.data && !text) text = decodeB64(p.body.data);
+    if (p.mimeType === "text/html" && p.body?.data && !html) html = decodeB64(p.body.data);
     if (p.parts) p.parts.forEach(walk);
   };
   walk(payload);
-  const best = parts.find(p => p.mimeType === "text/plain") || parts[0];
-  if (!best) return null;
-  const text = atob(best.body.data.replace(/-/g, "+").replace(/_/g, "/"));
-  return text.replace(/\s+/g, " ").trim().slice(0, 400);
+  return { text, html };
+}
+
+function bodyPreview(payload: any): string | null {
+  const { text, html } = extractBodies(payload);
+  if (text) return text.replace(/\s+/g, " ").trim().slice(0, 400);
+  if (html) return html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 400);
+  return null;
 }
 
 async function gatewayGet(path: string, lovableKey: string, connectionKey: string) {
@@ -148,16 +164,10 @@ Deno.serve(async (req) => {
       const subject = headers.subject || "(no subject)";
       const date = new Date(Number(full.internalDate));
       const preview = bodyPreview(full.payload) || full.snippet || "";
+      const { html: htmlBody } = extractBodies(full.payload);
 
-      // Match sender to prospect
-      let prospectId: string | null = null;
-      const { data: prospect } = await supabase
-        .from("prospects")
-        .select("id")
-        .eq("email", sender.email)
-        .maybeSingle();
-      if (prospect) prospectId = prospect.id;
-
+      // NOTE: We intentionally do NOT auto-link senders to prospects here.
+      // Users add contacts explicitly via the Contact 360 panel.
       const upsert = {
         user_id: account.user_id,
         account_id: account.id,
@@ -170,12 +180,13 @@ Deno.serve(async (req) => {
         subject,
         snippet: full.snippet || null,
         body_preview: preview,
+        body_html: htmlBody,
         date: date.toISOString(),
         label_ids: full.labelIds || [],
         is_read: !(full.labelIds || []).includes("UNREAD"),
         is_starred: (full.labelIds || []).includes("STARRED"),
         is_archived: !(full.labelIds || []).includes("INBOX"),
-        prospect_id: prospectId,
+        prospect_id: null,
         category: null,
         urgency: null,
         intent: null,

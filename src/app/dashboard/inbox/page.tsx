@@ -38,7 +38,7 @@ export default function InboxPage() {
                 <span className="font-mono text-foreground">APPROVE PHASE 1</span> and I'll walk you through
                 creating them in Google Cloud Console (5 min).
               </p>
-              <Button disabled variant="outline">Connect Gmail (Phase 1 — pending)</Button>
+              <button disabled className="px-4 py-2 rounded-lg border text-sm font-medium opacity-60 cursor-not-allowed">Connect Gmail (Phase 1 — pending)</button>
             </div>
           </CardContent>
         </Card>

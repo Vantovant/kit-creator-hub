@@ -94,7 +94,7 @@ export function EmailBody({ html, text }: { html?: string | null; text?: string 
         ref={frameRef}
         title="Email body"
         srcDoc={srcDoc}
-        sandbox="allow-popups allow-popups-to-escape-sandbox"
+        sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
         className="w-full rounded-md border bg-background"
         style={{ height }}
       />

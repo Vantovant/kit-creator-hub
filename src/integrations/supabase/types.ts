@@ -539,6 +539,39 @@ export type Database = {
           },
         ]
       }
+      inbox_learning_signals: {
+        Row: {
+          created_at: string
+          id: string
+          last_action_at: string
+          sender_domain: string | null
+          sender_email: string | null
+          signal: string
+          user_id: string
+          weight: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          last_action_at?: string
+          sender_domain?: string | null
+          sender_email?: string | null
+          signal: string
+          user_id: string
+          weight?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          last_action_at?: string
+          sender_domain?: string | null
+          sender_email?: string | null
+          signal?: string
+          user_id?: string
+          weight?: number
+        }
+        Relationships: []
+      }
       inbox_messages: {
         Row: {
           account_id: string

@@ -946,6 +946,30 @@ export type Database = {
         }
         Relationships: []
       }
+      pipeline_stages: {
+        Row: {
+          created_at: string
+          id: string
+          is_default: boolean
+          name: string
+          sort_order: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_default?: boolean
+          name: string
+          sort_order?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_default?: boolean
+          name?: string
+          sort_order?: number
+        }
+        Relationships: []
+      }
       plan_meetings: {
         Row: {
           attendees: Json | null
@@ -1192,6 +1216,8 @@ export type Database = {
           associate_status: string | null
           city: string | null
           communication_status: string | null
+          contact_confidence: string | null
+          contact_source: string | null
           country: string | null
           created_at: string
           date_captured: string | null
@@ -1202,24 +1228,32 @@ export type Database = {
           focus_area: string | null
           full_name: string | null
           go_status: string | null
+          hub_contact_id: string | null
+          hub_version: number | null
           id: string
           interest_level: string | null
           last_activity_at: string | null
+          last_name: string | null
           lead_path: string | null
           lead_temperature: string | null
           lead_type: string | null
           meeting_time: string | null
+          name_needs_confirmation: boolean
           needs_enrichment: boolean
           next_action: string | null
           phone_normalized: string | null
           phone_number: string | null
+          phone_raw: string | null
           province: string | null
           registration_status: string | null
           source: string | null
           sponsor_name: string | null
+          stage_id: string | null
           state: string | null
           unsubscribe_token: string | null
           unsubscribed: boolean
+          updated_at: string
+          whatsapp_display_name: string | null
         }
         Insert: {
           action_taken?: string | null
@@ -1229,6 +1263,8 @@ export type Database = {
           associate_status?: string | null
           city?: string | null
           communication_status?: string | null
+          contact_confidence?: string | null
+          contact_source?: string | null
           country?: string | null
           created_at?: string
           date_captured?: string | null
@@ -1239,24 +1275,32 @@ export type Database = {
           focus_area?: string | null
           full_name?: string | null
           go_status?: string | null
+          hub_contact_id?: string | null
+          hub_version?: number | null
           id?: string
           interest_level?: string | null
           last_activity_at?: string | null
+          last_name?: string | null
           lead_path?: string | null
           lead_temperature?: string | null
           lead_type?: string | null
           meeting_time?: string | null
+          name_needs_confirmation?: boolean
           needs_enrichment?: boolean
           next_action?: string | null
           phone_normalized?: string | null
           phone_number?: string | null
+          phone_raw?: string | null
           province?: string | null
           registration_status?: string | null
           source?: string | null
           sponsor_name?: string | null
+          stage_id?: string | null
           state?: string | null
           unsubscribe_token?: string | null
           unsubscribed?: boolean
+          updated_at?: string
+          whatsapp_display_name?: string | null
         }
         Update: {
           action_taken?: string | null
@@ -1266,6 +1310,8 @@ export type Database = {
           associate_status?: string | null
           city?: string | null
           communication_status?: string | null
+          contact_confidence?: string | null
+          contact_source?: string | null
           country?: string | null
           created_at?: string
           date_captured?: string | null
@@ -1276,26 +1322,42 @@ export type Database = {
           focus_area?: string | null
           full_name?: string | null
           go_status?: string | null
+          hub_contact_id?: string | null
+          hub_version?: number | null
           id?: string
           interest_level?: string | null
           last_activity_at?: string | null
+          last_name?: string | null
           lead_path?: string | null
           lead_temperature?: string | null
           lead_type?: string | null
           meeting_time?: string | null
+          name_needs_confirmation?: boolean
           needs_enrichment?: boolean
           next_action?: string | null
           phone_normalized?: string | null
           phone_number?: string | null
+          phone_raw?: string | null
           province?: string | null
           registration_status?: string | null
           source?: string | null
           sponsor_name?: string | null
+          stage_id?: string | null
           state?: string | null
           unsubscribe_token?: string | null
           unsubscribed?: boolean
+          updated_at?: string
+          whatsapp_display_name?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "prospects_stage_id_fkey"
+            columns: ["stage_id"]
+            isOneToOne: false
+            referencedRelation: "pipeline_stages"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       segments: {
         Row: {
@@ -1673,6 +1735,8 @@ export type Database = {
           associate_status: string | null
           city: string | null
           communication_status: string | null
+          contact_confidence: string | null
+          contact_source: string | null
           country: string | null
           created_at: string
           date_captured: string | null
@@ -1683,24 +1747,32 @@ export type Database = {
           focus_area: string | null
           full_name: string | null
           go_status: string | null
+          hub_contact_id: string | null
+          hub_version: number | null
           id: string
           interest_level: string | null
           last_activity_at: string | null
+          last_name: string | null
           lead_path: string | null
           lead_temperature: string | null
           lead_type: string | null
           meeting_time: string | null
+          name_needs_confirmation: boolean
           needs_enrichment: boolean
           next_action: string | null
           phone_normalized: string | null
           phone_number: string | null
+          phone_raw: string | null
           province: string | null
           registration_status: string | null
           source: string | null
           sponsor_name: string | null
+          stage_id: string | null
           state: string | null
           unsubscribe_token: string | null
           unsubscribed: boolean
+          updated_at: string
+          whatsapp_display_name: string | null
         }[]
         SetofOptions: {
           from: "*"
@@ -1716,6 +1788,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      normalize_phone_e164: { Args: { v: string }; Returns: string }
       recalculate_engagement_scores: { Args: never; Returns: undefined }
       search_kb_chunks: {
         Args: {

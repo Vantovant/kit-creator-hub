@@ -1,59 +1,165 @@
+import { useEffect, useState, useCallback } from "react";
 import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Inbox, Zap, Users, ListChecks, Sparkles } from "lucide-react";
+import { useInboxAccounts } from "@/hooks/useInboxAccounts";
+import { useInbox, InboxFilter } from "@/hooks/useInbox";
+import { InboxMessageList } from "@/components/inbox/InboxMessageList";
+import { InboxMessageDetail } from "@/components/inbox/InboxMessageDetail";
+import { Contact360Panel } from "@/components/inbox/Contact360Panel";
+import { Inbox, Star, Archive, Clock, CheckCircle2, Send, RefreshCw, Plus } from "lucide-react";
+import { cn } from "@/lib/utils";
+
+const filters: { key: InboxFilter; label: string; icon: React.ReactNode }[] = [
+  { key: "inbox", label: "Inbox", icon: <Inbox className="w-4 h-4" /> },
+  { key: "starred", label: "Starred", icon: <Star className="w-4 h-4" /> },
+  { key: "snoozed", label: "Snoozed", icon: <Clock className="w-4 h-4" /> },
+  { key: "waiting", label: "Waiting", icon: <CheckCircle2 className="w-4 h-4" /> },
+  { key: "handled", label: "Handled", icon: <CheckCircle2 className="w-4 h-4" /> },
+  { key: "archive", label: "Archive", icon: <Archive className="w-4 h-4" /> },
+];
 
 export default function InboxPage() {
+  const { accounts, selected, selectedId, setSelectedId, syncAccount, loading: accountsLoading } = useInboxAccounts();
+  const [filter, setFilter] = useState<InboxFilter>("inbox");
+  const { messages, loading, selectedId: msgId, setSelectedId: setMsgId, doAction, refresh } = useInbox(selectedId, filter);
+  const [syncing, setSyncing] = useState(false);
+
+  const selectedMessage = messages.find((m) => m.id === msgId) || messages[0] || null;
+
+  const handleSync = useCallback(async () => {
+    if (!selectedId) return;
+    setSyncing(true);
+    try {
+      await syncAccount(selectedId);
+      await refresh();
+    } catch (e) {
+      console.error("Sync failed", e);
+    }
+    setSyncing(false);
+  }, [selectedId, syncAccount, refresh]);
+
+  useEffect(() => {
+    if (!selectedId && accounts[0]?.id) setSelectedId(accounts[0].id);
+  }, [accounts, selectedId, setSelectedId]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!messages.length) return;
+      const idx = messages.findIndex((m) => m.id === msgId);
+      if (e.key === "j" || e.key === "ArrowDown") {
+        const next = Math.min(idx + 1, messages.length - 1);
+        setMsgId(messages[next]?.id);
+      } else if (e.key === "k" || e.key === "ArrowUp") {
+        const prev = Math.max(idx - 1, 0);
+        setMsgId(messages[prev]?.id);
+      } else if (e.key === "e") {
+        if (selectedMessage) doAction(selectedMessage.id, selectedMessage.is_archived ? "unarchive" : "archive");
+      } else if (e.key === "s") {
+        if (selectedMessage) doAction(selectedMessage.id, selectedMessage.is_starred ? "unstar" : "star");
+      } else if (e.key === "h") {
+        if (selectedMessage) doAction(selectedMessage.id, "handled");
+      } else if (e.key === "r") {
+        if (selectedMessage) doAction(selectedMessage.id, "mark_read");
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [messages, msgId, selectedMessage, doAction, setMsgId]);
+
   return (
-    <div>
+    <div className="h-[calc(100vh-5rem)] flex flex-col">
       <DashboardHeader
         title="Inbox"
-        subtitle="Superhuman-style triage + Nimble-style contact intelligence for your Gmail."
+        subtitle="Superhuman triage + Nimble contact intelligence for your Gmail."
       />
 
-      <div className="p-6 max-w-5xl space-y-6">
-        <Card className="border-dashed">
-          <CardHeader>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                <Inbox className="w-5 h-5 text-primary" />
-              </div>
-              <div>
-                <CardTitle>Phase 0 complete — foundations installed</CardTitle>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Database, RLS, and audit trail are ready. Next: connect Gmail (Phase 1).
-                </p>
-              </div>
+      <div className="flex-1 flex overflow-hidden">
+        <aside className="w-56 border-r flex flex-col">
+          <div className="p-4 border-b space-y-3">
+            {accountsLoading ? (
+              <p className="text-sm text-muted-foreground">Loading accounts...</p>
+            ) : (
+              <select
+                className="w-full text-sm bg-background border rounded-md px-2 py-1.5"
+                value={selectedId || ""}
+                onChange={(e) => setSelectedId(e.target.value)}
+              >
+                {accounts.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.label || a.email_address}
+                  </option>
+                ))}
+              </select>
+            )}
+            <div className="flex gap-2">
+              <button
+                onClick={handleSync}
+                disabled={syncing || !selectedId}
+                className="flex-1 flex items-center justify-center gap-1.5 text-xs px-2 py-1.5 rounded-md border hover:bg-muted disabled:opacity-50"
+              >
+                <RefreshCw className={cn("w-3.5 h-3.5", syncing && "animate-spin")} />
+                Sync
+              </button>
+              <button
+                disabled
+                className="flex items-center justify-center gap-1.5 text-xs px-2 py-1.5 rounded-md border opacity-50 cursor-not-allowed"
+                title="Multi-account support coming in Phase 3"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Add
+              </button>
             </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-              <FeatureRow icon={<Zap className="w-4 h-4" />} title="Gmail sync (Phase 1)" desc="Read-only OAuth, every 2 min." />
-              <FeatureRow icon={<Sparkles className="w-4 h-4" />} title="Superhuman UI (Phase 2)" desc="J/K nav · snooze · waiting · handled · ⌘K." />
-              <FeatureRow icon={<Users className="w-4 h-4" />} title="Contact 360 (Phase 3)" desc="Nimble panel: prospect, tags, sequences, activity." />
-              <FeatureRow icon={<ListChecks className="w-4 h-4" />} title="Auto-enroll + reply → task (Phase 4-5)" desc="Registrations → sequences, replies → tags + Plan tasks." />
-            </div>
-            <div className="pt-2 border-t">
-              <p className="text-sm text-muted-foreground mb-3">
-                To start Phase 1 I need Google OAuth credentials. Reply with{" "}
-                <span className="font-mono text-foreground">APPROVE PHASE 1</span> and I'll walk you through
-                creating them in Google Cloud Console (5 min).
-              </p>
-              <button disabled className="px-4 py-2 rounded-lg border text-sm font-medium opacity-60 cursor-not-allowed">Connect Gmail (Phase 1 — pending)</button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
-  );
-}
+            {selected?.last_sync_at && (
+              <p className="text-xs text-muted-foreground">Last sync: {new Date(selected.last_sync_at).toLocaleString()}</p>
+            )}
+          </div>
 
-function FeatureRow({ icon, title, desc }: { icon: React.ReactNode; title: string; desc: string }) {
-  return (
-    <div className="flex items-start gap-3 p-3 rounded-lg border bg-muted/30">
-      <div className="mt-0.5 text-muted-foreground">{icon}</div>
-      <div>
-        <p className="font-medium text-foreground">{title}</p>
-        <p className="text-xs text-muted-foreground mt-0.5">{desc}</p>
+          <nav className="flex-1 p-2 space-y-0.5">
+            {filters.map((f) => (
+              <button
+                key={f.key}
+                onClick={() => setFilter(f.key)}
+                className={cn(
+                  "w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors",
+                  filter === f.key ? "bg-muted font-medium" : "hover:bg-muted/50"
+                )}
+              >
+                {f.icon}
+                {f.label}
+              </button>
+            ))}
+          </nav>
+
+          <div className="p-4 border-t text-xs text-muted-foreground space-y-1">
+            <p><kbd className="font-mono border rounded px-1">j/k</kbd> navigate</p>
+            <p><kbd className="font-mono border rounded px-1">e</kbd> archive</p>
+            <p><kbd className="font-mono border rounded px-1">s</kbd> star</p>
+            <p><kbd className="font-mono border rounded px-1">h</kbd> handled</p>
+            <p><kbd className="font-mono border rounded px-1">r</kbd> read</p>
+          </div>
+        </aside>
+
+        <main className="flex-1 flex min-w-0">
+          <div className="w-1/3 min-w-[320px] border-r flex flex-col">
+            <div className="px-4 py-2 border-b text-xs text-muted-foreground flex items-center justify-between">
+              <span>{loading ? "Loading..." : `${messages.length} messages`}</span>
+              <span className="text-[10px] uppercase tracking-wider">{filter}</span>
+            </div>
+            <InboxMessageList
+              messages={messages}
+              selectedId={msgId}
+              onSelect={setMsgId}
+            />
+          </div>
+
+          <div className="flex-1 min-w-0 border-r">
+            <InboxMessageDetail
+              message={selectedMessage}
+              onAction={(action, data) => selectedMessage && doAction(selectedMessage.id, action, data)}
+            />
+          </div>
+
+          <Contact360Panel message={selectedMessage} />
+        </main>
       </div>
     </div>
   );

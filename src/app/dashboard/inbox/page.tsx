@@ -66,7 +66,7 @@ export default function InboxPage() {
   }, [messages, msgId, selectedMessage, doAction, setMsgId]);
 
   return (
-    <div className="h-[calc(100vh-4rem)] flex flex-col">
+    <div className="h-[calc(100vh-5rem)] flex flex-col">
       <DashboardHeader
         title="Inbox"
         subtitle="Superhuman triage + Nimble contact intelligence for your Gmail."

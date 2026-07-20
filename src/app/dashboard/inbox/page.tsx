@@ -49,6 +49,14 @@ export default function InboxPage() {
   const menuAnchorRef = useRef<HTMLDivElement>(null);
 
   const { widths, startDrag } = useResizablePanels("inbox-widths-v2", [420, 620]);
+  const [isMdUp, setIsMdUp] = useState<boolean>(() => typeof window !== "undefined" ? window.matchMedia("(min-width: 768px)").matches : true);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia("(min-width: 768px)");
+    const on = () => setIsMdUp(mq.matches);
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, []);
 
   const selectedMessage = messages.find((m) => m.id === msgId) || messages[0] || null;
 
@@ -328,7 +336,13 @@ export default function InboxPage() {
         <main className="flex-1 flex min-w-0">
           {!fullscreen && (
             <>
-              <div className="shrink-0 flex flex-col border-r" style={{ width: widths[0] }}>
+              <div
+                className={cn(
+                  "flex flex-col border-r w-full md:w-auto md:shrink-0",
+                  msgId ? "hidden md:flex" : "flex",
+                )}
+                style={isMdUp ? { width: widths[0] } : undefined}
+              >
                 <div className="px-4 py-2 border-b text-xs text-muted-foreground flex items-center justify-between shrink-0">
                   <span>{loading ? "Loading..." : `${messages.length} messages`}</span>
                   <span className="text-[10px] uppercase tracking-wider">{scope === "all" ? "all • " : ""}{filter}</span>
@@ -354,11 +368,27 @@ export default function InboxPage() {
                   density={density}
                 />
               </div>
-              <ResizeHandle onPointerDown={startDrag(0)} />
+              <div className="hidden md:block"><ResizeHandle onPointerDown={startDrag(0)} /></div>
             </>
           )}
 
-          <div className="flex-1 min-w-0 relative" ref={menuAnchorRef} style={fullscreen || !showContact ? undefined : { width: widths[1] }}>
+          <div
+            className={cn(
+              "flex-1 min-w-0 relative w-full",
+              msgId ? "flex flex-col" : "hidden md:flex md:flex-col",
+            )}
+            ref={menuAnchorRef}
+            style={isMdUp && !fullscreen && showContact ? { width: widths[1] } : undefined}
+          >
+            {/* Mobile back button */}
+            {msgId && (
+              <button
+                onClick={() => setMsgId(null as any)}
+                className="md:hidden flex items-center gap-1 px-3 py-2 border-b text-xs text-muted-foreground hover:text-foreground"
+              >
+                <ArrowLeft className="w-4 h-4" /> Back to messages
+              </button>
+            )}
             <InboxMessageDetail
               message={selectedMessage}
               onAction={(action, data) => selectedMessage && doAction(selectedMessage.id, action, data)}
@@ -389,15 +419,16 @@ export default function InboxPage() {
           </div>
 
           {!fullscreen && showContact && (
-            <>
+            <div className="hidden lg:flex">
               <ResizeHandle onPointerDown={startDrag(1)} />
               <div className="shrink-0 min-w-[260px]" style={{ width: "auto", flex: "0 0 320px" }}>
                 <Contact360Panel message={selectedMessage} />
               </div>
-            </>
+            </div>
           )}
         </main>
       </div>
+
 
       <AddAccountModal
         open={addOpen}

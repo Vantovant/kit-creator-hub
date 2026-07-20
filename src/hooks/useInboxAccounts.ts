@@ -40,10 +40,29 @@ export function useInboxAccounts() {
   const addAccount = async (email: string, label = "Personal") => {
     const user = (await supabase.auth.getUser()).data.user;
     if (!user) return null;
+    const normalized = email.trim().toLowerCase();
+    // Reactivate an existing row for this user+email if one exists
+    const { data: existing } = await supabase
+      .from("inbox_accounts")
+      .select("*")
+      .eq("user_id", user.id)
+      .eq("email_address", normalized)
+      .maybeSingle();
+    if (existing) {
+      const { data, error } = await supabase
+        .from("inbox_accounts")
+        .update({ is_active: true, status: "needs_authorization", label, sync_error: null })
+        .eq("id", existing.id)
+        .select()
+        .single();
+      if (error) throw error;
+      await fetchAccounts();
+      return data as InboxAccount;
+    }
     const { data, error } = await supabase.from("inbox_accounts").insert({
       user_id: user.id,
       provider: "gmail",
-      email_address: email,
+      email_address: normalized,
       label,
       status: "needs_authorization",
       is_active: true,

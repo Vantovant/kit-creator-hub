@@ -37,6 +37,7 @@ const navigation = [
   { name: "Analytics", href: "/dashboard/analytics", icon: BarChart3 },
   { name: "Knowledge Base", href: "/dashboard/knowledge-base", icon: BookOpen },
   { name: "Email", href: "/dashboard/email", icon: MessageSquareReply },
+  { name: "Inbox", href: "/dashboard/inbox", icon: Inbox },
   { name: "Plan", href: "/dashboard/plan", icon: Target },
 ];
 

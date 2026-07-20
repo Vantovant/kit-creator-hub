@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { InboxMessage } from "@/hooks/useInbox";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Mail, Tag, ListOrdered, Activity, UserPlus, Bot, Loader2 } from "lucide-react";
+import { Mail, Tag, ListOrdered, Activity, UserPlus, Bot, Loader2, AlertTriangle } from "lucide-react";
 
 const ROBOT_PATTERNS = [/^robot@/i, /^no-?reply@/i, /^donotreply@/i, /^notifications?@/i, /^mailer-daemon@/i, /^postmaster@/i, /^system@/i, /^bounce@/i];
 const isRobot = (e?: string | null) => !!e && ROBOT_PATTERNS.some((r) => r.test(e));

@@ -227,6 +227,22 @@ serve(async (req: Request) => {
                 provider_message_id: sendResult?.data?.id || null,
               });
 
+              try {
+                const tagName = `Broadcast:${broadcast.id}`;
+                const { data: tag } = await adminClient
+                  .from("tags")
+                  .upsert({ name: tagName }, { onConflict: "name" })
+                  .select("id")
+                  .single();
+                if (sub.id && tag?.id) {
+                  await adminClient
+                    .from("prospect_tags")
+                    .upsert({ prospect_id: sub.id, tag_id: tag.id }, { onConflict: "prospect_id,tag_id" });
+                }
+              } catch (tagErr) {
+                console.error("Broadcast tag sync failed:", tagErr);
+              }
+
               sent++;
             } catch (e) {
               console.error(`Failed to send to ${sub.email}:`, e);

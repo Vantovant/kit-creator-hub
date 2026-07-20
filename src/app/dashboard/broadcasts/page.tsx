@@ -35,6 +35,7 @@ export default function BroadcastsPage() {
   const [loading, setLoading] = useState(true);
   const [statsMap, setStatsMap] = useState<Record<string, BroadcastStats>>({});
   const [expandedStats, setExpandedStats] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchBroadcasts = async () => {
@@ -73,7 +74,12 @@ export default function BroadcastsPage() {
 
   const handleDelete = async (id: string) => {
     if (!confirm("Delete this broadcast draft?")) return;
-    await supabase.from("broadcasts").delete().eq("id", id);
+    setDeleteError(null);
+    const { error } = await supabase.from("broadcasts").delete().eq("id", id).eq("status", "draft");
+    if (error) {
+      setDeleteError(error.message || "Could not delete broadcast.");
+      return;
+    }
     setBroadcasts((prev) => prev.filter((b) => b.id !== id));
   };
 
@@ -100,6 +106,10 @@ export default function BroadcastsPage() {
 
         {loading ? (
           <p className="text-center text-muted-foreground py-12">Loading…</p>
+        ) : deleteError ? (
+          <Card className="bg-card">
+            <CardContent className="p-4 text-sm text-destructive">{deleteError}</CardContent>
+          </Card>
         ) : broadcasts.length === 0 ? (
           <Card className="bg-card">
             <CardContent className="p-12 text-center">

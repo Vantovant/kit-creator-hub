@@ -53,6 +53,16 @@ export function useInboxAccounts() {
     return data as InboxAccount;
   };
 
+  const removeAccount = async (accountId: string) => {
+    const { error } = await supabase
+      .from("inbox_accounts")
+      .update({ is_active: false, status: "removed" })
+      .eq("id", accountId);
+    if (error) throw error;
+    if (selectedId === accountId) setSelectedId(null);
+    await fetchAccounts();
+  };
+
   const syncAccount = async (accountId: string) => {
     const { data, error } = await supabase.functions.invoke("gmail-sync", {
       body: { account_id: accountId, max_results: 50 },
@@ -70,6 +80,7 @@ export function useInboxAccounts() {
     selectedId,
     setSelectedId,
     addAccount,
+    removeAccount,
     syncAccount,
     refresh: fetchAccounts,
   };

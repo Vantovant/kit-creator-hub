@@ -14,6 +14,8 @@ export type InboxMessage = {
   subject: string | null;
   snippet: string | null;
   body_preview: string | null;
+  body_html?: string | null;
+  body_text?: string | null;
   date: string;
   label_ids: string[] | null;
   is_read: boolean;

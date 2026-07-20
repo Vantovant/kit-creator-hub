@@ -1,6 +1,5 @@
 import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Inbox, Zap, Users, ListChecks, Sparkles } from "lucide-react";
 
 export default function InboxPage() {
@@ -8,7 +7,7 @@ export default function InboxPage() {
     <div>
       <DashboardHeader
         title="Inbox"
-        description="Superhuman-style triage + Nimble-style contact intelligence for your Gmail."
+        subtitle="Superhuman-style triage + Nimble-style contact intelligence for your Gmail."
       />
 
       <div className="p-6 max-w-5xl space-y-6">

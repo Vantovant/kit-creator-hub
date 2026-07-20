@@ -19,6 +19,7 @@ import SettingsPage from "@/app/dashboard/settings/page";
 import KnowledgeBasePage from "@/app/dashboard/knowledge-base/page";
 import PlanPage from "@/app/dashboard/plan/page";
 import RepliesPage from "@/app/dashboard/replies/page";
+import InboxPage from "@/app/dashboard/inbox/page";
 import WelcomeForm from "@/pages/WelcomeForm";
 import SequenceForm from "@/pages/SequenceForm";
 import VantoOSBetaForm from "@/pages/VantoOSBetaForm";

@@ -542,6 +542,7 @@ export type Database = {
       inbox_messages: {
         Row: {
           account_id: string
+          body_html: string | null
           body_preview: string | null
           category: string | null
           cc: string[] | null
@@ -571,6 +572,7 @@ export type Database = {
         }
         Insert: {
           account_id: string
+          body_html?: string | null
           body_preview?: string | null
           category?: string | null
           cc?: string[] | null
@@ -600,6 +602,7 @@ export type Database = {
         }
         Update: {
           account_id?: string
+          body_html?: string | null
           body_preview?: string | null
           category?: string | null
           cc?: string[] | null

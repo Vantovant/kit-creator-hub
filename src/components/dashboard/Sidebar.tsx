@@ -26,6 +26,8 @@ import { useAuth } from "@/hooks/useAuth";
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { name: "Subscribers", href: "/dashboard/subscribers", icon: Users },
+  { name: "Plan", href: "/dashboard/plan", icon: Target },
+  { name: "Inbox", href: "/dashboard/inbox", icon: Inbox },
   { name: "Contacts", href: "/dashboard/contacts", icon: Users },
   { name: "Broadcasts", href: "/dashboard/broadcasts", icon: Mail },
   { name: "Automations", href: "/dashboard/automations", icon: Zap },
@@ -38,8 +40,6 @@ const navigation = [
   { name: "Analytics", href: "/dashboard/analytics", icon: BarChart3 },
   { name: "Knowledge Base", href: "/dashboard/knowledge-base", icon: BookOpen },
   { name: "Email", href: "/dashboard/email", icon: MessageSquareReply },
-  { name: "Inbox", href: "/dashboard/inbox", icon: Inbox },
-  { name: "Plan", href: "/dashboard/plan", icon: Target },
 ];
 
 const bottomNav = [

@@ -215,3 +215,63 @@ function NoProspectCard({ message, onLinked }: { message: InboxMessage; onLinked
     </Card>
   );
 }
+
+function EnrichmentNudge({ prospect, onSaved }: { prospect: ProspectDetail; onSaved: () => void }) {
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const save = async () => {
+    setSaving(true); setErr(null);
+    try {
+      const patch: any = { needs_enrichment: false };
+      if (email.trim()) patch.email = email.trim().toLowerCase();
+      if (phone.trim()) patch.phone_number = phone.trim();
+      const { error } = await supabase.from("prospects").update(patch).eq("id", prospect.id);
+      if (error) throw error;
+      onSaved();
+    } catch (e: any) {
+      setErr(e.message || "Save failed");
+    }
+    setSaving(false);
+  };
+
+  return (
+    <Card className="border-amber-500/40 bg-amber-500/5">
+      <CardHeader className="pb-2">
+        <div className="flex items-center gap-2">
+          <AlertTriangle className="w-4 h-4 text-amber-500" />
+          <CardTitle className="text-sm">Needs contact info</CardTitle>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        <p className="text-xs text-muted-foreground">
+          Auto-created from an APLGO enrollment notice. Add a real email &amp; phone so we can reach them directly.
+        </p>
+        <input
+          type="email"
+          placeholder="Real email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          className="w-full text-xs border rounded px-2 py-1.5 bg-background"
+        />
+        <input
+          type="tel"
+          placeholder="Phone (e.g. +27...)"
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+          className="w-full text-xs border rounded px-2 py-1.5 bg-background"
+        />
+        <button
+          onClick={save}
+          disabled={saving || (!email.trim() && !phone.trim())}
+          className="w-full text-xs bg-primary text-primary-foreground rounded py-1.5 font-medium disabled:opacity-50"
+        >
+          {saving ? "Saving…" : "Save & mark enriched"}
+        </button>
+        {err && <p className="text-xs text-destructive">{err}</p>}
+      </CardContent>
+    </Card>
+  );
+}

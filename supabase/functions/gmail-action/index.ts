@@ -233,5 +233,43 @@ Deno.serve(async (req) => {
     });
   }
 
+  // AGENTIC LEARNING: record sender-level signal based on user actions.
+  // trash → spam signal (+1). untrash → spam (-1).
+  // star  → keep signal (+1). unstar  → keep (-1).
+  const senderEmail = (msg.sender || "").toLowerCase();
+  const senderDomain = senderEmail.includes("@") ? senderEmail.split("@")[1] : null;
+  const signalMap: Record<string, { signal: "spam" | "keep"; delta: number }> = {
+    trash: { signal: "spam", delta: 1 },
+    untrash: { signal: "spam", delta: -1 },
+    star: { signal: "keep", delta: 1 },
+    unstar: { signal: "keep", delta: -1 },
+  };
+  const learn = signalMap[action];
+  if (learn && senderEmail) {
+    const { data: existing } = await supabase
+      .from("inbox_learning_signals")
+      .select("id, weight")
+      .eq("user_id", msg.user_id)
+      .eq("sender_email", senderEmail)
+      .eq("signal", learn.signal)
+      .maybeSingle();
+    if (existing) {
+      const nextWeight = Math.max(0, (existing.weight || 0) + learn.delta);
+      await supabase
+        .from("inbox_learning_signals")
+        .update({ weight: nextWeight, last_action_at: new Date().toISOString() })
+        .eq("id", existing.id);
+    } else if (learn.delta > 0) {
+      await supabase.from("inbox_learning_signals").insert({
+        user_id: msg.user_id,
+        sender_email: senderEmail,
+        sender_domain: senderDomain,
+        signal: learn.signal,
+        weight: learn.delta,
+      });
+    }
+  }
+
+
   return json({ ok: true, action, message_id });
 });

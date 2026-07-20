@@ -356,6 +356,47 @@ Deno.serve(async (req) => {
       if (upsertErr) throw upsertErr;
       stored.push(full.id);
 
+      // AGENTIC LEARNING: apply learned sender routing on NEW inbox messages only.
+      const isFreshInbox = (full.labelIds || []).includes("INBOX") && (full.labelIds || []).includes("UNREAD");
+      if (upserted?.id && isFreshInbox) {
+        const { data: signals } = await supabase
+          .from("inbox_learning_signals")
+          .select("signal, weight")
+          .eq("user_id", account.user_id)
+          .eq("sender_email", sender.email);
+        const spamWeight = signals?.find((s) => s.signal === "spam")?.weight || 0;
+        const keepWeight = signals?.find((s) => s.signal === "keep")?.weight || 0;
+        if (keepWeight > 0) {
+          // Learned KEEP: ensure starred + in inbox.
+          try {
+            await gatewayPost(
+              `/users/me/messages/${full.id}/modify`,
+              { addLabelIds: ["STARRED", "INBOX"], removeLabelIds: [] },
+              lovableKey,
+              connectionKey,
+            );
+            await supabase
+              .from("inbox_messages")
+              .update({ is_starred: true, is_archived: false })
+              .eq("id", upserted.id);
+          } catch { /* non-fatal */ }
+        } else if (spamWeight > 0) {
+          // Learned SPAM: send to Gmail Spam folder + mark deleted locally.
+          try {
+            await gatewayPost(
+              `/users/me/messages/${full.id}/modify`,
+              { addLabelIds: ["SPAM"], removeLabelIds: ["INBOX", "UNREAD"] },
+              lovableKey,
+              connectionKey,
+            );
+            await supabase
+              .from("inbox_messages")
+              .update({ is_archived: true, is_read: true, deleted_at: new Date().toISOString() })
+              .eq("id", upserted.id);
+          } catch { /* non-fatal */ }
+        }
+      }
+
       // Fire-and-forget AI classify
       if (upserted?.id) {
         fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/inbox-classify`, {
@@ -364,6 +405,7 @@ Deno.serve(async (req) => {
           body: JSON.stringify({ message_id: upserted.id }),
         }).catch(() => {});
       }
+
     } catch (e: any) {
       errors.push(`${m.id}: ${e.message}`);
     }

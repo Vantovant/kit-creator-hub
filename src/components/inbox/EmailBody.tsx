@@ -31,20 +31,22 @@ export function EmailBody({ html, text }: { html?: string | null; text?: string 
   const frameRef = useRef<HTMLIFrameElement>(null);
   const [height, setHeight] = useState(520);
 
-  const sanitized = useMemo(() => {
-    if (html && html.trim()) {
-      const clean = DOMPurify.sanitize(html, {
-        USE_PROFILES: { html: true },
-        ADD_ATTR: ["target", "rel"],
-        FORBID_TAGS: ["script", "iframe", "object", "embed", "form"],
-        FORBID_ATTR: ["onerror", "onclick", "onload", "onmouseover"],
-      });
-      // Force links open in new tab
-      return clean.replace(/<a /gi, '<a target="_blank" rel="noopener noreferrer" ');
-    }
+  const sanitizedHtml = useMemo(() => {
+    if (!html?.trim()) return "";
+    const clean = DOMPurify.sanitize(html, {
+      USE_PROFILES: { html: true },
+      ADD_TAGS: ["style"],
+      ADD_ATTR: ["target", "rel", "style", "align", "bgcolor", "border", "cellpadding", "cellspacing", "height", "width", "valign"],
+      FORBID_TAGS: ["script", "iframe", "object", "embed", "form"],
+      FORBID_ATTR: ["onerror", "onclick", "onload", "onmouseover"],
+    });
+    return clean.replace(/<a /gi, '<a target="_blank" rel="noopener noreferrer" ');
+  }, [html]);
+
+  const sanitizedText = useMemo(() => {
     if (text) return linkifyPlain(text);
     return "<em class='text-muted-foreground'>No body available.</em>";
-  }, [html, text]);
+  }, [text]);
 
   const srcDoc = useMemo(() => {
     if (!html?.trim()) return "";
@@ -62,9 +64,9 @@ export function EmailBody({ html, text }: { html?: string | null; text?: string 
       a { color: #2563eb; }
     </style>
   </head>
-  <body>${sanitized}</body>
+  <body>${sanitizedHtml}</body>
 </html>`;
-  }, [html, sanitized]);
+  }, [html, sanitizedHtml]);
 
   useEffect(() => {
     if (!html?.trim()) return;
@@ -108,6 +110,7 @@ export function EmailBody({ html, text }: { html?: string | null; text?: string 
                  [&_img]:max-w-full [&_table]:max-w-full
                  [&_blockquote]:border-l-2 [&_blockquote]:border-muted-foreground/30 [&_blockquote]:pl-3 [&_blockquote]:text-muted-foreground"
       dangerouslySetInnerHTML={{ __html: sanitized }}
+      dangerouslySetInnerHTML={{ __html: sanitizedText }}
     />
   );
 }

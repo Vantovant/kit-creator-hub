@@ -219,22 +219,23 @@ Deno.serve(async (req) => {
 
   if (canAct && detected_type === "registration") {
     try {
-      // If the sender is a robot (e.g. robot@aplgo.com) the enrollee is NOT
-      // the sender. Use the extracted enrollee identity instead.
       const enrolleeName = entities.enrollee_name || entities.first_name || null;
       const enrolleeId = entities.enrollee_id || null;
       let enrolleeEmail = entities.email && !isRobotSender(entities.email)
         ? String(entities.email).toLowerCase()
         : null;
 
+      // Robot enrollments: only Name + APLGO ID are trustworthy.
+      // Do NOT invent phone/email — mark needs_enrichment so UI nudges the user.
+      const enrolleePhone = senderIsRobot ? null : (entities.phone || null);
+      const needsEnrichment = senderIsRobot && !enrolleeEmail;
+
       if (senderIsRobot && !enrolleeEmail) {
-        // No real email — mint a stable placeholder so we can still track them.
         const slug = enrolleeId
           ? `id-${enrolleeId}`
           : (enrolleeName ? enrolleeName.toLowerCase().replace(/[^a-z0-9]+/g, "-") : `unknown-${msg.id.slice(0,8)}`);
         enrolleeEmail = `${slug}@aplgo.enrollment.pending`;
       } else if (!enrolleeEmail) {
-        // Non-robot sender with no explicit email — fall back to the sender.
         enrolleeEmail = String(msg.sender).toLowerCase();
       }
 
@@ -248,7 +249,9 @@ Deno.serve(async (req) => {
           first_name: enrolleeName,
           source: matchedRule?.rule_name || (senderIsRobot ? "aplgo_new_enrollment" : "inbox_ai_registration"),
           sequence_id: matchedRule?.sequence_id || null,
-          phone_number: entities.phone || null,
+          phone_number: enrolleePhone,
+          aplgo_id: enrolleeId,
+          needs_enrichment: needsEnrichment,
           additional_notes: `Auto-enrolled from Gmail: ${msg.subject}${enrolleeId ? ` (ID ${enrolleeId})` : ""}`,
         }),
       });

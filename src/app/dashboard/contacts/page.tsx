@@ -5,9 +5,9 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
-  Search, Mail, Phone, MapPin, Tag as TagIcon, Activity, Send,
-  User, Filter, Plus, Star, Flame, Snowflake, Loader2,
+  Search, Tag as TagIcon, Filter, Plus, Star, Flame, Snowflake,
 } from "lucide-react";
+import { ContactDrawer } from "@/components/contacts/ContactDrawer";
 
 type Prospect = {
   id: string;

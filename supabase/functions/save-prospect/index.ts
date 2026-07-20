@@ -99,7 +99,12 @@ serve(async (req: Request) => {
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
     const { error: dbError } = await supabase.from("prospects").upsert(
-      { email: trimmedEmail, first_name: sanitizedName, source: sanitizedSource },
+      {
+        email: trimmedEmail,
+        first_name: sanitizedName,
+        source: sanitizedSource,
+        last_activity_at: new Date().toISOString(),
+      },
       { onConflict: "email" }
     );
 
@@ -201,6 +206,28 @@ serve(async (req: Request) => {
       } catch (seqErr) {
         console.error("Sequence enrollment error (non-fatal):", seqErr);
       }
+    }
+
+    // Tag every form/sequence sourced lead so Contacts can be filtered by acquisition path.
+    try {
+      const tagName = resolvedSequenceId ? `Sequence:${resolvedSequenceId}` : `Source:${sanitizedSource}`;
+      const { data: savedProspect } = await supabase
+        .from("prospects")
+        .select("id")
+        .eq("email", trimmedEmail)
+        .maybeSingle();
+      const { data: tag } = await supabase
+        .from("tags")
+        .upsert({ name: tagName }, { onConflict: "name" })
+        .select("id")
+        .single();
+      if (savedProspect?.id && tag?.id) {
+        await supabase
+          .from("prospect_tags")
+          .upsert({ prospect_id: savedProspect.id, tag_id: tag.id }, { onConflict: "prospect_id,tag_id" });
+      }
+    } catch (tagErr) {
+      console.error("Source/sequence tagging error (non-fatal):", tagErr);
     }
 
     return new Response(JSON.stringify({ success: true }), {

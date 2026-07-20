@@ -218,6 +218,22 @@ serve(async (req: Request) => {
       });
     }
 
+    try {
+      const tagName = `Sequence:${seq.id}`;
+      const { data: tag } = await adminClient
+        .from("tags")
+        .upsert({ name: tagName }, { onConflict: "name" })
+        .select("id")
+        .single();
+      if (prospect?.id && tag?.id) {
+        await adminClient
+          .from("prospect_tags")
+          .upsert({ prospect_id: prospect.id, tag_id: tag.id }, { onConflict: "prospect_id,tag_id" });
+      }
+    } catch (tagErr) {
+      console.error("Sequence tag sync failed:", tagErr);
+    }
+
     const unsubUrl = `${APP_URL}/unsubscribe?token=${prospect?.unsubscribe_token || ""}`;
 
     let cumulativeDelayHours = 0;

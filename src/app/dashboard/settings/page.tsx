@@ -23,12 +23,15 @@ import {
   RefreshCw,
   CheckCircle2,
   AlertTriangle,
+  Trash2,
+  Plus,
+  ShieldCheck,
 } from "lucide-react";
 import { EmailSignaturePreview } from "@/components/dashboard/EmailSignaturePreview";
 
 export default function SettingsPage() {
   const { user } = useAuth();
-  const { accounts: inboxAccounts, refresh: refreshInboxAccounts } = useInboxAccounts();
+  const { accounts: inboxAccounts, refresh: refreshInboxAccounts, addAccount, removeAccount } = useInboxAccounts();
   const [saving, setSaving] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark">("light");
   const [activeTab, setActiveTab] = useState(() => {
@@ -37,6 +40,10 @@ export default function SettingsPage() {
   });
   const [gmailRefreshing, setGmailRefreshing] = useState(false);
   const [gmailMessage, setGmailMessage] = useState<string | null>(null);
+  const [gmailEmail, setGmailEmail] = useState("");
+  const [gmailLabel, setGmailLabel] = useState("Work");
+  const [gmailSaving, setGmailSaving] = useState(false);
+  const [securityMessage, setSecurityMessage] = useState<string | null>(null);
 
   useEffect(() => {
     const savedTheme = localStorage.getItem("kit-theme") as "light" | "dark" | null;
@@ -76,6 +83,54 @@ export default function SettingsPage() {
       setGmailMessage(e.message || "Could not refresh Gmail authorizations.");
     } finally {
       setGmailRefreshing(false);
+    }
+  };
+
+  const registerGmailAccount = async () => {
+    const trimmedEmail = gmailEmail.trim().toLowerCase();
+    if (!trimmedEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+      setGmailMessage("Enter a valid Gmail address first.");
+      return;
+    }
+    setGmailSaving(true);
+    setGmailMessage(null);
+    try {
+      await addAccount(trimmedEmail, gmailLabel.trim() || "Inbox");
+      setGmailEmail("");
+      setGmailLabel("Work");
+      setGmailMessage("Mailbox added as pending. Authorize it through the connector card in chat, then refresh here.");
+    } catch (e: any) {
+      setGmailMessage(e.message || "Could not add Gmail account.");
+    } finally {
+      setGmailSaving(false);
+    }
+  };
+
+  const deleteGmailAccount = async (accountId: string) => {
+    if (!confirm("Remove this Gmail inbox from Zazi Mail?")) return;
+    setGmailMessage(null);
+    try {
+      await removeAccount(accountId);
+      setGmailMessage("Gmail inbox removed from the app.");
+    } catch (e: any) {
+      setGmailMessage(e.message || "Could not remove Gmail account.");
+    }
+  };
+
+  const enable2FA = async () => {
+    setSecurityMessage(null);
+    try {
+      const { data: factors } = await supabase.auth.mfa.listFactors();
+      const existing = factors?.totp?.find((factor) => factor.status === "verified");
+      if (existing) {
+        setSecurityMessage("2FA is already enabled for this account.");
+        return;
+      }
+      const { error } = await supabase.auth.mfa.enroll({ factorType: "totp" });
+      if (error) throw error;
+      setSecurityMessage("2FA setup started. Open your authenticator app flow from your account security prompt and verify the code to finish.");
+    } catch (e: any) {
+      setSecurityMessage(e.message || "2FA is not available for this account yet.");
     }
   };
 
@@ -300,11 +355,15 @@ export default function SettingsPage() {
                     </div>
                     <button
                       type="button"
+                      onClick={enable2FA}
                       className="px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                     >
+                      <span className="inline-flex items-center gap-2"><ShieldCheck className="w-4 h-4" />
                       Enable 2FA
+                      </span>
                     </button>
                   </div>
+                  {securityMessage && <p className="text-sm text-muted-foreground">{securityMessage}</p>}
                 </CardContent>
               </Card>
             </TabsContent>
@@ -478,15 +537,47 @@ export default function SettingsPage() {
                         </p>
                       </div>
                     </div>
-                    <button
-                      type="button"
-                      onClick={refreshAuthorizedGmailAccounts}
-                      disabled={gmailRefreshing}
-                      className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground font-medium rounded-lg transition-colors disabled:opacity-50"
-                    >
-                      {gmailRefreshing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-                      {gmailRefreshing ? "Checking…" : "Refresh authorized Gmail accounts"}
-                    </button>
+                    <div className="grid gap-3 sm:grid-cols-[1fr_160px_auto]">
+                      <Input
+                        type="email"
+                        placeholder="newgmail@example.com"
+                        value={gmailEmail}
+                        onChange={(e) => setGmailEmail(e.target.value)}
+                        className="dark:bg-gray-700 dark:border-gray-600"
+                      />
+                      <Input
+                        placeholder="Label"
+                        value={gmailLabel}
+                        onChange={(e) => setGmailLabel(e.target.value)}
+                        className="dark:bg-gray-700 dark:border-gray-600"
+                      />
+                      <button
+                        type="button"
+                        onClick={registerGmailAccount}
+                        disabled={gmailSaving}
+                        className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-card border border-border rounded-lg hover:bg-muted transition-colors disabled:opacity-50"
+                      >
+                        {gmailSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                        Add Gmail
+                      </button>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={refreshAuthorizedGmailAccounts}
+                        disabled={gmailRefreshing}
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground font-medium rounded-lg transition-colors disabled:opacity-50"
+                      >
+                        {gmailRefreshing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                        {gmailRefreshing ? "Checking…" : "Refresh authorized Gmail accounts"}
+                      </button>
+                      <a
+                        href="/dashboard/integrations"
+                        className="inline-flex items-center gap-2 px-4 py-2 border border-border rounded-lg hover:bg-muted transition-colors"
+                      >
+                        <Mail className="w-4 h-4" /> Open integrations
+                      </a>
+                    </div>
                     {gmailMessage && (
                       <p className="text-sm text-muted-foreground">{gmailMessage}</p>
                     )}
@@ -504,9 +595,19 @@ export default function SettingsPage() {
                             <p className="text-sm text-muted-foreground">{account.email_address}</p>
                             {account.sync_error && <p className="text-xs text-destructive mt-1">{account.sync_error}</p>}
                           </div>
-                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0">
-                            {authorized ? <CheckCircle2 className="w-4 h-4 text-primary" /> : <AlertTriangle className="w-4 h-4 text-destructive" />}
-                            {authorized ? "Authorized" : "Needs authorization"}
+                          <div className="flex items-center gap-2 shrink-0">
+                            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                              {authorized ? <CheckCircle2 className="w-4 h-4 text-primary" /> : <AlertTriangle className="w-4 h-4 text-destructive" />}
+                              {authorized ? "Authorized" : "Needs authorization"}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => deleteGmailAccount(account.id)}
+                              className="p-2 rounded hover:bg-destructive/10 text-destructive transition-colors"
+                              title="Remove Gmail inbox"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
                           </div>
                         </div>
                       );

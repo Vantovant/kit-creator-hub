@@ -1,4 +1,4 @@
-import { formatDistanceToNow } from "date-fns";
+
 import { InboxMessage } from "@/hooks/useInbox";
 import { Star, Archive, Clock, CheckCircle2, Circle } from "lucide-react";
 import { cn } from "@/lib/utils";

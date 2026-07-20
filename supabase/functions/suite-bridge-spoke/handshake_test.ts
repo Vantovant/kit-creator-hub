@@ -1,6 +1,6 @@
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 
-const APP_KEY = "mlm_course";
+const APP_KEY = "zazi_email";
 const enc = new TextEncoder();
 
 async function hmac(secret: string, msg: string) {

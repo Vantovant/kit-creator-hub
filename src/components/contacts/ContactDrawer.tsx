@@ -6,7 +6,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { toast } from "sonner";
+const toast = {
+  success: (msg: string) => console.log("✓", msg),
+  error: (msg: string) => { console.error("✗", msg); if (typeof window !== "undefined") window.alert(msg); },
+};
 
 type Stage = { id: string; name: string; sort_order: number };
 type Tag = { id: string; name: string };
@@ -118,10 +121,12 @@ export function ContactDrawer({
   const addTag = async () => {
     const name = tagInput.trim();
     if (!name || !prospectId) return;
-    let existing = await supabase.from("tags").select("id,name").eq("name", name).maybeSingle();
+    const user = (await supabase.auth.getUser()).data.user;
+    if (!user) { toast.error("Sign in required"); return; }
+    const existing = await supabase.from("tags").select("id,name").eq("name", name).maybeSingle();
     let tagId = existing.data?.id;
     if (!tagId) {
-      const ins = await supabase.from("tags").insert({ name }).select("id,name").single();
+      const ins = await supabase.from("tags").insert({ name, user_id: user.id }).select("id,name").single();
       if (ins.error) { toast.error(ins.error.message); return; }
       tagId = ins.data.id;
     }

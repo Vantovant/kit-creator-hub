@@ -1,14 +1,16 @@
 import { useState } from "react";
-import { X } from "lucide-react";
+import { Settings, X } from "lucide-react";
 
 export function AddAccountModal({
   open,
   onClose,
   onAdd,
+  onOpenSettings,
 }: {
   open: boolean;
   onClose: () => void;
   onAdd: (email: string, label: string) => Promise<void>;
+  onOpenSettings?: () => void;
 }) {
   const [email, setEmail] = useState("");
   const [label, setLabel] = useState("Work");
@@ -25,11 +27,22 @@ export function AddAccountModal({
           <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="w-4 h-4" /></button>
         </div>
         <div className="p-5 space-y-3 text-sm">
-          <p className="text-muted-foreground">
-            Register another Gmail address to route into Zazi Mail. The primary connector
-            currently powers all syncs; additional accounts appear immediately in
-            <span className="font-mono px-1">All Inboxes</span> once linked at the workspace level.
-          </p>
+          <div className="rounded-md border bg-muted/30 p-3 space-y-2">
+            <p className="font-medium">Authorize Gmail first</p>
+            <p className="text-muted-foreground">
+              Google authorization happens in Lovable Connectors, not from this form. After the mailbox is authorized, refresh Gmail accounts in Settings so Zazi Mail can match the exact address.
+            </p>
+            {onOpenSettings && (
+              <button
+                type="button"
+                onClick={onOpenSettings}
+                className="inline-flex items-center gap-2 text-xs px-2.5 py-1.5 rounded-md border hover:bg-muted"
+              >
+                <Settings className="w-3.5 h-3.5" />
+                Open Email Settings
+              </button>
+            )}
+          </div>
           <div>
             <label className="text-xs text-muted-foreground">Email address</label>
             <input
@@ -62,7 +75,7 @@ export function AddAccountModal({
             }}
             className="text-sm px-3 py-1.5 rounded bg-primary text-primary-foreground disabled:opacity-40"
           >
-            {saving ? "Adding…" : "Add account"}
+            {saving ? "Adding…" : "Add pending account"}
           </button>
         </div>
       </div>

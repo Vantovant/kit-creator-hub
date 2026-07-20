@@ -45,7 +45,7 @@ export function useInboxAccounts() {
       provider: "gmail",
       email_address: email,
       label,
-      status: "pending",
+      status: "needs_authorization",
       is_active: true,
     }).select().single();
     if (error) throw error;

@@ -13,8 +13,6 @@ import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 
 const GATEWAY_URL = "https://connector-gateway.lovable.dev/google_mail/gmail/v1";
 
-const enc = new TextEncoder();
-
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -119,6 +117,67 @@ async function gatewayGet(path: string, lovableKey: string, connectionKey: strin
   return JSON.parse(text);
 }
 
+function getGmailConnectionKeys() {
+  const keys: { envName: string; key: string }[] = [];
+  const primary = Deno.env.get("GOOGLE_MAIL_API_KEY");
+  if (primary) keys.push({ envName: "GOOGLE_MAIL_API_KEY", key: primary });
+
+  for (let i = 2; i <= 10; i += 1) {
+    const envName = `GOOGLE_MAIL_API_KEY_${i}`;
+    const key = Deno.env.get(envName);
+    if (key) keys.push({ envName, key });
+  }
+
+  return keys;
+}
+
+async function listAuthorizedGmailProfiles(lovableKey: string) {
+  const profiles: { envName: string; key: string; emailAddress: string; messagesTotal?: number; threadsTotal?: number }[] = [];
+  const errors: string[] = [];
+
+  for (const connection of getGmailConnectionKeys()) {
+    try {
+      const profile = await gatewayGet("/users/me/profile", lovableKey, connection.key);
+      if (profile?.emailAddress) {
+        profiles.push({
+          envName: connection.envName,
+          key: connection.key,
+          emailAddress: normalizeEmail(profile.emailAddress),
+          messagesTotal: profile.messagesTotal,
+          threadsTotal: profile.threadsTotal,
+        });
+      }
+    } catch (e: any) {
+      errors.push(`${connection.envName}: ${e.message}`);
+    }
+  }
+
+  return { profiles, errors };
+}
+
+async function resolveConnectionKeyForAccount(account: any, lovableKey: string): Promise<string> {
+  const expectedEmail = normalizeEmail(account.email_address || "");
+  const { profiles } = await listAuthorizedGmailProfiles(lovableKey);
+  const match = profiles.find((profile) => profile.emailAddress === expectedEmail);
+
+  if (!match) {
+    throw new Error(
+      `No linked Gmail authorization matches ${account.email_address}. Authorize that mailbox in Settings, then refresh authorized accounts.`,
+    );
+  }
+
+  return match.key;
+}
+
+async function getRequestUser(req: Request, supabase: any) {
+  const authHeader = req.headers.get("Authorization") || "";
+  const token = authHeader.replace(/^Bearer\s+/i, "");
+  if (!token) return null;
+  const { data, error } = await supabase.auth.getUser(token);
+  if (error) return null;
+  return data.user || null;
+}
+
 async function gatewayPost(path: string, body: any, lovableKey: string, connectionKey: string) {
   const url = `${GATEWAY_URL}${path}`;
   const res = await fetch(url, {
@@ -144,8 +203,7 @@ Deno.serve(async (req) => {
   );
 
   const lovableKey = Deno.env.get("LOVABLE_API_KEY");
-  const connectionKey = Deno.env.get("GOOGLE_MAIL_API_KEY");
-  if (!lovableKey || !connectionKey) {
+  if (!lovableKey || getGmailConnectionKeys().length === 0) {
     return json({ error: "missing_gateway_keys" }, 500);
   }
 
@@ -154,6 +212,50 @@ Deno.serve(async (req) => {
   try {
     if (req.method === "POST") payload = await req.json();
   } catch { /* empty manual trigger allowed */ }
+
+  if (payload?.discover_accounts === true) {
+    const user = await getRequestUser(req, supabase);
+    if (!user) return json({ error: "authentication_required" }, 401);
+
+    const { profiles, errors } = await listAuthorizedGmailProfiles(lovableKey);
+    const accounts: any[] = [];
+
+    for (const profile of profiles) {
+      const { data: existing } = await supabase
+        .from("inbox_accounts")
+        .select("*")
+        .eq("user_id", user.id)
+        .eq("provider", "gmail")
+        .eq("email_address", profile.emailAddress)
+        .maybeSingle();
+
+      if (existing) {
+        const { data } = await supabase
+          .from("inbox_accounts")
+          .update({ status: "connected", is_active: true, sync_error: null })
+          .eq("id", existing.id)
+          .select("*")
+          .single();
+        if (data) accounts.push(data);
+      } else {
+        const { data } = await supabase
+          .from("inbox_accounts")
+          .insert({
+            user_id: user.id,
+            provider: "gmail",
+            email_address: profile.emailAddress,
+            label: profile.emailAddress,
+            status: "connected",
+            is_active: true,
+          })
+          .select("*")
+          .single();
+        if (data) accounts.push(data);
+      }
+    }
+
+    return json({ ok: true, accounts, errors: errors.length ? errors : undefined });
+  }
 
   const accountId = payload?.account_id;
   const maxResults = Math.min(Math.max(payload?.max_results ?? 50, 1), 200);
@@ -173,6 +275,17 @@ Deno.serve(async (req) => {
 
   if (accountErr || !account) {
     return json({ error: "account_not_found", detail: accountErr?.message }, 404);
+  }
+
+  let connectionKey: string;
+  try {
+    connectionKey = await resolveConnectionKeyForAccount(account, lovableKey);
+  } catch (e: any) {
+    await supabase
+      .from("inbox_accounts")
+      .update({ status: "needs_authorization", sync_error: e.message })
+      .eq("id", accountId);
+    return json({ error: "gmail_authorization_required", detail: e.message }, 409);
   }
 
   // List messages

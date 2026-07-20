@@ -75,6 +75,41 @@ function buildRawMime(opts: {
   return `${headers.join("\r\n")}\r\n\r\n${parts.join("\r\n")}`;
 }
 
+function normalizeEmail(raw: string): string {
+  return raw.toLowerCase().replace(/\s/g, "").replace(/<|>/g, "");
+}
+
+function getGmailConnectionKeys() {
+  const keys: { envName: string; key: string }[] = [];
+  const primary = Deno.env.get("GOOGLE_MAIL_API_KEY");
+  if (primary) keys.push({ envName: "GOOGLE_MAIL_API_KEY", key: primary });
+  for (let i = 2; i <= 10; i += 1) {
+    const envName = `GOOGLE_MAIL_API_KEY_${i}`;
+    const key = Deno.env.get(envName);
+    if (key) keys.push({ envName, key });
+  }
+  return keys;
+}
+
+async function resolveConnectionKeyForEmail(email: string, lovableKey: string): Promise<string> {
+  const expectedEmail = normalizeEmail(email);
+  for (const connection of getGmailConnectionKeys()) {
+    try {
+      const res = await fetch(`${GATEWAY_URL}/users/me/profile`, {
+        headers: {
+          "Authorization": `Bearer ${lovableKey}`,
+          "X-Connection-Api-Key": connection.key,
+        },
+      });
+      if (!res.ok) continue;
+      const profile = await res.json();
+      if (normalizeEmail(profile?.emailAddress || "") === expectedEmail) return connection.key;
+    } catch { /* try next linked Gmail connection */ }
+  }
+
+  throw new Error(`No linked Gmail authorization matches ${email}. Authorize that mailbox in Settings, then refresh authorized accounts.`);
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
@@ -84,8 +119,7 @@ Deno.serve(async (req) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
   const lovableKey = Deno.env.get("LOVABLE_API_KEY");
-  const connectionKey = Deno.env.get("GOOGLE_MAIL_API_KEY");
-  if (!lovableKey || !connectionKey) return json({ error: "missing_gateway_keys" }, 500);
+  if (!lovableKey || getGmailConnectionKeys().length === 0) return json({ error: "missing_gateway_keys" }, 500);
 
   let body: any = {};
   try { body = await req.json(); } catch { return json({ error: "invalid_json" }, 400); }
@@ -97,6 +131,13 @@ Deno.serve(async (req) => {
 
   const { data: account } = await supabase.from("inbox_accounts").select("*").eq("id", account_id).maybeSingle();
   if (!account) return json({ error: "account_not_found" }, 404);
+
+  let connectionKey: string;
+  try {
+    connectionKey = await resolveConnectionKeyForEmail(account.email_address, lovableKey);
+  } catch (e: any) {
+    return json({ error: "gmail_authorization_required", detail: e.message }, 409);
+  }
 
   let inReplyTo: string | undefined;
   let references: string | undefined;

@@ -9,6 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useInboxAccounts } from "@/hooks/useInboxAccounts";
 import {
   User,
   Mail,
@@ -19,13 +20,23 @@ import {
   Save,
   Camera,
   Loader2,
+  RefreshCw,
+  CheckCircle2,
+  AlertTriangle,
 } from "lucide-react";
 import { EmailSignaturePreview } from "@/components/dashboard/EmailSignaturePreview";
 
 export default function SettingsPage() {
   const { user } = useAuth();
+  const { accounts: inboxAccounts, refresh: refreshInboxAccounts } = useInboxAccounts();
   const [saving, setSaving] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark">("light");
+  const [activeTab, setActiveTab] = useState(() => {
+    const tab = new URLSearchParams(window.location.search).get("tab");
+    return ["profile", "notifications", "appearance", "email"].includes(tab || "") ? tab! : "profile";
+  });
+  const [gmailRefreshing, setGmailRefreshing] = useState(false);
+  const [gmailMessage, setGmailMessage] = useState<string | null>(null);
 
   useEffect(() => {
     const savedTheme = localStorage.getItem("kit-theme") as "light" | "dark" | null;
@@ -40,6 +51,32 @@ export default function SettingsPage() {
     setTheme(newTheme);
     localStorage.setItem("kit-theme", newTheme);
     document.documentElement.classList.toggle("dark", newTheme === "dark");
+  };
+
+  const handleTabChange = (value: string) => {
+    setActiveTab(value);
+    const url = new URL(window.location.href);
+    if (value === "profile") url.searchParams.delete("tab");
+    else url.searchParams.set("tab", value);
+    window.history.replaceState(null, "", url.toString());
+  };
+
+  const refreshAuthorizedGmailAccounts = async () => {
+    setGmailRefreshing(true);
+    setGmailMessage(null);
+    try {
+      const { data, error } = await supabase.functions.invoke("gmail-sync", {
+        body: { discover_accounts: true },
+      });
+      if (error) throw error;
+      const count = Array.isArray((data as any)?.accounts) ? (data as any).accounts.length : 0;
+      setGmailMessage(count ? `${count} authorized Gmail account${count === 1 ? "" : "s"} ready.` : "No authorized Gmail accounts found yet.");
+      await refreshInboxAccounts();
+    } catch (e: any) {
+      setGmailMessage(e.message || "Could not refresh Gmail authorizations.");
+    } finally {
+      setGmailRefreshing(false);
+    }
   };
 
   const [notifications, setNotifications] = useState({
@@ -122,7 +159,7 @@ export default function SettingsPage() {
 
       <main className="p-6">
         <div className="max-w-4xl mx-auto">
-          <Tabs defaultValue="profile" className="space-y-6">
+          <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
             <TabsList className="bg-white dark:bg-gray-800 p-1 gap-1">
               <TabsTrigger value="profile" className="gap-2">
                 <User className="w-4 h-4" />
@@ -426,6 +463,58 @@ export default function SettingsPage() {
 
             {/* Email Settings Tab */}
             <TabsContent value="email" className="space-y-6">
+              <Card className="bg-white dark:bg-gray-800">
+                <CardHeader>
+                  <CardTitle className="text-lg dark:text-gray-100">Gmail Inbox Authorization</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-3">
+                    <div className="flex items-start gap-3">
+                      <Mail className="w-5 h-5 text-primary mt-0.5" />
+                      <div className="space-y-1">
+                        <p className="font-medium dark:text-gray-100">Connect each Gmail mailbox through Lovable Connectors.</p>
+                        <p className="text-sm text-muted-foreground">
+                          The inbox can sync multiple authorized Gmail connections. After authorizing a mailbox, refresh here and Zazi Mail will match the authorized email address before syncing, replying, or archiving.
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={refreshAuthorizedGmailAccounts}
+                      disabled={gmailRefreshing}
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground font-medium rounded-lg transition-colors disabled:opacity-50"
+                    >
+                      {gmailRefreshing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                      {gmailRefreshing ? "Checking…" : "Refresh authorized Gmail accounts"}
+                    </button>
+                    {gmailMessage && (
+                      <p className="text-sm text-muted-foreground">{gmailMessage}</p>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    {inboxAccounts.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No Gmail inboxes are registered yet.</p>
+                    ) : inboxAccounts.map((account) => {
+                      const authorized = account.status === "connected" && !account.sync_error;
+                      return (
+                        <div key={account.id} className="flex items-start justify-between gap-3 rounded-lg border border-border p-3">
+                          <div>
+                            <p className="font-medium dark:text-gray-100">{account.label || account.email_address}</p>
+                            <p className="text-sm text-muted-foreground">{account.email_address}</p>
+                            {account.sync_error && <p className="text-xs text-destructive mt-1">{account.sync_error}</p>}
+                          </div>
+                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0">
+                            {authorized ? <CheckCircle2 className="w-4 h-4 text-primary" /> : <AlertTriangle className="w-4 h-4 text-destructive" />}
+                            {authorized ? "Authorized" : "Needs authorization"}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+
               <EmailSignaturePreview />
               <Card className="bg-white dark:bg-gray-800">
                 <CardHeader>

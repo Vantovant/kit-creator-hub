@@ -2,6 +2,7 @@ import { InboxMessage } from "@/hooks/useInbox";
 import { Badge } from "@/components/ui/badge";
 import { Archive, Star, Clock, CheckCircle2, Reply, Trash2, MailOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { SmartExtractPanel } from "./SmartExtractPanel";
 
 const iconBtn = "p-2 rounded-md hover:bg-muted transition-colors text-muted-foreground hover:text-foreground";
 
@@ -68,6 +69,8 @@ export function InboxMessageDetail({
           {message.waiting_on && <Badge variant="outline" className="text-orange-500">Waiting on {message.waiting_on}</Badge>}
           {message.snoozed_until && <Badge variant="outline" className="text-orange-500">Snoozed</Badge>}
         </div>
+
+        <SmartExtractPanel messageId={message.id} />
 
         <div className="prose prose-sm max-w-none dark:prose-invert">
           <p className="text-sm whitespace-pre-wrap leading-relaxed">

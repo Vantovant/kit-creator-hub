@@ -120,24 +120,13 @@ export function Contact360Panel({ message }: { message: InboxMessage | null }) {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader className="pb-2">
-              <div className="flex items-center gap-2">
-                <Activity className="w-4 h-4" />
-                <CardTitle className="text-base">Recent Activity</CardTitle>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {prospect.activities.length ? prospect.activities.map(a => (
-                <div key={a.id} className="text-xs border-b last:border-0 pb-1 last:pb-0">
-                  <span className="font-medium capitalize">{a.activity_type}</span>
-                  <span className="text-muted-foreground ml-2">{new Date(a.created_at).toLocaleDateString()}</span>
-                  {a.notes && <p className="text-muted-foreground mt-0.5">{a.notes}</p>}
-                </div>
-              )) : <p className="text-xs text-muted-foreground">No recent activity</p>}
-            </CardContent>
-          </Card>
+          <TimelineCard prospectId={prospect.id} email={prospect.email} />
+
+          <NextBestActionCard prospectId={prospect.id} />
+
+          <GoogleContactsSyncCard />
         </>
+
       ) : (
         <NoProspectCard message={message} onLinked={() => {
           // trigger refetch by resetting prospect state — parent will re-render when message changes

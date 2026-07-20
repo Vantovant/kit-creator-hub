@@ -194,9 +194,15 @@ export default function InboxPage() {
                       <button
                         onClick={() => { setScope(a.id); setSelectedId(a.id); }}
                         className="w-full flex items-center gap-2 px-2 py-1.5 text-left"
+                        title={a.email_address}
                       >
                         <Inbox className="w-3.5 h-3.5 shrink-0" />
-                        <span className="truncate flex-1 text-sm">{a.label || a.email_address}</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="truncate text-sm font-medium">{a.email_address}</div>
+                          {a.label && (
+                            <div className="truncate text-[10px] text-muted-foreground">{a.label}</div>
+                          )}
+                        </div>
                         {needsAuth && (
                           <span className="text-[9px] px-1 rounded bg-amber-500/20 text-amber-600 dark:text-amber-400">AUTH</span>
                         )}

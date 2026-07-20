@@ -1,9 +1,22 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Sparkles, UserPlus, Tag as TagIcon, ListTodo, Loader2 } from "lucide-react";
-import { toast } from "sonner";
+
+const Button = ({ children, className = "", disabled, onClick, size, variant }: any) => (
+  <button
+    onClick={onClick}
+    disabled={disabled}
+    className={`inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+      variant === "outline" ? "border border-input bg-background hover:bg-muted" :
+      variant === "ghost" ? "hover:bg-muted" :
+      "bg-primary text-primary-foreground hover:bg-primary/90"
+    } ${size === "sm" ? "h-8 px-3" : "h-9 px-4"} ${className}`}
+  >
+    {children}
+  </button>
+);
+const toast = { success: (m: string) => console.log("✓", m), error: (m: string) => console.error("✗", m) };
 
 type Extract = {
   id: string;

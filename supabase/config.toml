@@ -59,3 +59,9 @@ verify_jwt = false
 
 [functions.inbox-unsnooze]
 verify_jwt = false
+
+[functions.contacts-bulk-sync]
+verify_jwt = false
+
+[functions.contact-hub-push]
+verify_jwt = false

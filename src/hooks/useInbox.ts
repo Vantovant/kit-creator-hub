@@ -47,7 +47,7 @@ export function useInbox(accountId: string | null, filter: InboxFilter = "inbox"
       .from("inbox_messages")
       .select("*")
       .eq("account_id", accountId)
-      .eq("deleted_at", null)
+      .is("deleted_at", null)
       .order("date", { ascending: false });
 
     if (filter === "inbox") query = query.eq("is_archived", false);

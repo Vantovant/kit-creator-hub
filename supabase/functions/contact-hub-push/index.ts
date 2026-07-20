@@ -1,4 +1,7 @@
-// Contact hub push — builds Spec Kit v1 payload and forwards through suite-bridge-spoke.
+// Contact hub push — enforces VantoOS Field Ownership Contract v1.
+// - First push per prospect = BOOTSTRAP: sends identity + contact_type.
+// - Every subsequent push = ONGOING: sends only source_ref, source_app,
+//   consent_marketing, consent_updated_at, and append-only shared arrays.
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -20,6 +23,36 @@ function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 }
 
+function buildBootstrapRecord(p: any) {
+  return {
+    source_app: APP_KEY,
+    source_ref: p.id,
+    full_name: p.full_name ?? null,
+    first_name: p.first_name ?? null,
+    last_name: p.last_name ?? null,
+    primary_email: p.email ? String(p.email).toLowerCase() : null,
+    primary_phone: p.phone_normalized ?? null,
+    contact_type: p.contact_type ?? p.lead_type ?? "subscriber",
+    consent_marketing: p.consent_marketing ?? !p.unsubscribed,
+    consent_updated_at: p.consent_updated_at ?? p.updated_at,
+    // Append-only shared arrays (contract §2)
+    secondary_emails: p.secondary_emails ?? [],
+    secondary_phones: p.secondary_phones ?? [],
+  };
+}
+
+function buildOngoingRecord(p: any) {
+  // Contract §3.1 — post-bootstrap payload must OMIT hub-owned identity fields.
+  return {
+    source_app: APP_KEY,
+    source_ref: p.id,
+    consent_marketing: p.consent_marketing ?? !p.unsubscribed,
+    consent_updated_at: p.consent_updated_at ?? p.updated_at,
+    secondary_emails: p.secondary_emails ?? [],
+    secondary_phones: p.secondary_phones ?? [],
+  };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
@@ -31,40 +64,21 @@ Deno.serve(async (req) => {
   const { data: p, error } = await supabase.from("prospects").select("*").eq("id", prospect_id).single();
   if (error || !p) return json({ error: "prospect_not_found", detail: error?.message }, 404);
 
-  const { data: tagsRows } = await supabase.from("prospect_tags").select("tags(name)").eq("prospect_id", prospect_id);
-  const tags = ((tagsRows as any[]) || []).map((r) => r.tags?.name).filter(Boolean);
-
-  const payload = {
-    kind: "contact_upsert",
-    app_key: APP_KEY,
-    local_id: p.id,
-    hub_contact_id: p.hub_contact_id ?? null,
-    hub_version: p.hub_version ?? null,
-    identity: {
-      name: p.full_name,
-      first_name: p.first_name,
-      last_name: p.last_name,
-      whatsapp_display_name: p.whatsapp_display_name,
-      phone_normalized: p.phone_normalized,
-      email: p.email,
-    },
-    attributes: {
-      lead_type: p.lead_type,
-      temperature: p.lead_temperature,
-      contact_source: p.contact_source,
-      contact_confidence: p.contact_confidence,
-      name_needs_confirmation: p.name_needs_confirmation,
-      tags,
-      notes: p.additional_notes,
-    },
-    updated_at: p.updated_at,
-  };
+  const isBootstrap = !p.hub_bootstrapped_at && !p.hub_contact_id;
+  const record = isBootstrap ? buildBootstrapRecord(p) : buildOngoingRecord(p);
 
   const secret = Deno.env.get("SUITE_BRIDGE_SECRET");
   const hubUrl = Deno.env.get("VANTOOS_HUB_URL");
-  if (!secret || !hubUrl) return json({ ok: false, error: "bridge_not_configured", payload }, 200);
+  if (!secret || !hubUrl) return json({ ok: false, error: "bridge_not_configured", record, mode: isBootstrap ? "bootstrap" : "ongoing" }, 200);
 
-  // Post directly to hub as vantoos would to a spoke — hub accepts contact_upsert from any known app.
+  // Contract §4 envelope
+  const payload = {
+    action: "contacts_upsert",
+    app_key: APP_KEY,
+    records: [record],
+    last_seen_version: p.hub_last_seen_version ?? null,
+  };
+
   const bodyStr = JSON.stringify(payload);
   const ts = Math.floor(Date.now() / 1000).toString();
   const nonce = crypto.randomUUID();
@@ -83,40 +97,44 @@ Deno.serve(async (req) => {
   });
   const text = await resp.text();
 
-  // Handle 409 conflict — hub returns { hub_contact_id, hub_version, identity, attributes }
-  if (resp.status === 409) {
-    try {
-      const conflict = JSON.parse(text);
-      const remote = conflict?.remote || conflict;
-      const patch: Record<string, unknown> = {
-        hub_contact_id: remote.hub_contact_id ?? p.hub_contact_id,
-        hub_version: remote.hub_version ?? p.hub_version,
-      };
-      if (remote.identity) {
-        if (remote.identity.name) patch.full_name = remote.identity.name;
-        if (remote.identity.first_name) patch.first_name = remote.identity.first_name;
-        if (remote.identity.last_name) patch.last_name = remote.identity.last_name;
-        if (remote.identity.email) patch.email = remote.identity.email;
-        if (remote.identity.phone_normalized) patch.phone_normalized = remote.identity.phone_normalized;
-      }
-      await supabase.from("prospects").update(patch).eq("id", prospect_id);
-      return json({ ok: true, conflict: true, applied_remote: true });
-    } catch { /* fall through */ }
-  }
+  // Parse hub response and apply hub-authoritative fields locally.
+  let parsed: any = null;
+  try { parsed = JSON.parse(text); } catch { /* ignore */ }
+  const result = parsed?.results?.[0] ?? parsed?.body?.results?.[0] ?? parsed?.body ?? parsed ?? {};
 
   if (resp.ok) {
-    try {
-      const ok = JSON.parse(text);
-      const hub_contact_id = ok?.hub_contact_id ?? ok?.body?.hub_contact_id;
-      const hub_version = ok?.hub_version ?? ok?.body?.hub_version;
-      if (hub_contact_id || hub_version != null) {
-        await supabase.from("prospects").update({
-          hub_contact_id: hub_contact_id ?? p.hub_contact_id,
-          hub_version: hub_version ?? p.hub_version,
-        }).eq("id", prospect_id);
-      }
-    } catch { /* ignore */ }
+    const patch: Record<string, unknown> = {};
+    if (result.hub_contact_id) patch.hub_contact_id = result.hub_contact_id;
+    if (result.version != null) {
+      patch.hub_version = result.version;
+      patch.hub_last_seen_version = result.version;
+    } else if (result.hub_version != null) {
+      patch.hub_version = result.hub_version;
+      patch.hub_last_seen_version = result.hub_version;
+    }
+    if (isBootstrap) patch.hub_bootstrapped_at = new Date().toISOString();
+    if (Object.keys(patch).length) {
+      await supabase.from("prospects").update(patch).eq("id", prospect_id);
+    }
+
+    // Record any hub-reported field ownership violations for observability.
+    const violations = result.field_ownership_violations ?? result.violations ?? [];
+    if (Array.isArray(violations) && violations.length) {
+      await supabase.from("hub_field_violations").insert(
+        violations.map((v: any) => ({
+          prospect_id,
+          field: v.field ?? v.name ?? "unknown",
+          attempted_value: v.value ?? null,
+          hub_reason: v.reason ?? "field_ownership_violation",
+        })),
+      );
+    }
   }
 
-  return json({ ok: resp.ok, status: resp.status, hub_response: text });
+  return json({
+    ok: resp.ok,
+    status: resp.status,
+    mode: isBootstrap ? "bootstrap" : "ongoing",
+    hub_response: text,
+  });
 });

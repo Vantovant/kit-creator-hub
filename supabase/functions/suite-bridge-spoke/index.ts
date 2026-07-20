@@ -181,18 +181,21 @@ Deno.serve(async (req) => {
   }
 
   // ---- contact_upsert (hub → spoke): merge one or more contacts locally ----
+  // Contract §3.2 — hub is authoritative for identity fields; always overwrite.
   if (body?.kind === "contact_upsert" || body?.kind === "contacts_upsert") {
     const sb = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
-    const list: any[] = Array.isArray(body.contacts) ? body.contacts : [body];
+    const list: any[] = Array.isArray(body.contacts)
+      ? body.contacts
+      : Array.isArray(body.records) ? body.records : [body];
     let merged = 0;
     for (const c of list) {
-      const id = c?.identity ?? {};
-      const at = c?.attributes ?? {};
-      const email = (id.email ?? "").toLowerCase() || null;
-      const phone = id.phone_normalized ?? null;
+      const flat = c?.identity ? { ...(c.identity), ...(c.attributes ?? {}) } : c;
+      const email = (flat.primary_email ?? flat.email ?? "")?.toString().toLowerCase() || null;
+      const phone = flat.primary_phone ?? flat.phone_normalized ?? null;
+      const version = c.version ?? c.hub_version ?? flat.version ?? null;
       if (!email && !phone && !c?.hub_contact_id) continue;
 
       let existing: any = null;
@@ -211,22 +214,27 @@ Deno.serve(async (req) => {
 
       const patch: Record<string, unknown> = {
         hub_contact_id: c.hub_contact_id ?? existing?.hub_contact_id ?? null,
-        hub_version: c.hub_version ?? existing?.hub_version ?? null,
+        hub_version: version ?? existing?.hub_version ?? null,
+        hub_last_seen_version: version ?? existing?.hub_last_seen_version ?? null,
       };
-      const setIf = (k: string, v: any) => { if (v != null && v !== "") patch[k] = v; };
-      setIf("full_name", id.name);
-      setIf("first_name", id.first_name);
-      setIf("last_name", id.last_name);
-      setIf("whatsapp_display_name", id.whatsapp_display_name);
-      setIf("email", email);
-      setIf("phone_normalized", phone);
-      setIf("phone_raw", phone);
-      setIf("lead_type", at.lead_type);
-      setIf("lead_temperature", at.temperature);
-      setIf("contact_source", at.contact_source);
-      setIf("contact_confidence", at.contact_confidence);
-      setIf("aplgo_id", at.aplgo_id);
-      setIf("additional_notes", at.notes);
+      const setAlways = (k: string, v: any) => { if (v !== undefined) patch[k] = v; };
+      setAlways("full_name", flat.full_name ?? c?.identity?.name);
+      setAlways("first_name", flat.first_name);
+      setAlways("last_name", flat.last_name);
+      setAlways("email", email);
+      setAlways("phone_normalized", phone);
+      setAlways("phone_raw", phone);
+      setAlways("contact_type", flat.contact_type);
+      setAlways("lead_type", flat.lead_type);
+      setAlways("lead_temperature", flat.temperature ?? flat.lifecycle_stage);
+
+      const mergeArr = (localArr: any, remoteArr: any) => {
+        const l = Array.isArray(localArr) ? localArr : [];
+        const r = Array.isArray(remoteArr) ? remoteArr : [];
+        return Array.from(new Set([...l, ...r]));
+      };
+      if (flat.secondary_emails) patch.secondary_emails = mergeArr(existing?.secondary_emails, flat.secondary_emails);
+      if (flat.secondary_phones) patch.secondary_phones = mergeArr(existing?.secondary_phones, flat.secondary_phones);
 
       if (existing) {
         await sb.from("prospects").update(patch).eq("id", existing.id);
@@ -236,12 +244,14 @@ Deno.serve(async (req) => {
           email: email ?? `hub-${crypto.randomUUID()}@placeholder.local`,
           source: "vantoos_hub",
           unsubscribed: false,
+          hub_bootstrapped_at: new Date().toISOString(),
         });
       }
       merged++;
     }
     return json({ ok: true, app: APP_KEY, received: "contact_upsert", merged });
   }
+
 
   // ---- snapshot_request → post a snapshot back to hub ----
   if (body?.kind === "snapshot_request") {

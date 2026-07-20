@@ -13,7 +13,7 @@ import { SnoozeMenu } from "@/components/inbox/SnoozeMenu";
 import { WaitingPrompt } from "@/components/inbox/WaitingPrompt";
 import { BulkActionBar } from "@/components/inbox/BulkActionBar";
 import { LearnedRulesPanel } from "@/components/inbox/LearnedRulesPanel";
-import { Inbox, Star, Archive, Clock, CheckCircle2, RefreshCw, Plus, Keyboard, Layers, Rows2, Rows3, PanelRightClose, PanelRight, Brain } from "lucide-react";
+import { Inbox, Star, Archive, Clock, CheckCircle2, RefreshCw, Plus, Keyboard, Layers, Rows2, Rows3, PanelRightClose, PanelRight, Brain, Menu, ArrowLeft, X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
@@ -41,6 +41,7 @@ export default function InboxPage() {
   const [waitingOpen, setWaitingOpen] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
   const [rulesOpen, setRulesOpen] = useState(false);
+  const [mobileMailboxesOpen, setMobileMailboxesOpen] = useState(false);
 
   const [density, setDensity] = useState<Density>(() => (localStorage.getItem("inbox-density") as Density) || "compact");
   const [showContact, setShowContact] = useState(() => localStorage.getItem("inbox-showContact") !== "0");
@@ -48,6 +49,14 @@ export default function InboxPage() {
   const menuAnchorRef = useRef<HTMLDivElement>(null);
 
   const { widths, startDrag } = useResizablePanels("inbox-widths-v2", [420, 620]);
+  const [isMdUp, setIsMdUp] = useState<boolean>(() => typeof window !== "undefined" ? window.matchMedia("(min-width: 768px)").matches : true);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia("(min-width: 768px)");
+    const on = () => setIsMdUp(mq.matches);
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, []);
 
   const selectedMessage = messages.find((m) => m.id === msgId) || messages[0] || null;
 
@@ -62,7 +71,7 @@ export default function InboxPage() {
   useEffect(() => { localStorage.setItem("inbox-showContact", showContact ? "1" : "0"); }, [showContact]);
 
   // Reset selection when filter/scope changes
-  useEffect(() => { setSelectedIds(new Set()); }, [filter, scope]);
+  useEffect(() => { setSelectedIds(new Set()); setMobileMailboxesOpen(false); }, [filter, scope]);
 
   const handleSync = useCallback(async () => {
     setSyncing(true);
@@ -155,8 +164,34 @@ export default function InboxPage() {
         subtitle="Superhuman triage + Nimble contact intelligence for your Gmail."
       />
 
-      <div className="flex-1 flex overflow-hidden">
-        <aside className="w-60 shrink-0 border-r flex flex-col">
+      {/* Mobile toolbar */}
+      <div className="md:hidden flex items-center gap-2 px-3 py-2 border-b bg-background">
+        <button onClick={() => setMobileMailboxesOpen(true)} className="p-2 rounded hover:bg-muted" aria-label="Mailboxes">
+          <Menu className="w-4 h-4" />
+        </button>
+        <span className="text-xs font-medium truncate flex-1">
+          {scope === "all" ? "All Inboxes" : accounts.find((a) => a.id === scope)?.email_address || "Inbox"} · <span className="capitalize">{filter}</span>
+        </span>
+        <button
+          onClick={handleSync}
+          disabled={syncing || !scope}
+          className="p-2 rounded hover:bg-muted disabled:opacity-50"
+          aria-label="Sync"
+        >
+          <RefreshCw className={cn("w-4 h-4", syncing && "animate-spin")} />
+        </button>
+      </div>
+
+      <div className="flex-1 flex overflow-hidden relative">
+        {mobileMailboxesOpen && (
+          <div className="md:hidden fixed inset-0 z-30 bg-black/40" onClick={() => setMobileMailboxesOpen(false)} />
+        )}
+        <aside className={cn(
+          "shrink-0 border-r flex flex-col bg-background transition-transform",
+          "md:w-60 md:static md:translate-x-0",
+          "fixed top-0 left-0 z-40 h-full w-72",
+          mobileMailboxesOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0",
+        )}>
           <div className="p-3 border-b space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Mailboxes</span>
@@ -301,7 +336,13 @@ export default function InboxPage() {
         <main className="flex-1 flex min-w-0">
           {!fullscreen && (
             <>
-              <div className="shrink-0 flex flex-col border-r" style={{ width: widths[0] }}>
+              <div
+                className={cn(
+                  "flex flex-col border-r w-full md:w-auto md:shrink-0",
+                  msgId ? "hidden md:flex" : "flex",
+                )}
+                style={isMdUp ? { width: widths[0] } : undefined}
+              >
                 <div className="px-4 py-2 border-b text-xs text-muted-foreground flex items-center justify-between shrink-0">
                   <span>{loading ? "Loading..." : `${messages.length} messages`}</span>
                   <span className="text-[10px] uppercase tracking-wider">{scope === "all" ? "all • " : ""}{filter}</span>
@@ -327,11 +368,27 @@ export default function InboxPage() {
                   density={density}
                 />
               </div>
-              <ResizeHandle onPointerDown={startDrag(0)} />
+              <div className="hidden md:block"><ResizeHandle onPointerDown={startDrag(0)} /></div>
             </>
           )}
 
-          <div className="flex-1 min-w-0 relative" ref={menuAnchorRef} style={fullscreen || !showContact ? undefined : { width: widths[1] }}>
+          <div
+            className={cn(
+              "flex-1 min-w-0 relative w-full",
+              msgId ? "flex flex-col" : "hidden md:flex md:flex-col",
+            )}
+            ref={menuAnchorRef}
+            style={isMdUp && !fullscreen && showContact ? { width: widths[1] } : undefined}
+          >
+            {/* Mobile back button */}
+            {msgId && (
+              <button
+                onClick={() => setMsgId(null as any)}
+                className="md:hidden flex items-center gap-1 px-3 py-2 border-b text-xs text-muted-foreground hover:text-foreground"
+              >
+                <ArrowLeft className="w-4 h-4" /> Back to messages
+              </button>
+            )}
             <InboxMessageDetail
               message={selectedMessage}
               onAction={(action, data) => selectedMessage && doAction(selectedMessage.id, action, data)}
@@ -362,15 +419,16 @@ export default function InboxPage() {
           </div>
 
           {!fullscreen && showContact && (
-            <>
+            <div className="hidden lg:flex">
               <ResizeHandle onPointerDown={startDrag(1)} />
               <div className="shrink-0 min-w-[260px]" style={{ width: "auto", flex: "0 0 320px" }}>
                 <Contact360Panel message={selectedMessage} />
               </div>
-            </>
+            </div>
           )}
         </main>
       </div>
+
 
       <AddAccountModal
         open={addOpen}

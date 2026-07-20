@@ -34,28 +34,28 @@ export function DashboardHeader({ title, subtitle, searchQuery, onSearchChange, 
 
   return (
     <header className="sticky top-0 z-30 bg-background border-b border-border">
-      <div className="flex items-center justify-between px-6 py-4">
-        <div className="flex items-center gap-4">
+      <div className="flex items-center justify-between gap-2 px-3 sm:px-6 py-3 sm:py-4">
+        <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1">
           <button
             type="button"
             onClick={toggleSidebar ?? undefined}
-            className="lg:hidden p-2 -ml-2 text-muted-foreground hover:text-foreground"
+            className="lg:hidden p-2 -ml-2 text-muted-foreground hover:text-foreground shrink-0"
           >
             <Menu className="w-5 h-5" />
           </button>
-          <div>
-            <h1 className="text-xl font-semibold text-foreground">{title}</h1>
-            {subtitle && <p className="text-sm text-muted-foreground">{subtitle}</p>}
+          <div className="min-w-0">
+            <h1 className="text-base sm:text-xl font-semibold text-foreground truncate">{title}</h1>
+            {subtitle && <p className="text-xs sm:text-sm text-muted-foreground truncate hidden sm:block">{subtitle}</p>}
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5 mr-2 shrink-0">
+        <div className="hidden sm:flex items-center gap-1.5 mr-2 shrink-0">
             <img src="/assets/aplgo-logo.png" alt="APLGO" className="h-6 w-auto" />
-            <span className="text-[10px] leading-tight text-muted-foreground font-medium hidden sm:block">
+            <span className="text-[10px] leading-tight text-muted-foreground font-medium hidden md:block">
               Accredited Distributors<br />of APLGO
             </span>
           </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-1 sm:gap-4 shrink-0">
           {onSearchChange ? (
             <div className="hidden md:block relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />

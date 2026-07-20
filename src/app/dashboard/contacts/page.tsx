@@ -304,7 +304,7 @@ function ContactDetail({ prospect, tags }: { prospect: Prospect; tags: Tag[] }) 
         activity_type: "sequence_enroll",
         notes: `Enrolled in ${sequences.find((s) => s.id === sequenceId)?.name || "sequence"}`,
         user_id: (await supabase.auth.getUser()).data.user?.id,
-      });
+      } as any);
       setMessage((data as any)?.message || "Contact enrolled.");
       loadActivities();
     } catch (e: any) {

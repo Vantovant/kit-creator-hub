@@ -44,24 +44,65 @@ function decodeB64(data: string): string {
   }
 }
 
-function extractBodies(payload: any): { text: string | null; html: string | null } {
+async function getBodyPartData(part: any, messageId: string, lovableKey: string, connectionKey: string): Promise<string> {
+  if (part?.body?.data) return decodeB64(part.body.data);
+  if (!part?.body?.attachmentId) return "";
+
+  try {
+    const attachment = await gatewayGet(
+      `/users/me/messages/${messageId}/attachments/${part.body.attachmentId}`,
+      lovableKey,
+      connectionKey,
+    );
+    return attachment?.data ? decodeB64(attachment.data) : "";
+  } catch {
+    return "";
+  }
+}
+
+async function extractBodies(
+  payload: any,
+  messageId: string,
+  lovableKey: string,
+  connectionKey: string,
+): Promise<{ text: string | null; html: string | null }> {
   if (!payload) return { text: null, html: null };
   let text: string | null = null;
   let html: string | null = null;
-  const walk = (p: any) => {
+  const walk = async (p: any) => {
     if (!p) return;
-    if (p.mimeType === "text/plain" && p.body?.data && !text) text = decodeB64(p.body.data);
-    if (p.mimeType === "text/html" && p.body?.data && !html) html = decodeB64(p.body.data);
-    if (p.parts) p.parts.forEach(walk);
+    if (p.mimeType === "text/plain" && !text) {
+      const value = await getBodyPartData(p, messageId, lovableKey, connectionKey);
+      if (value.trim()) text = value;
+    }
+    if (p.mimeType === "text/html" && !html) {
+      const value = await getBodyPartData(p, messageId, lovableKey, connectionKey);
+      if (value.trim()) html = value;
+    }
+    if (p.parts) {
+      for (const child of p.parts) await walk(child);
+    }
   };
-  walk(payload);
+  await walk(payload);
   return { text, html };
 }
 
-function bodyPreview(payload: any): string | null {
-  const { text, html } = extractBodies(payload);
+function stripHtml(html: string): string {
+  return html
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'");
+}
+
+function bodyPreview(text: string | null, html: string | null): string | null {
   if (text) return text.replace(/\s+/g, " ").trim().slice(0, 400);
-  if (html) return html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 400);
+  if (html) return stripHtml(html).replace(/\s+/g, " ").trim().slice(0, 400);
   return null;
 }
 
@@ -163,8 +204,8 @@ Deno.serve(async (req) => {
       const cc = (headers.cc || "").split(",").map(normalizeEmail).filter(Boolean);
       const subject = headers.subject || "(no subject)";
       const date = new Date(Number(full.internalDate));
-      const preview = bodyPreview(full.payload) || full.snippet || "";
-      const { html: htmlBody } = extractBodies(full.payload);
+      const { text: textBody, html: htmlBody } = await extractBodies(full.payload, full.id, lovableKey, connectionKey);
+      const preview = bodyPreview(textBody, htmlBody) || full.snippet || "";
 
       // NOTE: We intentionally do NOT auto-link senders to prospects here.
       // Users add contacts explicitly via the Contact 360 panel.
@@ -180,6 +221,7 @@ Deno.serve(async (req) => {
         subject,
         snippet: full.snippet || null,
         body_preview: preview,
+        body_text: textBody,
         body_html: htmlBody,
         date: date.toISOString(),
         label_ids: full.labelIds || [],

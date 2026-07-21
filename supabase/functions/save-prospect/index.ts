@@ -98,6 +98,15 @@ serve(async (req: Request) => {
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
+    // Idempotency guard — check if prospect already exists BEFORE upsert.
+    // Re-submissions (same email) must NOT re-trigger welcome/automation.
+    const { data: existingProspect } = await supabase
+      .from("prospects")
+      .select("id, created_at, unsubscribed")
+      .eq("email", trimmedEmail)
+      .maybeSingle();
+    const isNewProspect = !existingProspect;
+
     const { error: dbError } = await supabase.from("prospects").upsert(
       {
         email: trimmedEmail,
@@ -125,46 +134,14 @@ serve(async (req: Request) => {
       });
     }
 
-    // Get unsubscribe token for the email link
-    const { data: prospect } = await supabase
-      .from("prospects")
-      .select("unsubscribe_token")
-      .eq("email", email)
-      .single();
+    // Hardcoded Resend "Welcome to Vanto Zazi Mail!" removed 2026-07-21 —
+    // it was duplicating the "Welcome Series" automation ("Welcome to our community!")
+    // so every signup produced 2 welcome emails. Automation is now the single source.
 
-    const unsubscribeToken = prospect?.unsubscribe_token || "";
-    const appUrl = Deno.env.get("APP_URL") || "https://kit-clone-dashboard.lovable.app";
-    const unsubscribeUrl = `${appUrl}/unsubscribe?token=${unsubscribeToken}`;
-
-    // Send generic welcome email via Resend — ONLY when not enrolling in a specific sequence.
-    // Bridge sequences send their own product-specific Day 1 email.
-    const resendKey = Deno.env.get("RESEND_API_KEY");
-    if (resendKey && !resolvedSequenceId) {
-      try {
-        const resend = new Resend(resendKey);
-        await resend.emails.send({
-          from: "Vanto Zazi <vanto@onlinecourseformlm.com>",
-          to: [email],
-          subject: "Welcome to Vanto Zazi Mail!",
-          html: `
-            <h1>Welcome${first_name ? `, ${first_name}` : ""}!</h1>
-            <p>Thanks for joining the Vanto Zazi Mail list.</p>
-            <p>Insights, tools, and clarity — designed to help you build without burnout.</p>
-            <p>Stay tuned!</p>
-            <hr style="margin: 24px 0; border: none; border-top: 1px solid #eee;" />
-            <p style="font-size: 12px; color: #999;">
-              <a href="${unsubscribeUrl}" style="color: #999;">Unsubscribe</a>
-            </p>
-          `,
-        });
-        console.log("Welcome email sent to:", email);
-      } catch (emailErr) {
-        console.error("Email send error (non-fatal):", emailErr);
-      }
-    }
-
-    // Trigger 'subscribe' automations — only when NOT enrolled into a specific sequence.
-    if (!resolvedSequenceId) {
+    // Trigger 'subscribe' automations — ONLY for genuinely new prospects
+    // that are NOT being enrolled in a specific sequence. This stops
+    // re-submissions of the same email from re-firing the Welcome Series.
+    if (!resolvedSequenceId && isNewProspect && !existingProspect?.unsubscribed) {
       try {
         await fetch(`${supabaseUrl}/functions/v1/execute-automation`, {
           method: "POST",
@@ -177,6 +154,8 @@ serve(async (req: Request) => {
       } catch (triggerErr) {
         console.error("Automation trigger error (non-fatal):", triggerErr);
       }
+    } else if (!isNewProspect) {
+      console.log(`Skipping 'subscribe' automation for ${trimmedEmail} — prospect already exists (idempotency guard).`);
     } else {
       console.log(`Skipping generic 'subscribe' automation for ${trimmedEmail} — enrolled in sequence ${resolvedSequenceId} (source=${sanitizedSource})`);
     }

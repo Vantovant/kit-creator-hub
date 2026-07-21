@@ -236,16 +236,43 @@ Deno.serve(async (req) => {
       if (flat.secondary_emails) patch.secondary_emails = mergeArr(existing?.secondary_emails, flat.secondary_emails);
       if (flat.secondary_phones) patch.secondary_phones = mergeArr(existing?.secondary_phones, flat.secondary_phones);
 
+      let keeperId: string | null = existing?.id ?? null;
       if (existing) {
         await sb.from("prospects").update(patch).eq("id", existing.id);
       } else {
-        await sb.from("prospects").insert({
+        const { data: inserted } = await sb.from("prospects").insert({
           ...patch,
           email: email ?? `hub-${crypto.randomUUID()}@placeholder.local`,
           source: "vantoos_hub",
           unsubscribed: false,
           hub_bootstrapped_at: new Date().toISOString(),
-        });
+        }).select("id").maybeSingle();
+        keeperId = inserted?.id ?? null;
+      }
+
+      // Auto-merge: fold any APLGO placeholder duplicates into this keeper.
+      // Matches by (a) same aplgo_id or (b) same normalized full_name — restricted
+      // to rows whose email is a synthetic placeholder (@aplgo.enrollment.pending
+      // or @placeholder.local) so we never merge two real contacts.
+      if (keeperId) {
+        const { data: keeper } = await sb
+          .from("prospects").select("id, aplgo_id, full_name, first_name")
+          .eq("id", keeperId).maybeSingle();
+        if (keeper) {
+          const nameKey = (keeper.full_name || `${keeper.first_name ?? ""}`).trim().toLowerCase();
+          let q = sb.from("prospects").select("id, aplgo_id, full_name, first_name, email")
+            .neq("id", keeperId)
+            .or("email.ilike.%@aplgo.enrollment.pending,email.ilike.%@placeholder.local");
+          const { data: candidates } = await q;
+          for (const cand of candidates ?? []) {
+            const sameId = keeper.aplgo_id && cand.aplgo_id && keeper.aplgo_id === cand.aplgo_id;
+            const candName = (cand.full_name || cand.first_name || "").trim().toLowerCase();
+            const sameName = nameKey && candName && (candName === nameKey || nameKey.startsWith(candName) || candName.startsWith(nameKey));
+            if (sameId || sameName) {
+              await sb.rpc("merge_prospects", { keep_id: keeperId, drop_id: cand.id });
+            }
+          }
+        }
       }
       merged++;
     }

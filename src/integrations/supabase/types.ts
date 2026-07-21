@@ -1884,6 +1884,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      merge_prospects: {
+        Args: { drop_id: string; keep_id: string }
+        Returns: undefined
+      }
       normalize_phone_e164: { Args: { v: string }; Returns: string }
       recalculate_engagement_scores: { Args: never; Returns: undefined }
       search_kb_chunks: {

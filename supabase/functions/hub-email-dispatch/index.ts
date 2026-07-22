@@ -185,7 +185,12 @@ Deno.serve(async (req) => {
 
   if (!senderApp || !ts || !nonce || !sig) return json({ error: "missing_signature_headers" }, 400);
   if (senderApp !== HUB_APP_KEY) return json({ error: "unexpected_sender" }, 401);
-  if (Math.abs(Math.floor(Date.now() / 1000) - Number(ts)) > SIG_WINDOW_SECONDS) {
+  // Accept both ms (Date.now()) and seconds (Math.floor(Date.now()/1000)) timestamps
+  const tsNum = Number(ts);
+  if (!Number.isFinite(tsNum)) return json({ error: "bad_timestamp" }, 400);
+  const nowMs = Date.now();
+  const tsMs = tsNum > 1e12 ? tsNum : tsNum * 1000;
+  if (Math.abs(nowMs - tsMs) > SIG_WINDOW_SECONDS * 1000) {
     return json({ error: "stale_timestamp" }, 400);
   }
 

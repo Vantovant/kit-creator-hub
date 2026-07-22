@@ -9,7 +9,8 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { Resend } from "npm:resend@^2.0.0";
 
-const APP_KEY = "getwell_africa_email";
+const HUB_APP_KEY = "vantoos_hub";          // identity the hub uses when calling this spoke
+const SPOKE_APP_KEY = "getwell_africa_email"; // identity this spoke uses when calling back to the hub
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",

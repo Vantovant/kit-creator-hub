@@ -21,6 +21,7 @@ import PlanPage from "@/app/dashboard/plan/page";
 import RepliesPage from "@/app/dashboard/replies/page";
 import InboxPage from "@/app/dashboard/inbox/page";
 import ContactsPage from "@/app/dashboard/contacts/page";
+import RetentionLoopPage from "@/app/dashboard/retention-loop/page";
 import WelcomeForm from "@/pages/WelcomeForm";
 import SequenceForm from "@/pages/SequenceForm";
 import VantoOSBetaForm from "@/pages/VantoOSBetaForm";

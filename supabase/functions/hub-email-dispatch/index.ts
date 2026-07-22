@@ -184,13 +184,13 @@ Deno.serve(async (req) => {
   const sig = req.headers.get("x-bridge-signature") ?? "";
 
   if (!senderApp || !ts || !nonce || !sig) return json({ error: "missing_signature_headers" }, 400);
-  if (senderApp !== "vantoos") return json({ error: "unexpected_sender" }, 401);
+  if (senderApp !== HUB_APP_KEY) return json({ error: "unexpected_sender" }, 401);
   if (Math.abs(Math.floor(Date.now() / 1000) - Number(ts)) > SIG_WINDOW_SECONDS) {
     return json({ error: "stale_timestamp" }, 400);
   }
 
   const bodyStr = await req.text();
-  const expected = await hmacSha256Hex(secret, `${ts}.${nonce}.${APP_KEY}.${bodyStr}`);
+  const expected = await hmacSha256Hex(secret, `${ts}.${nonce}.${HUB_APP_KEY}.${bodyStr}`);
   if (!timingSafeEqual(sig, expected)) return json({ error: "bad_signature" }, 401);
 
   let body: any = {};

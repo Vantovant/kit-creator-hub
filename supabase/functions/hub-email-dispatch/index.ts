@@ -278,15 +278,7 @@ Deno.serve(async (req) => {
     if (hubUrl) await callHubEmailRecorded(secret, hubUrl, { idempotency_key: idempotencyKey, status: "skipped", reason: "suppressed" });
     return json({ accepted: false, reason: "suppressed" });
   }
-    await sb.from("email_dispatch_log").insert({
-      idempotency_key: idempotencyKey, hub_event_id: hubEventId, origin_app: originApp,
-      origin_event_id: originEventId, campaign_type: campaignType,
-      template_name: templateHint, recipient_email: recipient,
-      body_preview: body.body_preview ?? null, status: "skipped", skip_reason: "suppressed",
-    });
-    if (hubUrl) await callHubEmailRecorded(secret, hubUrl, { idempotency_key: idempotencyKey, status: "skipped", reason: "suppressed" });
-    return json({ accepted: false, reason: "suppressed" });
-  }
+
 
   // 5. Send via Resend
   const resend = new Resend(resendKey);

@@ -328,10 +328,11 @@ Deno.serve(async (req) => {
   if (status === "queued") {
     try {
       await sb.from("email_events").insert({
-        event_type: "email.sent", recipient_email: recipient, subject,
-        broadcast_id: null,
+        event_type: "email.sent",
+        email: recipient,
+        metadata: { source: "hub-email-dispatch", template: templateHint, subject, campaign_type: campaignType },
       });
-    } catch (_e) { /* schema may differ; ignore */ }
+    } catch (_e) { /* ignore */ }
   }
 
   // 6. Callback hub

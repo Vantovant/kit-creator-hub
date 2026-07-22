@@ -9,7 +9,8 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { Resend } from "npm:resend@^2.0.0";
 
-const APP_KEY = "getwell_africa_email";
+const HUB_APP_KEY = "vantoos_hub";          // identity the hub uses when calling this spoke
+const SPOKE_APP_KEY = "getwell_africa_email"; // identity this spoke uses when calling back to the hub
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -150,14 +151,14 @@ async function callHubEmailRecorded(secret: string, hubUrl: string, payload: Rec
   const body = JSON.stringify({ kind: "email_recorded", ...payload });
   const ts = Math.floor(Date.now() / 1000).toString();
   const nonce = crypto.randomUUID();
-  const sig = await hmacSha256Hex(secret, `${ts}.${nonce}.${APP_KEY}.${body}`);
+  const sig = await hmacSha256Hex(secret, `${ts}.${nonce}.${SPOKE_APP_KEY}.${body}`);
   const target = new URL("/functions/v1/suite-bridge-hub", hubUrl).toString();
   try {
     await fetch(target, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-bridge-app": APP_KEY,
+        "x-bridge-app": SPOKE_APP_KEY,
         "x-bridge-timestamp": ts,
         "x-bridge-nonce": nonce,
         "x-bridge-signature": sig,
@@ -183,13 +184,13 @@ Deno.serve(async (req) => {
   const sig = req.headers.get("x-bridge-signature") ?? "";
 
   if (!senderApp || !ts || !nonce || !sig) return json({ error: "missing_signature_headers" }, 400);
-  if (senderApp !== "vantoos") return json({ error: "unexpected_sender" }, 401);
+  if (senderApp !== HUB_APP_KEY) return json({ error: "unexpected_sender" }, 401);
   if (Math.abs(Math.floor(Date.now() / 1000) - Number(ts)) > SIG_WINDOW_SECONDS) {
     return json({ error: "stale_timestamp" }, 400);
   }
 
   const bodyStr = await req.text();
-  const expected = await hmacSha256Hex(secret, `${ts}.${nonce}.${APP_KEY}.${bodyStr}`);
+  const expected = await hmacSha256Hex(secret, `${ts}.${nonce}.${HUB_APP_KEY}.${bodyStr}`);
   if (!timingSafeEqual(sig, expected)) return json({ error: "bad_signature" }, 401);
 
   let body: any = {};

@@ -151,14 +151,14 @@ async function callHubEmailRecorded(secret: string, hubUrl: string, payload: Rec
   const body = JSON.stringify({ kind: "email_recorded", ...payload });
   const ts = Math.floor(Date.now() / 1000).toString();
   const nonce = crypto.randomUUID();
-  const sig = await hmacSha256Hex(secret, `${ts}.${nonce}.${APP_KEY}.${body}`);
+  const sig = await hmacSha256Hex(secret, `${ts}.${nonce}.${SPOKE_APP_KEY}.${body}`);
   const target = new URL("/functions/v1/suite-bridge-hub", hubUrl).toString();
   try {
     await fetch(target, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-bridge-app": APP_KEY,
+        "x-bridge-app": SPOKE_APP_KEY,
         "x-bridge-timestamp": ts,
         "x-bridge-nonce": nonce,
         "x-bridge-signature": sig,

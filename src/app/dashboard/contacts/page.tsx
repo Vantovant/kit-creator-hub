@@ -54,12 +54,27 @@ export default function ContactsPage() {
   useEffect(() => {
     (async () => {
       setLoading(true);
-      const [pRes, tRes, ptRes] = await Promise.all([
-        supabase.from("prospects").select("*").order("last_activity_at", { ascending: false, nullsFirst: false }).limit(500),
+      // Page through ALL prospects (Supabase caps a single request at 1000 rows).
+      const PAGE = 1000;
+      let from = 0;
+      const all: Prospect[] = [];
+      while (true) {
+        const { data, error } = await supabase
+          .from("prospects")
+          .select("*")
+          .order("last_activity_at", { ascending: false, nullsFirst: false })
+          .order("created_at", { ascending: false })
+          .range(from, from + PAGE - 1);
+        if (error || !data || data.length === 0) break;
+        all.push(...(data as Prospect[]));
+        if (data.length < PAGE) break;
+        from += PAGE;
+      }
+      const [tRes, ptRes] = await Promise.all([
         supabase.from("tags").select("id, name").order("name"),
-        supabase.from("prospect_tags").select("prospect_id, tag_id, tags(id, name)"),
+        supabase.from("prospect_tags").select("prospect_id, tag_id, tags(id, name)").limit(50000),
       ]);
-      setProspects((pRes.data as Prospect[]) || []);
+      setProspects(all);
       setAllTags((tRes.data as Tag[]) || []);
       const map: Record<string, Tag[]> = {};
       ((ptRes.data as any[]) || []).forEach((pt) => {

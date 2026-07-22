@@ -65,3 +65,6 @@ verify_jwt = false
 
 [functions.contact-hub-push]
 verify_jwt = false
+
+[functions.hub-email-dispatch]
+verify_jwt = false

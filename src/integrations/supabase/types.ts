@@ -284,6 +284,60 @@ export type Database = {
           },
         ]
       }
+      email_dispatch_log: {
+        Row: {
+          body_preview: string | null
+          campaign_type: string
+          email_send_id: string | null
+          hub_event_id: string | null
+          id: string
+          idempotency_key: string
+          origin_app: string
+          origin_event_id: string | null
+          received_at: string
+          recipient_email: string | null
+          recipient_hash: string | null
+          skip_reason: string | null
+          status: string
+          template_name: string
+          updated_at: string
+        }
+        Insert: {
+          body_preview?: string | null
+          campaign_type: string
+          email_send_id?: string | null
+          hub_event_id?: string | null
+          id?: string
+          idempotency_key: string
+          origin_app: string
+          origin_event_id?: string | null
+          received_at?: string
+          recipient_email?: string | null
+          recipient_hash?: string | null
+          skip_reason?: string | null
+          status: string
+          template_name: string
+          updated_at?: string
+        }
+        Update: {
+          body_preview?: string | null
+          campaign_type?: string
+          email_send_id?: string | null
+          hub_event_id?: string | null
+          id?: string
+          idempotency_key?: string
+          origin_app?: string
+          origin_event_id?: string | null
+          received_at?: string
+          recipient_email?: string | null
+          recipient_hash?: string | null
+          skip_reason?: string | null
+          status?: string
+          template_name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       email_events: {
         Row: {
           broadcast_id: string | null

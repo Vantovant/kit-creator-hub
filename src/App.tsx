@@ -62,6 +62,7 @@ function App() {
           <Route path="email" element={<RepliesPage />} />
           <Route path="inbox" element={<InboxPage />} />
           <Route path="contacts" element={<ContactsPage />} />
+          <Route path="retention-loop" element={<RetentionLoopPage />} />
           <Route path="settings" element={<SettingsPage />} />
         </Route>
       </Routes>

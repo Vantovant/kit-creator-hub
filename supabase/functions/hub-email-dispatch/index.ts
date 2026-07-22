@@ -248,11 +248,8 @@ Deno.serve(async (req) => {
 
   // 3. Resolve recipient
   let recipient: string | null = (contact.email ?? "").toString().toLowerCase() || null;
-  if (!recipient && (contact.aplgo_id || contact.phone_hash)) {
-    let q = sb.from("prospects").select("email").limit(1);
-    if (contact.aplgo_id) q = q.eq("aplgo_id", contact.aplgo_id);
-    else if (contact.phone_hash) q = q.eq("phone_hash", contact.phone_hash);
-    const { data: p } = await q.maybeSingle();
+  if (!recipient && contact.aplgo_id) {
+    const { data: p } = await sb.from("prospects").select("email").eq("aplgo_id", contact.aplgo_id).maybeSingle();
     if (p?.email && !p.email.endsWith("@aplgo.enrollment.pending") && !p.email.endsWith("@placeholder.local")) {
       recipient = p.email.toLowerCase();
     }
@@ -268,12 +265,19 @@ Deno.serve(async (req) => {
     return json({ accepted: false, reason: "no_email" });
   }
 
-  // 4. Suppression
-  const { data: sup } = await sb
-    .from("suppressed_emails").select("email").eq("email", recipient).maybeSingle();
+  // 4. Suppression — rely on prospects.unsubscribed (no suppressed_emails table in this project)
   const { data: pros } = await sb
     .from("prospects").select("unsubscribed").eq("email", recipient).maybeSingle();
-  if (sup || pros?.unsubscribed) {
+  if (pros?.unsubscribed) {
+    await sb.from("email_dispatch_log").insert({
+      idempotency_key: idempotencyKey, hub_event_id: hubEventId, origin_app: originApp,
+      origin_event_id: originEventId, campaign_type: campaignType,
+      template_name: templateHint, recipient_email: recipient,
+      body_preview: body.body_preview ?? null, status: "skipped", skip_reason: "suppressed",
+    });
+    if (hubUrl) await callHubEmailRecorded(secret, hubUrl, { idempotency_key: idempotencyKey, status: "skipped", reason: "suppressed" });
+    return json({ accepted: false, reason: "suppressed" });
+  }
     await sb.from("email_dispatch_log").insert({
       idempotency_key: idempotencyKey, hub_event_id: hubEventId, origin_app: originApp,
       origin_event_id: originEventId, campaign_type: campaignType,

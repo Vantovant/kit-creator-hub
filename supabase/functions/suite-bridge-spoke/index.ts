@@ -156,6 +156,11 @@ Deno.serve(async (req) => {
 
   let body: any = {};
   try { body = JSON.parse(bodyStr || "{}"); } catch { /* keep {} */ }
+  // Hub wraps payloads as { action: "receive", body: {...} }. Unwrap so downstream
+  // branches see the real kind/records without special-casing every handler.
+  if (body && body.action === "receive" && body.body && typeof body.body === "object") {
+    body = body.body;
+  }
 
   // ---- ping / pong (Phase A) ----
   if (body?.kind === "ping") {

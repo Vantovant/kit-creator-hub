@@ -136,17 +136,31 @@ Deno.serve(async (req) => {
   const sig = req.headers.get("x-bridge-signature") ?? "";
 
   if (!senderApp || !ts || !nonce || !sig) return json({ error: "missing_signature_headers" }, 400);
-  if (senderApp !== "vantoos") return json({ error: "unexpected_sender" }, 401);
-  if (Math.abs(Math.floor(Date.now() / 1000) - Number(ts)) > SIG_WINDOW_SECONDS) {
+  // Hub signs outbound as `vantoos_hub` (per Field Ownership Contract activation).
+  // Accept the legacy `vantoos` alias too for any older callers.
+  if (senderApp !== "vantoos_hub" && senderApp !== "vantoos") {
+    return json({ error: "unexpected_sender" }, 401);
+  }
+  // Accept both ms (Date.now()) and seconds timestamps.
+  const tsNum = Number(ts);
+  if (!Number.isFinite(tsNum)) return json({ error: "bad_timestamp" }, 400);
+  const tsMs = tsNum > 1e12 ? tsNum : tsNum * 1000;
+  if (Math.abs(Date.now() - tsMs) > SIG_WINDOW_SECONDS * 1000) {
     return json({ error: "stale_timestamp" }, 400);
   }
 
   const bodyStr = await req.text();
-  const expected = await hmacSha256Hex(secret, `${ts}.${nonce}.${APP_KEY}.${bodyStr}`);
+  // Canonical string uses the SENDER's app_key (matches hub-email-dispatch verification).
+  const expected = await hmacSha256Hex(secret, `${ts}.${nonce}.${senderApp}.${bodyStr}`);
   if (!timingSafeEqual(sig, expected)) return json({ error: "bad_signature" }, 401);
 
   let body: any = {};
   try { body = JSON.parse(bodyStr || "{}"); } catch { /* keep {} */ }
+  // Hub wraps payloads as { action: "receive", body: {...} }. Unwrap so downstream
+  // branches see the real kind/records without special-casing every handler.
+  if (body && body.action === "receive" && body.body && typeof body.body === "object") {
+    body = body.body;
+  }
 
   // ---- ping / pong (Phase A) ----
   if (body?.kind === "ping") {

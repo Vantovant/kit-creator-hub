@@ -243,13 +243,16 @@ Deno.serve(async (req) => {
   // 2. Resolve template
   const template = TEMPLATES[templateHint];
   if (!template) {
+    // Store the raw payload snippet so we can see what the hub actually sent.
+    const rawPreview = (body.body_preview ?? bodyStr).toString().slice(0, 500);
+    console.log("hub-email-dispatch skip unknown_template", { templateHint, campaignType, originApp, hubEventId, rawPreview });
     await sb.from("email_dispatch_log").insert({
       idempotency_key: idempotencyKey, hub_event_id: hubEventId, origin_app: originApp,
       origin_event_id: originEventId, campaign_type: campaignType,
-      template_name: templateHint || "unknown", body_preview: body.body_preview ?? null,
+      template_name: templateHint || "unknown", body_preview: rawPreview,
       status: "skipped", skip_reason: "unknown_template",
     });
-    return json({ accepted: false, reason: "unknown_template" });
+    return json({ accepted: false, reason: "unknown_template", template_hint: templateHint });
   }
 
   // 3. Resolve recipient

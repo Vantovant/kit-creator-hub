@@ -277,6 +277,11 @@ Deno.serve(async (req) => {
     return json({ error: "account_not_found", detail: accountErr?.message }, 404);
   }
 
+  // Ownership check: the caller must own this mailbox.
+  const requestUser = await getRequestUser(req, supabase);
+  if (!requestUser) return json({ error: "authentication_required" }, 401);
+  if (requestUser.id !== account.user_id) return json({ error: "forbidden" }, 403);
+
   let connectionKey: string;
   try {
     connectionKey = await resolveConnectionKeyForAccount(account, lovableKey);

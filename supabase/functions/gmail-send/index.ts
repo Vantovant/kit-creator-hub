@@ -110,6 +110,15 @@ async function resolveConnectionKeyForEmail(email: string, lovableKey: string): 
   throw new Error(`No linked Gmail authorization matches ${email}. Authorize that mailbox in Settings, then refresh authorized accounts.`);
 }
 
+async function getRequestUser(req: Request, supabase: any) {
+  const authHeader = req.headers.get("Authorization") || "";
+  const token = authHeader.replace(/^Bearer\s+/i, "");
+  if (!token) return null;
+  const { data, error } = await supabase.auth.getUser(token);
+  if (error) return null;
+  return data.user || null;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
@@ -131,6 +140,11 @@ Deno.serve(async (req) => {
 
   const { data: account } = await supabase.from("inbox_accounts").select("*").eq("id", account_id).maybeSingle();
   if (!account) return json({ error: "account_not_found" }, 404);
+
+  // Ownership check: the caller must own this mailbox.
+  const sender = await getRequestUser(req, supabase);
+  if (!sender) return json({ error: "authentication_required" }, 401);
+  if (sender.id !== account.user_id) return json({ error: "forbidden" }, 403);
 
   let connectionKey: string;
   try {

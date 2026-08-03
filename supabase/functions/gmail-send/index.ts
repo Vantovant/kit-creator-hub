@@ -110,6 +110,15 @@ async function resolveConnectionKeyForEmail(email: string, lovableKey: string): 
   throw new Error(`No linked Gmail authorization matches ${email}. Authorize that mailbox in Settings, then refresh authorized accounts.`);
 }
 
+async function getRequestUser(req: Request, supabase: any) {
+  const authHeader = req.headers.get("Authorization") || "";
+  const token = authHeader.replace(/^Bearer\s+/i, "");
+  if (!token) return null;
+  const { data, error } = await supabase.auth.getUser(token);
+  if (error) return null;
+  return data.user || null;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);

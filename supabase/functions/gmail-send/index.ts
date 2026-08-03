@@ -141,6 +141,11 @@ Deno.serve(async (req) => {
   const { data: account } = await supabase.from("inbox_accounts").select("*").eq("id", account_id).maybeSingle();
   if (!account) return json({ error: "account_not_found" }, 404);
 
+  // Ownership check: the caller must own this mailbox.
+  const sender = await getRequestUser(req, supabase);
+  if (!sender) return json({ error: "authentication_required" }, 401);
+  if (sender.id !== account.user_id) return json({ error: "forbidden" }, 403);
+
   let connectionKey: string;
   try {
     connectionKey = await resolveConnectionKeyForEmail(account.email_address, lovableKey);

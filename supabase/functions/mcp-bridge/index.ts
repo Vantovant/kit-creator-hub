@@ -119,10 +119,12 @@ Deno.serve(async (req) => {
           .order('created_at', { ascending: false })
           .limit(10)
 
+        // email_events has no prospect_id column (confirmed against
+        // resend-webhook's own insert) — it's keyed by `email` instead.
         const { data: recentEvents } = await supabase
           .from('email_events')
           .select('event_type, created_at')
-          .eq('prospect_id', prospect.id)
+          .eq('email', prospect.email)
           .order('created_at', { ascending: false })
           .limit(10)
 
@@ -214,11 +216,13 @@ Deno.serve(async (req) => {
         const { count: unsubscribedCount } = await supabase
           .from('prospects').select('*', { count: 'exact', head: true }).eq('unsubscribed', true)
 
+        // resend-webhook stores event_type prefixed, e.g. "email.sent",
+        // "email.opened" — confirmed against its own insert call.
         const eventTypes = ['sent', 'delivered', 'opened', 'clicked', 'bounced', 'complained']
         const counts: Record<string, number> = {}
         for (const t of eventTypes) {
           const { count } = await supabase
-            .from('email_events').select('*', { count: 'exact', head: true }).eq('event_type', t)
+            .from('email_events').select('*', { count: 'exact', head: true }).eq('event_type', `email.${t}`)
           counts[t] = count ?? 0
         }
 

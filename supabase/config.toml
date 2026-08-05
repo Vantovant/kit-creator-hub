@@ -68,3 +68,6 @@ verify_jwt = false
 
 [functions.hub-email-dispatch]
 verify_jwt = false
+
+[functions.mcp-bridge]
+verify_jwt = false

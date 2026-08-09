@@ -237,6 +237,19 @@ Deno.serve(async (req) => {
       }
 
       case 'tag_prospect': {
+        // NOTE: tags.user_id is NOT NULL. The equivalent tagging code in
+        // save-prospect and process-scheduled-broadcasts omits user_id
+        // entirely and wraps the insert in a non-fatal try/catch — meaning
+        // both of those have likely been silently failing on every call in
+        // production (confirmed 2026-08-09: all 81 existing tag rows have
+        // user_id populated, consistent with only ever being created via
+        // the app's own UI, never via those two backend paths). Resolving
+        // and setting the owner id here avoids repeating that bug.
+        const ownerId = await resolveOwnerUserId()
+        if (!ownerId) {
+          return json({ error: 'owner_not_configured', message: 'Set DEFAULT_OWNER_EMAIL secret on this function.' }, 500)
+        }
+
         const prospectId = String(body.prospect_id ?? '')
         const tagName = body.tag_name ? String(body.tag_name).trim() : ''
         if (!prospectId) return json({ error: 'prospect_id_required' }, 400)
@@ -247,11 +260,13 @@ Deno.serve(async (req) => {
         if (pErr) throw pErr
         if (!prospect) return json({ error: 'prospect_not_found' }, 404)
 
-        // Same upsert-by-name pattern already used by save-prospect and
-        // process-scheduled-broadcasts for tagging.
+        // Upsert-by-name, now with user_id set. As of 2026-08-09 tags.name
+        // also has a real UNIQUE constraint (added this session — it was
+        // previously missing, which caused a separate onConflict failure
+        // and let duplicate-named tag rows accumulate).
         const { data: tag, error: tagErr } = await supabase
           .from('tags')
-          .upsert({ name: tagName }, { onConflict: 'name' })
+          .upsert({ name: tagName, user_id: ownerId }, { onConflict: 'name' })
           .select('id, name')
           .single()
         if (tagErr) throw tagErr

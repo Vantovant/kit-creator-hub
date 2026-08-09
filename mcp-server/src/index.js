@@ -101,18 +101,24 @@ function pkceVerify(codeVerifier, codeChallenge) {
 
 // ---------------------------------------------------------------------------
 // MCP server + tools
-// Deliberately read-mostly / safety-scoped for this first version:
-//   - No broadcast send/schedule capability exposed.
-//   - No automation/sequence trigger capability.
-//   - No delete of any kind.
+// Deliberately safety-scoped, even in this expanded version:
+//   - No broadcast send/schedule capability exposed — create_broadcast only
+//     ever writes status='draft', enforced inside the bridge itself.
+//   - No sequence-enrollment / automation-trigger capability exposed —
+//     list_sequences is read-only. Enrolling a contact triggers automated,
+//     unattended sends over time and was deliberately left out pending a
+//     separate decision, same as broadcast send/schedule.
+//   - No delete of any kind, anywhere.
 //   - update_prospect only ever touches fields explicitly provided; email is
 //     not editable here (identity/matching field).
-//   - add_contact_note is strictly additive.
+//   - add_contact_note, tag_prospect are strictly additive.
+//   - list_inbox_messages is read-only and never touches Gmail directly —
+//     it only reads rows already synced by the app's own per-user cron.
 // ---------------------------------------------------------------------------
 function buildServer() {
   const server = new McpServer({
     name: "vanto-zazi-mail-mcp",
-    version: "1.0.0",
+    version: "1.1.0",
   });
 
   server.registerTool(
@@ -143,8 +149,9 @@ function buildServer() {
     {
       title: "Get a single subscriber/prospect",
       description:
-        "Full detail for one prospect by id or email, plus their last 10 activity log " +
-        "entries and last 10 email events (sent/opened/clicked/bounced/etc). Read-only.",
+        "Full detail for one prospect by id or email, plus their tags, last 10 " +
+        "activity log entries, and last 10 email events (sent/opened/clicked/bounced/" +
+        "etc). Read-only.",
       inputSchema: {
         prospect_id: z.string().optional().describe("UUID of the prospect"),
         email: z.string().optional().describe("Email address of the prospect"),
@@ -183,6 +190,32 @@ function buildServer() {
   );
 
   server.registerTool(
+    "create_prospect",
+    {
+      title: "Create a new subscriber/prospect",
+      description:
+        "Add a new contact by email (upserts if the email already exists). Does NOT " +
+        "trigger any welcome email, automation, or sequence enrollment — this only " +
+        "writes the contact record itself.",
+      inputSchema: {
+        email: z.string().describe("Email address (required)"),
+        first_name: z.string().optional(),
+        last_name: z.string().optional(),
+        full_name: z.string().optional(),
+        phone_number: z.string().optional(),
+        contact_type: z.string().optional().describe("e.g. subscriber, customer"),
+        lead_type: z.string().optional(),
+        lead_temperature: z.string().optional().describe("e.g. hot, warm, cold"),
+        source: z.string().optional().describe("Defaults to 'claude_mcp' if not provided"),
+      },
+    },
+    async (args) => {
+      const data = await callBridge("create_prospect", args);
+      return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
+    }
+  );
+
+  server.registerTool(
     "add_contact_note",
     {
       title: "Log an activity / note for a prospect",
@@ -201,13 +234,30 @@ function buildServer() {
   );
 
   server.registerTool(
+    "tag_prospect",
+    {
+      title: "Tag a prospect",
+      description:
+        "Add a tag to a prospect (creates the tag if it doesn't already exist). " +
+        "Strictly additive — does not remove any existing tags.",
+      inputSchema: {
+        prospect_id: z.string().describe("UUID of the prospect"),
+        tag_name: z.string().describe("Tag to add, e.g. 'VIP', 'Webinar:Aug2026'"),
+      },
+    },
+    async (args) => {
+      const data = await callBridge("tag_prospect", args);
+      return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
+    }
+  );
+
+  server.registerTool(
     "list_broadcasts",
     {
       title: "List email broadcasts/campaigns",
       description:
         "Read email broadcasts, optionally filtered by status (draft/scheduled/sending/" +
-        "sent/failed) or brand. Returns up to 100 with delivery stats. Read-only — " +
-        "creating or sending broadcasts is not exposed via MCP.",
+        "sent/failed) or brand. Returns up to 100 with delivery stats. Read-only.",
       inputSchema: {
         status: z.string().optional().describe("Filter by status, e.g. draft, scheduled, sent, failed"),
         brand: z.string().optional().describe("Filter by brand, e.g. vanto, aplgo"),
@@ -216,6 +266,126 @@ function buildServer() {
     },
     async (args) => {
       const data = await callBridge("list_broadcasts", args);
+      return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
+    }
+  );
+
+  server.registerTool(
+    "create_broadcast",
+    {
+      title: "Draft a new email broadcast",
+      description:
+        "Create a broadcast email as a DRAFT. This can never send or schedule real " +
+        "email — status is fixed to 'draft' by the backend regardless of what's " +
+        "passed in. Open it in the Vanto Zazi Mail app to review, schedule, or send it.",
+      inputSchema: {
+        subject: z.string().describe("Email subject line (required)"),
+        content: z.string().describe("Email body, HTML supported, use {{first_name}} for personalization (required)"),
+        preview_text: z.string().optional().describe("Preview text shown in inbox"),
+        from_name: z.string().optional().describe("Defaults to 'Vanto Zazi'"),
+        reply_to: z.string().optional(),
+        brand: z.string().optional().describe("'aplgo' or 'vantoos', defaults to 'aplgo'"),
+        segment_id: z.string().optional().describe("UUID of a segment to target; omit for all active subscribers"),
+      },
+    },
+    async (args) => {
+      const data = await callBridge("create_broadcast", args);
+      return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
+    }
+  );
+
+  server.registerTool(
+    "list_sequences",
+    {
+      title: "List email sequences",
+      description:
+        "Read multi-step email sequences with a summary of each step (subject lines " +
+        "and wait durations, not full HTML content). Read-only — enrolling a contact " +
+        "into a sequence is not exposed via MCP, since it triggers automated sends " +
+        "over time.",
+      inputSchema: {
+        status: z.string().optional().describe("Filter by status, e.g. active, paused"),
+        limit: z.number().int().positive().max(100).optional().describe("Max results, default 25, max 100"),
+      },
+    },
+    async (args) => {
+      const data = await callBridge("list_sequences", args);
+      return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
+    }
+  );
+
+  server.registerTool(
+    "list_inbox_messages",
+    {
+      title: "List Reply Inbox messages",
+      description:
+        "Read messages already synced into the Reply Inbox (does not trigger a new " +
+        "Gmail sync — reads existing rows only). Scoped to the configured owner " +
+        "account. Read-only.",
+      inputSchema: {
+        unread_only: z.boolean().optional(),
+        include_archived: z.boolean().optional().describe("Defaults to false (archived messages hidden)"),
+        search: z.string().optional().describe("Free-text search on subject/sender"),
+        limit: z.number().int().positive().max(100).optional().describe("Max results, default 25, max 100"),
+      },
+    },
+    async (args) => {
+      const data = await callBridge("list_inbox_messages", args);
+      return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
+    }
+  );
+
+  server.registerTool(
+    "create_task",
+    {
+      title: "Create a Plan Hub task",
+      description: "Add a new task to the Plan Hub (Tasks tab).",
+      inputSchema: {
+        title: z.string().describe("Task title (required)"),
+        description: z.string().optional(),
+        priority: z.string().optional().describe("e.g. P1, P2, P3, P4"),
+        due_date: z.string().optional().describe("ISO 8601 date/datetime"),
+      },
+    },
+    async (args) => {
+      const data = await callBridge("create_task", args);
+      return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
+    }
+  );
+
+  server.registerTool(
+    "create_reminder",
+    {
+      title: "Create a Plan Hub reminder",
+      description: "Add a new reminder to the Plan Hub (Reminders tab).",
+      inputSchema: {
+        title: z.string().describe("Reminder title (required)"),
+        reminder_time: z.string().describe("ISO 8601 datetime for when to be reminded (required)"),
+        description: z.string().optional(),
+      },
+    },
+    async (args) => {
+      const data = await callBridge("create_reminder", args);
+      return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
+    }
+  );
+
+  server.registerTool(
+    "create_meeting",
+    {
+      title: "Create a Plan Hub meeting",
+      description: "Add a new meeting to the Plan Hub (Meetings tab).",
+      inputSchema: {
+        title: z.string().describe("Meeting title (required)"),
+        start_time: z.string().describe("ISO 8601 datetime for meeting start (required)"),
+        end_time: z.string().optional().describe("ISO 8601 datetime for meeting end"),
+        location: z.string().optional().describe("Physical location or video call link"),
+        description: z.string().optional(),
+        attendees: z.array(z.string()).optional().describe("List of attendee names or emails"),
+      },
+    },
+    async (args) => {
+      const data = await callBridge("create_meeting", args);
       return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
     }
   );

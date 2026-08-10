@@ -466,15 +466,10 @@ Deno.serve(async (req) => {
         //     resolved DEFAULT_OWNER_EMAIL user (this bridge has no user JWT
         //     to reuse gmail-send's own ownership check directly)
         //
-        // VERIFY BEFORE DEPLOY: this reads `gmail_message_id` and `thread_id`
-        // from inbox_messages, and `email_address` from inbox_accounts — these
-        // column names were NOT in the confirmed select list for
-        // list_inbox_messages and have not been checked against the live
-        // schema. Run an information_schema.columns query against
-        // inbox_messages / inbox_accounts (same pattern used for the tags
-        // table fix) and correct the field names below before this action is
-        // trusted to send real mail — this project has already hit two real
-        // column-name mismatches from assuming rather than checking.
+        // Column names verified live against inbox_messages / inbox_accounts
+        // via information_schema.columns (2026-08-10) — message_id, thread_id,
+        // and inbox_accounts.email_address all confirmed correct. inbox_action_log
+        // schema also confirmed to match the insert below.
         const ownerId = await resolveOwnerUserId()
         if (!ownerId) {
           return json({ error: 'owner_not_configured', message: 'Set DEFAULT_OWNER_EMAIL secret on this function.' }, 500)
@@ -487,7 +482,7 @@ Deno.serve(async (req) => {
 
         const { data: parent, error: pErr } = await supabase
           .from('inbox_messages')
-          .select('id, user_id, account_id, sender, subject, gmail_message_id, thread_id')
+          .select('id, user_id, account_id, sender, subject, message_id, thread_id')
           .eq('id', messageId)
           .maybeSingle()
         if (pErr) throw pErr
@@ -525,7 +520,7 @@ Deno.serve(async (req) => {
         let references: string | undefined
         try {
           const r = await fetch(
-            `${GMAIL_GATEWAY_URL}/users/me/messages/${parent.gmail_message_id}?format=metadata&metadataHeaders=Message-Id&metadataHeaders=References`,
+            `${GMAIL_GATEWAY_URL}/users/me/messages/${parent.message_id}?format=metadata&metadataHeaders=Message-Id&metadataHeaders=References`,
             { headers: { Authorization: `Bearer ${lovableKey}`, 'X-Connection-Api-Key': connectionKey } },
           )
           if (r.ok) {

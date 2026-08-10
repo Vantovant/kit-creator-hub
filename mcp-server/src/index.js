@@ -114,11 +114,18 @@ function pkceVerify(codeVerifier, codeChallenge) {
 //   - add_contact_note, tag_prospect are strictly additive.
 //   - list_inbox_messages is read-only and never touches Gmail directly —
 //     it only reads rows already synced by the app's own per-user cron.
+//   - reply_to_inbox_message is the ONE send-capable tool in this file. It
+//     is deliberately narrow: single existing message only, recipient is
+//     always the original sender (no override), subject is always forced
+//     to "Re: <original subject>". Ownership is enforced inside the bridge
+//     by comparing the message's mailbox against the configured
+//     DEFAULT_OWNER_EMAIL account. See reply_to_inbox_message_bridge_action.ts
+//     for the corresponding mcp-bridge/index.ts action.
 // ---------------------------------------------------------------------------
 function buildServer() {
   const server = new McpServer({
     name: "vanto-zazi-mail-mcp",
-    version: "1.1.0",
+    version: "1.2.0",
   });
 
   server.registerTool(
@@ -331,6 +338,27 @@ function buildServer() {
     },
     async (args) => {
       const data = await callBridge("list_inbox_messages", args);
+      return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
+    }
+  );
+
+  server.registerTool(
+    "reply_to_inbox_message",
+    {
+      title: "Reply to a Reply Inbox message",
+      description:
+        "Reply to a single existing Reply Inbox message, sent from the connected " +
+        "Gmail account as a proper threaded reply. Recipient is always the original " +
+        "sender (no override). Subject is always forced to 'Re: <original subject>'. " +
+        "This is the only send-capable tool in this integration — use it deliberately, " +
+        "one message at a time.",
+      inputSchema: {
+        message_id: z.string().describe("The id of the inbox_messages row being replied to (from list_inbox_messages)"),
+        body_text: z.string().describe("Plain-text reply body"),
+      },
+    },
+    async (args) => {
+      const data = await callBridge("reply_to_inbox_message", args);
       return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
     }
   );

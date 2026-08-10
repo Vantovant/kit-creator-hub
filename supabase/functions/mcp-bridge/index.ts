@@ -24,6 +24,63 @@ function timingSafeEqual(a: string, b: string): boolean {
   return diff === 0
 }
 
+// ---------------------------------------------------------------------------
+// reply_to_inbox_message helpers — reuse gmail-send's MIME/threading/gateway
+// logic, but since this bridge authenticates via x-mcp-token (service role,
+// no user JWT), ownership is enforced by comparing the message's owner
+// against the resolved DEFAULT_OWNER_EMAIL user, instead of gmail-send's
+// JWT-based `sender.id === account.user_id` check.
+// ---------------------------------------------------------------------------
+const GMAIL_GATEWAY_URL = 'https://connector-gateway.lovable.dev/google_mail/gmail/v1'
+
+function b64url(input: string): string {
+  const bytes = new TextEncoder().encode(input)
+  let bin = ''
+  bytes.forEach((b) => (bin += String.fromCharCode(b)))
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '')
+}
+
+function normalizeEmail(raw: string): string {
+  return raw.toLowerCase().replace(/\s/g, '').replace(/<|>/g, '')
+}
+
+function buildReplyMime(opts: {
+  from: string; to: string; subject: string; text: string
+  inReplyTo?: string; references?: string
+}): string {
+  const headers = [
+    `From: ${opts.from}`,
+    `To: ${opts.to}`,
+    `Subject: ${opts.subject}`,
+  ]
+  if (opts.inReplyTo) headers.push(`In-Reply-To: ${opts.inReplyTo}`)
+  if (opts.references) headers.push(`References: ${opts.references}`)
+  headers.push('MIME-Version: 1.0', 'Content-Type: text/plain; charset="UTF-8"')
+  return `${headers.join('\r\n')}\r\n\r\n${opts.text}`
+}
+
+async function resolveGmailConnectionKey(email: string, lovableKey: string): Promise<string> {
+  const expected = normalizeEmail(email)
+  const keys: string[] = []
+  const primary = Deno.env.get('GOOGLE_MAIL_API_KEY')
+  if (primary) keys.push(primary)
+  for (let i = 1; i <= 10; i++) {
+    const k = Deno.env.get(`GOOGLE_MAIL_API_KEY_${i}`)
+    if (k) keys.push(k)
+  }
+  for (const key of keys) {
+    try {
+      const res = await fetch(`${GMAIL_GATEWAY_URL}/users/me/profile`, {
+        headers: { Authorization: `Bearer ${lovableKey}`, 'X-Connection-Api-Key': key },
+      })
+      if (!res.ok) continue
+      const profile = await res.json()
+      if (normalizeEmail(profile?.emailAddress || '') === expected) return key
+    } catch { /* try next linked Gmail connection */ }
+  }
+  throw new Error(`No linked Gmail authorization matches ${email}`)
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   if (req.method !== 'POST') return json({ error: 'method_not_allowed' }, 405)
@@ -168,7 +225,7 @@ Deno.serve(async (req) => {
           .from('prospects')
           .update(updates)
           .eq('id', prospectId)
-          .select('id, full_name, email, contact_type, lead_type, lead_temperature, unsubscribed, updated_at')
+          .select('id, full_name, email, contact_type, lead_type, lead_temperature, updated_at')
           .single()
         if (error) throw error
         return json({ ok: true, prospect: data })
@@ -398,6 +455,128 @@ Deno.serve(async (req) => {
         const { data, error } = await query
         if (error) throw error
         return json({ ok: true, count: data?.length ?? 0, messages: data ?? [] })
+      }
+
+      case 'reply_to_inbox_message': {
+        // The ONE send-capable action in this bridge. Deliberately narrow:
+        //   - single existing inbox_messages row only (no bulk, no cold-send)
+        //   - recipient is always the original sender — no address override
+        //   - subject is always forced to "Re: <original subject>"
+        //   - ownership is enforced by comparing the message's owner to the
+        //     resolved DEFAULT_OWNER_EMAIL user (this bridge has no user JWT
+        //     to reuse gmail-send's own ownership check directly)
+        //
+        // VERIFY BEFORE DEPLOY: this reads `gmail_message_id` and `thread_id`
+        // from inbox_messages, and `email_address` from inbox_accounts — these
+        // column names were NOT in the confirmed select list for
+        // list_inbox_messages and have not been checked against the live
+        // schema. Run an information_schema.columns query against
+        // inbox_messages / inbox_accounts (same pattern used for the tags
+        // table fix) and correct the field names below before this action is
+        // trusted to send real mail — this project has already hit two real
+        // column-name mismatches from assuming rather than checking.
+        const ownerId = await resolveOwnerUserId()
+        if (!ownerId) {
+          return json({ error: 'owner_not_configured', message: 'Set DEFAULT_OWNER_EMAIL secret on this function.' }, 500)
+        }
+
+        const messageId = String(body.message_id ?? '')
+        const bodyText = body.body_text ? String(body.body_text) : ''
+        if (!messageId) return json({ error: 'message_id_required' }, 400)
+        if (!bodyText) return json({ error: 'body_text_required' }, 400)
+
+        const { data: parent, error: pErr } = await supabase
+          .from('inbox_messages')
+          .select('id, user_id, account_id, sender, subject, gmail_message_id, thread_id')
+          .eq('id', messageId)
+          .maybeSingle()
+        if (pErr) throw pErr
+        if (!parent) return json({ error: 'message_not_found' }, 404)
+
+        // Ownership check — replaces gmail-send's JWT-based check, since this
+        // bridge has no user JWT to pass through.
+        if (parent.user_id !== ownerId) {
+          return json({ error: 'forbidden', message: "Message does not belong to the configured owner account." }, 403)
+        }
+
+        const { data: account, error: aErr } = await supabase
+          .from('inbox_accounts')
+          .select('id, email_address, user_id')
+          .eq('id', parent.account_id)
+          .maybeSingle()
+        if (aErr) throw aErr
+        if (!account) return json({ error: 'account_not_found' }, 404)
+        if (account.user_id !== ownerId) {
+          return json({ error: 'forbidden', message: "Mailbox does not belong to the configured owner account." }, 403)
+        }
+
+        const lovableKey = Deno.env.get('LOVABLE_API_KEY')
+        if (!lovableKey) return json({ error: 'missing_gateway_key' }, 500)
+
+        let connectionKey: string
+        try {
+          connectionKey = await resolveGmailConnectionKey(account.email_address, lovableKey)
+        } catch (e) {
+          return json({ error: 'gmail_authorization_required', message: (e as Error).message }, 409)
+        }
+
+        // Fetch RFC822 Message-Id / References for proper threading.
+        let inReplyTo: string | undefined
+        let references: string | undefined
+        try {
+          const r = await fetch(
+            `${GMAIL_GATEWAY_URL}/users/me/messages/${parent.gmail_message_id}?format=metadata&metadataHeaders=Message-Id&metadataHeaders=References`,
+            { headers: { Authorization: `Bearer ${lovableKey}`, 'X-Connection-Api-Key': connectionKey } },
+          )
+          if (r.ok) {
+            const meta = await r.json()
+            const hs = Object.fromEntries((meta.payload?.headers ?? []).map((h: any) => [h.name.toLowerCase(), h.value]))
+            if (hs['message-id']) {
+              inReplyTo = hs['message-id']
+              references = hs['references'] ? `${hs['references']} ${hs['message-id']}` : hs['message-id']
+            }
+          }
+        } catch { /* non-fatal — reply still sends, just without perfect threading headers */ }
+
+        const replySubject = /^re:/i.test(parent.subject ?? '') ? parent.subject : `Re: ${parent.subject ?? ''}`
+
+        const raw = buildReplyMime({
+          from: account.email_address,
+          to: parent.sender,
+          subject: replySubject,
+          text: bodyText,
+          inReplyTo,
+          references,
+        })
+
+        const sendBody: Record<string, unknown> = { raw: b64url(raw) }
+        if (parent.thread_id) sendBody.threadId = parent.thread_id
+
+        const sendRes = await fetch(`${GMAIL_GATEWAY_URL}/users/me/messages/send`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${lovableKey}`,
+            'X-Connection-Api-Key': connectionKey,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(sendBody),
+        })
+        const sendText = await sendRes.text()
+        if (!sendRes.ok) {
+          console.error('reply_to_inbox_message gateway error', sendRes.status, sendText)
+          return json({ error: 'gateway_failed', status: sendRes.status, detail: sendText }, 502)
+        }
+
+        // Log exactly like gmail-send does, so the reply shows up in Get Well
+        // Mail's own Reply Inbox UI, not just in the raw Gmail thread.
+        await supabase.from('inbox_action_log').insert({
+          user_id: ownerId,
+          message_id: parent.id,
+          action_type: 'reply_sent',
+          action_data: { to: parent.sender, subject: replySubject, thread_id: parent.thread_id ?? null, via: 'mcp' },
+        })
+
+        return json({ ok: true, to: parent.sender, subject: replySubject })
       }
 
       case 'create_task': {

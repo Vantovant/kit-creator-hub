@@ -114,18 +114,23 @@ function pkceVerify(codeVerifier, codeChallenge) {
 //   - add_contact_note, tag_prospect are strictly additive.
 //   - list_inbox_messages is read-only and never touches Gmail directly —
 //     it only reads rows already synced by the app's own per-user cron.
-//   - reply_to_inbox_message is the ONE send-capable tool in this file. It
-//     is deliberately narrow: single existing message only, recipient is
-//     always the original sender (no override), subject is always forced
-//     to "Re: <original subject>". Ownership is enforced inside the bridge
-//     by comparing the message's mailbox against the configured
-//     DEFAULT_OWNER_EMAIL account. See reply_to_inbox_message_bridge_action.ts
-//     for the corresponding mcp-bridge/index.ts action.
+//   - reply_to_inbox_message and send_prospect_email are the two
+//     send-capable tools in this file:
+//       * reply_to_inbox_message is narrow by construction — single existing
+//         message only, recipient always the original sender, subject
+//         always forced to "Re: <original subject>".
+//       * send_prospect_email (added 2026-08-11) sends immediately with NO
+//         review/draft step, at explicit user request. It is still scoped
+//         defensively: exactly one recipient per call, requires literal
+//         final subject/body (never generated in-tool), refuses
+//         unsubscribed/non-consenting prospects, and every send is logged
+//         to contact_activities + zazi_outbound_sends for an audit trail.
+//         Use it deliberately — there is no undo.
 // ---------------------------------------------------------------------------
 function buildServer() {
   const server = new McpServer({
     name: "vanto-zazi-mail-mcp",
-    version: "1.2.0",
+    version: "1.3.0",
   });
 
   server.registerTool(
@@ -349,9 +354,7 @@ function buildServer() {
       description:
         "Reply to a single existing Reply Inbox message, sent from the connected " +
         "Gmail account as a proper threaded reply. Recipient is always the original " +
-        "sender (no override). Subject is always forced to 'Re: <original subject>'. " +
-        "This is the only send-capable tool in this integration — use it deliberately, " +
-        "one message at a time.",
+        "sender (no override). Subject is always forced to 'Re: <original subject>'.",
       inputSchema: {
         message_id: z.string().describe("The id of the inbox_messages row being replied to (from list_inbox_messages)"),
         body_text: z.string().describe("Plain-text reply body"),
@@ -359,6 +362,34 @@ function buildServer() {
     },
     async (args) => {
       const data = await callBridge("reply_to_inbox_message", args);
+      return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
+    }
+  );
+
+  server.registerTool(
+    "send_prospect_email",
+    {
+      title: "Send an individual email to a prospect",
+      description:
+        "Send a real, one-off email IMMEDIATELY to a single prospect, using the app's " +
+        "own sending pipeline (Resend, the correct brand's reply-from address). " +
+        "There is NO draft or review step — this sends the moment it's called, so " +
+        "use it deliberately. Always pass the exact, final subject and body_html — " +
+        "never a vague instruction to 'write and send something'; this tool does no " +
+        "content generation of its own. Automatically refuses if the prospect is " +
+        "unsubscribed or has consent_marketing set to false. Every send is logged to " +
+        "the prospect's activity timeline and to the outbound-sends audit table.",
+      inputSchema: {
+        prospect_id: z.string().optional().describe("UUID of the prospect (provide this or email)"),
+        email: z.string().optional().describe("Email address of the prospect (provide this or prospect_id)"),
+        subject: z.string().describe("Exact, final email subject line (required)"),
+        body_html: z.string().describe("Exact, final email body HTML. Use {{first_name}} for personalization (required)"),
+        from_name: z.string().optional().describe("Display name in the From header, defaults to 'Vanto Zazi'"),
+        brand: z.string().optional().describe("'aplgo' or 'vantoos', defaults to 'aplgo' — determines which reply-from address is used"),
+      },
+    },
+    async (args) => {
+      const data = await callBridge("send_prospect_email", args);
       return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
     }
   );

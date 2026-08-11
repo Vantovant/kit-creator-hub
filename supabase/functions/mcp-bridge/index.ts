@@ -1,4 +1,5 @@
 import { createClient } from 'npm:@supabase/supabase-js@2'
+import { Resend } from 'npm:resend@^2.0.0'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -32,6 +33,7 @@ function timingSafeEqual(a: string, b: string): boolean {
 // JWT-based `sender.id === account.user_id` check.
 // ---------------------------------------------------------------------------
 const GMAIL_GATEWAY_URL = 'https://connector-gateway.lovable.dev/google_mail/gmail/v1'
+const APP_URL = 'https://kit-clone-dashboard.lovable.app'
 
 function b64url(input: string): string {
   const bytes = new TextEncoder().encode(input)
@@ -79,6 +81,28 @@ async function resolveGmailConnectionKey(email: string, lovableKey: string): Pro
     } catch { /* try next linked Gmail connection */ }
   }
   throw new Error(`No linked Gmail authorization matches ${email}`)
+}
+
+// ---------------------------------------------------------------------------
+// send_prospect_email helper — resolves the per-brand Resend "reply account"
+// exactly the way process-scheduled-broadcasts does (zzi_reply_accounts,
+// exact user+brand match, no cross-brand fallback), so individual sends from
+// this bridge look and behave identically to real broadcast/sequence sends.
+// ---------------------------------------------------------------------------
+async function resolveReplyAccount(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+  brand: string,
+): Promise<{ id: string; email: string } | null> {
+  const { data } = await supabase
+    .from('zazi_reply_accounts')
+    .select('id, account_email')
+    .eq('user_id', userId)
+    .eq('brand', brand)
+    .eq('is_active', true)
+    .limit(1)
+  if (data?.length) return { id: data[0].id, email: data[0].account_email }
+  return null
 }
 
 Deno.serve(async (req) => {
@@ -458,18 +482,12 @@ Deno.serve(async (req) => {
       }
 
       case 'reply_to_inbox_message': {
-        // The ONE send-capable action in this bridge. Deliberately narrow:
-        //   - single existing inbox_messages row only (no bulk, no cold-send)
-        //   - recipient is always the original sender — no address override
-        //   - subject is always forced to "Re: <original subject>"
-        //   - ownership is enforced by comparing the message's owner to the
-        //     resolved DEFAULT_OWNER_EMAIL user (this bridge has no user JWT
-        //     to reuse gmail-send's own ownership check directly)
-        //
-        // Column names verified live against inbox_messages / inbox_accounts
-        // via information_schema.columns (2026-08-10) — message_id, thread_id,
-        // and inbox_accounts.email_address all confirmed correct. inbox_action_log
-        // schema also confirmed to match the insert below.
+        // Deliberately narrow: single existing inbox_messages row only (no
+        // bulk, no cold-send); recipient is always the original sender — no
+        // address override; subject is always forced to "Re: <original
+        // subject>"; ownership is enforced by comparing the message's owner
+        // to the resolved DEFAULT_OWNER_EMAIL user (this bridge has no user
+        // JWT to reuse gmail-send's own ownership check directly).
         const ownerId = await resolveOwnerUserId()
         if (!ownerId) {
           return json({ error: 'owner_not_configured', message: 'Set DEFAULT_OWNER_EMAIL secret on this function.' }, 500)
@@ -572,6 +590,105 @@ Deno.serve(async (req) => {
         })
 
         return json({ ok: true, to: parent.sender, subject: replySubject })
+      }
+
+      case 'send_prospect_email': {
+        // Direct, unattended individual send — added 2026-08-11 at explicit
+        // user request, deliberately WITHOUT a draft/review step (unlike
+        // create_broadcast). To keep this safe to expose as a standing tool
+        // rather than a one-off, every one of these guardrails is enforced
+        // in code, not just in the tool description:
+        //   - exactly ONE recipient per call, resolved by prospect_id/email
+        //   - subject and body_html must be passed as literal, final text —
+        //     this action does no generation or expansion of its own
+        //   - refuses outright if the prospect is unsubscribed, or has
+        //     consent_marketing explicitly set to false
+        //   - uses the SAME per-brand Resend reply-account resolution as
+        //     real broadcast/sequence sends (zazi_reply_accounts, exact
+        //     user+brand match, no cross-brand fallback) — so this can't
+        //     send "as" an unconfigured or wrong identity
+        //   - every send is logged to zazi_outbound_sends (the same audit
+        //     table process-scheduled-broadcasts writes to) AND to
+        //     contact_activities, so there is always a record of exactly
+        //     what was sent, to whom, and when
+        const ownerId = await resolveOwnerUserId()
+        if (!ownerId) {
+          return json({ error: 'owner_not_configured', message: 'Set DEFAULT_OWNER_EMAIL secret on this function.' }, 500)
+        }
+
+        const prospectId = body.prospect_id ? String(body.prospect_id) : null
+        const email = body.email ? String(body.email).toLowerCase().trim() : null
+        if (!prospectId && !email) return json({ error: 'prospect_id_or_email_required' }, 400)
+
+        const subject = body.subject ? String(body.subject).trim() : ''
+        const bodyHtml = body.body_html ? String(body.body_html) : ''
+        if (!subject) return json({ error: 'subject_required' }, 400)
+        if (!bodyHtml) return json({ error: 'body_html_required' }, 400)
+
+        let pQuery = supabase.from('prospects')
+          .select('id, email, first_name, unsubscribed, consent_marketing, unsubscribe_token')
+          .limit(1)
+        pQuery = prospectId ? pQuery.eq('id', prospectId) : pQuery.eq('email', email)
+        const { data: prospect, error: pErr } = await pQuery.maybeSingle()
+        if (pErr) throw pErr
+        if (!prospect) return json({ error: 'prospect_not_found' }, 404)
+
+        if (prospect.unsubscribed) {
+          return json({ error: 'prospect_unsubscribed', message: 'This prospect has unsubscribed — cannot send.' }, 409)
+        }
+        if (prospect.consent_marketing === false) {
+          return json({ error: 'no_marketing_consent', message: 'This prospect has not consented to marketing email.' }, 409)
+        }
+
+        const brand = body.brand ? String(body.brand) : 'aplgo'
+        const replyAccount = await resolveReplyAccount(supabase, ownerId, brand)
+        if (!replyAccount) {
+          return json({ error: 'missing_brand_reply_account', message: `No active reply account configured for brand '${brand}'.` }, 500)
+        }
+
+        const resendKey = Deno.env.get('RESEND_API_KEY')
+        if (!resendKey) return json({ error: 'missing_resend_key' }, 500)
+
+        const fromName = body.from_name ? String(body.from_name).trim() : 'Vanto Zazi'
+        const unsubscribeUrl = `${APP_URL}/unsubscribe?token=${prospect.unsubscribe_token || ''}`
+        const personalizedContent = bodyHtml.replace(/\{\{first_name\}\}/g, prospect.first_name || 'Friend')
+        const html = `${personalizedContent}<p style="font-size: 11px; color: #999; margin-top: 16px;">You're receiving this email because you're subscribed.<br/><a href="${unsubscribeUrl}" style="color:#999; text-decoration: underline;">Unsubscribe</a></p>`
+
+        const resend = new Resend(resendKey)
+        let sendResult: any
+        try {
+          sendResult = await resend.emails.send({
+            from: `${fromName} <${replyAccount.email}>`,
+            reply_to: replyAccount.email,
+            to: [prospect.email],
+            subject,
+            html,
+          })
+        } catch (e) {
+          console.error('send_prospect_email resend error', e)
+          return json({ error: 'send_failed', message: (e as Error).message }, 502)
+        }
+
+        // Audit trail — mirrors process-scheduled-broadcasts' trackOutboundSend.
+        await supabase.from('zazi_outbound_sends').insert({
+          user_id: ownerId,
+          account_id: replyAccount.id,
+          recipient_email: prospect.email,
+          subject,
+          brand,
+          prospect_id: prospect.id,
+          provider_message_id: sendResult?.data?.id ?? null,
+          sent_at: new Date().toISOString(),
+        })
+        await supabase.from('contact_activities').insert({
+          user_id: ownerId,
+          prospect_id: prospect.id,
+          activity_type: 'email_sent',
+          notes: `Sent via Claude MCP: "${subject}"`,
+          outcome: null,
+        })
+
+        return json({ ok: true, to: prospect.email, subject, provider_message_id: sendResult?.data?.id ?? null })
       }
 
       case 'create_task': {

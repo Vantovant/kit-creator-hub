@@ -377,15 +377,19 @@ function buildServer() {
         "use it deliberately. Always pass the exact, final subject and body_html — " +
         "never a vague instruction to 'write and send something'; this tool does no " +
         "content generation of its own. Automatically refuses if the prospect is " +
-        "unsubscribed or has consent_marketing set to false. Every send is logged to " +
-        "the prospect's activity timeline and to the outbound-sends audit table.",
+        "unsubscribed or has consent_marketing set to false. A default per-brand " +
+        "signature (logo + contact details) is appended automatically after " +
+        "body_html unless overridden. Every send is logged to the prospect's " +
+        "activity timeline and to the outbound-sends audit table.",
       inputSchema: {
         prospect_id: z.string().optional().describe("UUID of the prospect (provide this or email)"),
         email: z.string().optional().describe("Email address of the prospect (provide this or prospect_id)"),
         subject: z.string().describe("Exact, final email subject line (required)"),
         body_html: z.string().describe("Exact, final email body HTML. Use {{first_name}} for personalization (required)"),
         from_name: z.string().optional().describe("Display name in the From header, defaults to 'Vanto Zazi'"),
-        brand: z.string().optional().describe("'aplgo' or 'vantoos', defaults to 'aplgo' — determines which reply-from address is used"),
+        brand: z.string().optional().describe("'aplgo' or 'vantoos', defaults to 'aplgo' — determines which reply-from address AND default signature are used"),
+        include_signature: z.boolean().optional().describe("Set to false to send with no signature at all. Defaults to true."),
+        signature_html: z.string().optional().describe("Exact HTML to use instead of the brand's default signature for this one send. Ignored if include_signature is false."),
       },
     },
     async (args) => {

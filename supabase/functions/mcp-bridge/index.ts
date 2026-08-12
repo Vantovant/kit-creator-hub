@@ -93,15 +93,25 @@ async function resolveReplyAccount(
   supabase: ReturnType<typeof createClient>,
   userId: string,
   brand: string,
-): Promise<{ id: string; email: string } | null> {
+): Promise<{ id: string; email: string; signatureHtml: string | null } | null> {
   const { data } = await supabase
     .from('zazi_reply_accounts')
-    .select('id, account_email')
+    .select('id, account_email, config_json')
     .eq('user_id', userId)
     .eq('brand', brand)
     .eq('is_active', true)
     .limit(1)
-  if (data?.length) return { id: data[0].id, email: data[0].account_email }
+  if (data?.length) {
+    const row = data[0] as { id: string; account_email: string; config_json: Record<string, unknown> | null }
+    return {
+      id: row.id,
+      email: row.account_email,
+      // Default signature lives in config_json.signature_html, set per-brand
+      // (2026-08-11). No dedicated column — reuses the existing generic
+      // config_json field rather than a schema migration.
+      signatureHtml: typeof row.config_json?.signature_html === 'string' ? row.config_json.signature_html : null,
+    }
+  }
   return null
 }
 
@@ -652,7 +662,18 @@ Deno.serve(async (req) => {
         const fromName = body.from_name ? String(body.from_name).trim() : 'Vanto Zazi'
         const unsubscribeUrl = `${APP_URL}/unsubscribe?token=${prospect.unsubscribe_token || ''}`
         const personalizedContent = bodyHtml.replace(/\{\{first_name\}\}/g, prospect.first_name || 'Friend')
-        const html = `${personalizedContent}<p style="font-size: 11px; color: #999; margin-top: 16px;">You're receiving this email because you're subscribed.<br/><a href="${unsubscribeUrl}" style="color:#999; text-decoration: underline;">Unsubscribe</a></p>`
+
+        // Signature — added 2026-08-11. Precedence:
+        //   1. include_signature === false  -> no signature at all
+        //   2. signature_html param passed  -> use that exact override instead of the default
+        //   3. otherwise                    -> use the brand's default from zazi_reply_accounts.config_json
+        // The unsubscribe footer is unconditional either way — it's a compliance
+        // element, not a branding one, and stays outside all three cases above.
+        const includeSignature = body.include_signature !== false
+        const signatureOverride = typeof body.signature_html === 'string' ? body.signature_html : null
+        const signature = includeSignature ? (signatureOverride ?? replyAccount.signatureHtml ?? '') : ''
+
+        const html = `${personalizedContent}${signature}<p style="font-size: 11px; color: #999; margin-top: 16px;">You're receiving this email because you're subscribed.<br/><a href="${unsubscribeUrl}" style="color:#999; text-decoration: underline;">Unsubscribe</a></p>`
 
         const resend = new Resend(resendKey)
         let sendResult: any

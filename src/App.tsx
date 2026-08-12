@@ -28,6 +28,7 @@ import VantoOSBetaForm from "@/pages/VantoOSBetaForm";
 import AuthPage from "@/pages/AuthPage";
 import ResetPasswordPage from "@/pages/ResetPasswordPage";
 import UnsubscribePage from "@/pages/UnsubscribePage";
+import HostedImage from "@/pages/HostedImage";
 import { ProtectedRoute } from "@/components/dashboard/ProtectedRoute";
 
 function App() {
@@ -41,6 +42,9 @@ function App() {
         <Route path="/forms/sequence/:id" element={<SequenceForm />} />
         <Route path="/forms/vantoos-beta" element={<VantoOSBetaForm />} />
         <Route path="/unsubscribe" element={<UnsubscribePage />} />
+        <Route path="/signature" element={<HostedImage src="/hosted/signature.png" alt="Vanto Vanto — Getwell Africa email signature" />} />
+        <Route path="/africalogo" element={<HostedImage src="/hosted/africalogo.jpeg" alt="Get Well Africa logo" />} />
+        <Route path="/aplgologo" element={<HostedImage src="/hosted/aplgologo.png" alt="APLGO logo" />} />
         <Route path="/dashboard" element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
           <Route index element={<DashboardPage />} />
           <Route path="subscribers" element={<SubscribersPage />} />

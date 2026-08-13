@@ -117,7 +117,10 @@ function pkceVerify(codeVerifier, codeChallenge) {
 //     one or all connected mailboxes, but ONLY fetches and stores — it
 //     deliberately excludes the app's own "learning" auto-star/auto-spam
 //     behavior, since that writes back to the user's real mailbox rather
-//     than just this app's database.
+//     than just this app's database. Multi-account calls (no account_id)
+//     cap max_results at 8/account to avoid the Edge Function timing out
+//     when several mailboxes are synced in one call — pass account_id for
+//     a single mailbox with a higher limit (up to 50).
 //   - reply_to_inbox_message and send_prospect_email are the two
 //     send-capable tools in this file:
 //       * reply_to_inbox_message is narrow by construction — single existing
@@ -134,7 +137,7 @@ function pkceVerify(codeVerifier, codeChallenge) {
 function buildServer() {
   const server = new McpServer({
     name: "vanto-zazi-mail-mcp",
-    version: "1.4.0",
+    version: "1.4.1",
   });
 
   server.registerTool(
@@ -356,12 +359,15 @@ function buildServer() {
       description:
         "Triggers a REAL fetch from Gmail for one or all connected mailboxes and " +
         "stores new/updated messages into the Reply Inbox. With no account_id, " +
-        "syncs every connected mailbox (use list_inbox_accounts to see them). " +
-        "This only fetches and stores messages — it never modifies your actual " +
-        "Gmail account (no auto-star, no auto-move-to-spam, no sends).",
+        "syncs every connected mailbox (use list_inbox_accounts to see them) — " +
+        "in that case max_results is capped at 8 per account (regardless of the " +
+        "value passed) to avoid a timeout when several accounts are synced in one " +
+        "call; pass account_id to sync a single account with a higher limit (up " +
+        "to 50). This only fetches and stores messages — it never modifies your " +
+        "actual Gmail account (no auto-star, no auto-move-to-spam, no sends).",
       inputSchema: {
-        account_id: z.string().optional().describe("Sync only this account (id from list_inbox_accounts). Omit to sync all connected accounts."),
-        max_results: z.number().int().positive().max(50).optional().describe("Max messages to fetch per account, default 25, max 50"),
+        account_id: z.string().optional().describe("Sync only this account (id from list_inbox_accounts). Omit to sync all connected accounts (capped at 8 messages/account in that case)."),
+        max_results: z.number().int().positive().max(50).optional().describe("Max messages to fetch per account, default 25. Max 50 when account_id is set; capped at 8 when syncing all accounts."),
       },
     },
     async (args) => {

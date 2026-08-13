@@ -564,7 +564,7 @@ Deno.serve(async (req) => {
 
       case 'list_inbox_accounts': {
         // Read-only. Lists the connected Gmail accounts (inbox_accounts
-        // rows) for the configured owner — the six mailboxes referenced by
+        // rows) for the configured owner — the mailboxes referenced by
         // the user — so Claude/the user can see status, last_sync_at, and
         // pick an account_id to pass to sync_gmail_inbox if needed.
         const ownerId = await resolveOwnerUserId()
@@ -599,7 +599,7 @@ Deno.serve(async (req) => {
         // database. This tool only fetches and stores; it never writes back
         // to Gmail.
         //
-        // Six-account support: with no account_id, loops over every active
+        // Multi-account support: with no account_id, loops over every active
         // inbox_accounts row for the owner (all connected mailboxes) and
         // returns a per-account result. Pass account_id (from
         // list_inbox_accounts) to sync just one.
@@ -612,8 +612,25 @@ Deno.serve(async (req) => {
         if (!lovableKey) return json({ error: 'missing_gateway_key' }, 500)
 
         const requestedAccountId = body.account_id ? String(body.account_id) : null
-        const maxResults = Number.isInteger(Number(body.max_results)) && Number(body.max_results) > 0
-          ? Math.min(Number(body.max_results), 50) : 25
+
+        // SAFEGUARD (2026-08-13): a "sync all accounts" call with a high
+        // per-account max_results timed out in testing — looping over N
+        // accounts x max_results messages each, with 1-2+ Gmail gateway
+        // round trips per message (list, full fetch, sometimes an
+        // attachment fetch for body decoding), can exceed the Edge
+        // Function's execution window before finishing. When that happens
+        // the platform kills the function mid-response, which surfaces to
+        // the caller as an HTML error page instead of JSON. A single
+        // account with max_results up to 50 was verified reliable; the
+        // multi-account path (no account_id) caps the per-account batch
+        // much lower regardless of what was requested, to keep the total
+        // number of round trips bounded across however many accounts are
+        // connected.
+        const requestedMaxResults = Number.isInteger(Number(body.max_results)) && Number(body.max_results) > 0
+          ? Number(body.max_results) : 25
+        const maxResults = requestedAccountId
+          ? Math.min(requestedMaxResults, 50)
+          : Math.min(requestedMaxResults, 8)
 
         let acctQuery = supabase.from('inbox_accounts')
           .select('id, email_address, user_id, is_active')

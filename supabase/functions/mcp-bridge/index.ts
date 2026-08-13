@@ -717,8 +717,19 @@ Deno.serve(async (req) => {
               }
             }
 
+            // On any successful pass through the loop above (even a partial
+            // one — errors[] tracks per-message failures separately), the
+            // Gmail credential itself resolved correctly, so this account is
+            // demonstrably reachable. Reset status to 'connected' here —
+            // previously this only updated last_sync_at/sync_error and left
+            // a stale 'needs_authorization' status in place even after a
+            // fresh, working authorization, which was confusing to read.
             await supabase.from('inbox_accounts')
-              .update({ last_sync_at: new Date().toISOString(), sync_error: errors.length ? errors.join('; ') : null })
+              .update({
+                status: 'connected',
+                last_sync_at: new Date().toISOString(),
+                sync_error: errors.length ? errors.join('; ') : null,
+              })
               .eq('id', account.id)
 
             results.push({

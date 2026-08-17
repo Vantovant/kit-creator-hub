@@ -11,6 +11,16 @@
 // database: the "password" on the /authorize consent screen IS your
 // existing MCP_API_KEY. Once you type it in once, Claude stores the
 // resulting token and reuses it — you won't need to log in again.
+//
+// THIS UPDATE adds 8 tools so Plan Hub tasks/reminders/meetings can be
+// queried, ticked off, and cleaned up, not just created:
+//   list_tasks, complete_task, delete_task,
+//   list_reminders, complete_reminder, delete_reminder,
+//   list_meetings, delete_meeting
+// Note: no complete_meeting — plan_meetings has no confirmed is_done
+// column in this app's schema (same finding as Get Well Hub).
+// delete_task/delete_reminder/delete_meeting are HARD deletes (no
+// deleted_at column on any of these three tables) — there is no undo.
 
 import crypto from "crypto";
 import express from "express";
@@ -108,7 +118,6 @@ function pkceVerify(codeVerifier, codeChallenge) {
 //     list_sequences is read-only. Enrolling a contact triggers automated,
 //     unattended sends over time and was deliberately left out pending a
 //     separate decision, same as broadcast send/schedule.
-//   - No delete of any kind, anywhere.
 //   - update_prospect only ever touches fields explicitly provided; email is
 //     not editable here (identity/matching field).
 //   - add_contact_note, tag_prospect are strictly additive.
@@ -133,11 +142,16 @@ function pkceVerify(codeVerifier, codeChallenge) {
 //         unsubscribed/non-consenting prospects, and every send is logged
 //         to contact_activities + zazi_outbound_sends for an audit trail.
 //         Use it deliberately — there is no undo.
+//   - The 8 new Plan Hub tools below (list/complete/delete for tasks and
+//     reminders, list/delete for meetings) follow the same delete
+//     conventions already established: HARD deletes only, since none of
+//     plan_tasks/plan_reminders/plan_meetings has a deleted_at column in
+//     this app.
 // ---------------------------------------------------------------------------
 function buildServer() {
   const server = new McpServer({
     name: "vanto-zazi-mail-mcp",
-    version: "1.4.1",
+    version: "1.5.0",
   });
 
   server.registerTool(
@@ -467,6 +481,55 @@ function buildServer() {
   );
 
   server.registerTool(
+    "list_tasks",
+    {
+      title: "List Plan Hub tasks",
+      description:
+        "Read Plan Hub tasks, optionally filtered by status ('pending'/'done') " +
+        "and/or a single calendar day (matches due_date). Read-only.",
+      inputSchema: {
+        status: z.string().optional().describe("Filter by status, e.g. 'pending'"),
+        date: z.string().optional().describe("YYYY-MM-DD — filters to tasks due on this day"),
+        limit: z.number().int().positive().max(100).optional().describe("Max results, default 50"),
+      },
+    },
+    async (args) => {
+      const data = await callBridge("list_tasks", args);
+      return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
+    }
+  );
+
+  server.registerTool(
+    "complete_task",
+    {
+      title: "Mark a Plan Hub task done",
+      description:
+        "Mark a Plan Hub task as done (sets status to 'done' and stamps completed_at). " +
+        "Use list_tasks first to find the task id.",
+      inputSchema: { id: z.string().describe("plan_tasks.id — required") },
+    },
+    async (args) => {
+      const data = await callBridge("complete_task", args);
+      return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
+    }
+  );
+
+  server.registerTool(
+    "delete_task",
+    {
+      title: "Delete a Plan Hub task",
+      description:
+        "Permanently delete a Plan Hub task. This is a hard delete — there is no undo. " +
+        "Use list_tasks first to find the task id.",
+      inputSchema: { id: z.string().describe("plan_tasks.id — required") },
+    },
+    async (args) => {
+      const data = await callBridge("delete_task", args);
+      return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
+    }
+  );
+
+  server.registerTool(
     "create_reminder",
     {
       title: "Create a Plan Hub reminder",
@@ -479,6 +542,55 @@ function buildServer() {
     },
     async (args) => {
       const data = await callBridge("create_reminder", args);
+      return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
+    }
+  );
+
+  server.registerTool(
+    "list_reminders",
+    {
+      title: "List Plan Hub reminders",
+      description:
+        "Read Plan Hub reminders, optionally filtered by is_done and/or a single " +
+        "calendar day (matches reminder_time). Read-only.",
+      inputSchema: {
+        is_done: z.boolean().optional(),
+        date: z.string().optional().describe("YYYY-MM-DD — filters to reminders on this day"),
+        limit: z.number().int().positive().max(100).optional().describe("Max results, default 50"),
+      },
+    },
+    async (args) => {
+      const data = await callBridge("list_reminders", args);
+      return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
+    }
+  );
+
+  server.registerTool(
+    "complete_reminder",
+    {
+      title: "Mark a Plan Hub reminder done",
+      description:
+        "Mark a Plan Hub reminder as done (sets is_done to true). Use list_reminders " +
+        "first to find the reminder id.",
+      inputSchema: { id: z.string().describe("plan_reminders.id — required") },
+    },
+    async (args) => {
+      const data = await callBridge("complete_reminder", args);
+      return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
+    }
+  );
+
+  server.registerTool(
+    "delete_reminder",
+    {
+      title: "Delete a Plan Hub reminder",
+      description:
+        "Permanently delete a Plan Hub reminder. This is a hard delete — there is no " +
+        "undo. Use list_reminders first to find the reminder id.",
+      inputSchema: { id: z.string().describe("plan_reminders.id — required") },
+    },
+    async (args) => {
+      const data = await callBridge("delete_reminder", args);
       return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
     }
   );
@@ -499,6 +611,40 @@ function buildServer() {
     },
     async (args) => {
       const data = await callBridge("create_meeting", args);
+      return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
+    }
+  );
+
+  server.registerTool(
+    "list_meetings",
+    {
+      title: "List Plan Hub meetings",
+      description:
+        "Read Plan Hub meetings, optionally filtered by a single calendar day " +
+        "(matches start_time). Read-only. Note: there is no completion/done tool " +
+        "for meetings — only tasks and reminders support marking done.",
+      inputSchema: {
+        date: z.string().optional().describe("YYYY-MM-DD — filters to meetings on this day"),
+        limit: z.number().int().positive().max(100).optional().describe("Max results, default 50"),
+      },
+    },
+    async (args) => {
+      const data = await callBridge("list_meetings", args);
+      return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
+    }
+  );
+
+  server.registerTool(
+    "delete_meeting",
+    {
+      title: "Delete a Plan Hub meeting",
+      description:
+        "Permanently delete a Plan Hub meeting. This is a hard delete — there is no " +
+        "undo. Use list_meetings first to find the meeting id.",
+      inputSchema: { id: z.string().describe("plan_meetings.id — required") },
+    },
+    async (args) => {
+      const data = await callBridge("delete_meeting", args);
       return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
     }
   );

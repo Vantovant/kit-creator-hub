@@ -191,9 +191,14 @@ serve(async (req: Request) => {
 
     const resendKey = Deno.env.get("RESEND_API_KEY");
 
+    console.log(
+      `selector: scheduled_due=${scheduledBroadcasts?.length ?? 0} sending=${sendingBroadcasts?.length ?? 0} stalled=${stalled.length} picked=${queue[0]?.id ?? "none"} resend_key=${resendKey ? "present" : "MISSING"} fetch_error=${fetchError ? fetchError.message : "none"}`
+    );
+
     let processed = 0;
 
     if (!fetchError && queue.length > 0 && resendKey) {
+
       const resend = new Resend(resendKey);
 
       for (const broadcast of queue) {

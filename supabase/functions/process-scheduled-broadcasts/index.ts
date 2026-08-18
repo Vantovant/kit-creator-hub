@@ -191,9 +191,14 @@ serve(async (req: Request) => {
 
     const resendKey = Deno.env.get("RESEND_API_KEY");
 
+    console.log(
+      `selector: scheduled_due=${scheduledBroadcasts?.length ?? 0} sending=${sendingBroadcasts?.length ?? 0} stalled=${stalled.length} picked=${queue[0]?.id ?? "none"} resend_key=${resendKey ? "present" : "MISSING"} fetch_error=${fetchError ? fetchError.message : "none"}`
+    );
+
     let processed = 0;
 
     if (!fetchError && queue.length > 0 && resendKey) {
+
       const resend = new Resend(resendKey);
 
       for (const broadcast of queue) {
@@ -216,32 +221,53 @@ serve(async (req: Request) => {
 
         let subscribers: any[] | null = null;
 
+        // PostgREST caps every response at 1000 rows — page explicitly or large
+        // segments silently truncate and the tail never gets sent.
+        const PAGE = 1000;
+        async function fetchAllPaged(build: (from: number, to: number) => any): Promise<any[]> {
+          const out: any[] = [];
+          for (let from = 0; ; from += PAGE) {
+            const { data, error } = await build(from, from + PAGE - 1);
+            if (error) {
+              console.error("subscriber page fetch error:", error);
+              break;
+            }
+            if (!data || data.length === 0) break;
+            out.push(...data);
+            if (data.length < PAGE) break;
+          }
+          return out;
+        }
+
+        let segmentFilters: any = null;
         if (broadcast.segment_id) {
           const { data: segment } = await adminClient
             .from("segments")
             .select("filters")
             .eq("id", broadcast.segment_id)
             .maybeSingle();
+          segmentFilters = segment?.filters ?? null;
+        }
 
-          if (segment?.filters) {
-            const { data } = await adminClient.rpc("get_segment_prospects", {
-              segment_filters: segment.filters,
-            }).select("id, email, first_name, unsubscribe_token");
-            subscribers = data;
-          } else {
-            const { data } = await adminClient
+        if (segmentFilters) {
+          subscribers = await fetchAllPaged((from, to) =>
+            adminClient
+              .rpc("get_segment_prospects", { segment_filters: segmentFilters })
+              .select("id, email, first_name, unsubscribe_token, unsubscribed")
+              .eq("unsubscribed", false)
+              .range(from, to)
+          );
+        } else {
+          subscribers = await fetchAllPaged((from, to) =>
+            adminClient
               .from("prospects")
               .select("id, email, first_name, unsubscribe_token")
-              .eq("unsubscribed", false);
-            subscribers = data;
-          }
-        } else {
-          const { data } = await adminClient
-            .from("prospects")
-            .select("id, email, first_name, unsubscribe_token")
-            .eq("unsubscribed", false);
-          subscribers = data;
+              .eq("unsubscribed", false)
+              .range(from, to)
+          );
         }
+        console.log(`Broadcast ${broadcast.id}: fetched ${subscribers?.length ?? 0} audience rows (paged)`);
+
 
         if (!subscribers || subscribers.length === 0) {
           await adminClient

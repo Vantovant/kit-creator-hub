@@ -128,20 +128,75 @@ serve(async (req: Request) => {
     const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
     const now = new Date().toISOString();
-    const { data: broadcasts, error: fetchError } = await adminClient
+
+    // Chunk size per invocation — keeps us inside the edge function time budget
+    const CHUNK_SIZE = 150;
+    // A "sending" broadcast with no outbound activity for this long is treated as stalled
+    const STALL_MINUTES = 10;
+
+    /** All recipient emails already recorded for this broadcast (paged, no 1000-row cap) */
+    async function fetchAlreadySent(broadcastId: string): Promise<Set<string>> {
+      const seen = new Set<string>();
+      const page = 1000;
+      for (let from = 0; ; from += page) {
+        const { data, error } = await adminClient
+          .from("zazi_outbound_sends")
+          .select("recipient_email")
+          .eq("broadcast_id", broadcastId)
+          .range(from, from + page - 1);
+        if (error || !data || data.length === 0) break;
+        for (const r of data) if (r.recipient_email) seen.add(String(r.recipient_email).toLowerCase());
+        if (data.length < page) break;
+      }
+      return seen;
+    }
+
+    /** Last time this broadcast recorded an outbound send (ms epoch) or null */
+    async function lastSendAt(broadcastId: string): Promise<number | null> {
+      const { data } = await adminClient
+        .from("zazi_outbound_sends")
+        .select("sent_at")
+        .eq("broadcast_id", broadcastId)
+        .order("sent_at", { ascending: false })
+        .limit(1);
+      if (data?.length && data[0].sent_at) return new Date(data[0].sent_at).getTime();
+      return null;
+    }
+
+    // 1) Scheduled + due broadcasts
+    const { data: scheduledBroadcasts, error: fetchError } = await adminClient
       .from("broadcasts")
       .select("*")
       .eq("status", "scheduled")
       .lte("scheduled_at", now);
 
+    // 2) Stalled "sending" broadcasts (manual sends that died mid-run)
+    const { data: sendingBroadcasts } = await adminClient
+      .from("broadcasts")
+      .select("*")
+      .eq("status", "sending");
+
+    const stalled: any[] = [];
+    for (const b of sendingBroadcasts || []) {
+      const last = await lastSendAt(b.id);
+      const reference = last ?? new Date(b.updated_at || b.created_at || now).getTime();
+      if (Date.now() - reference > STALL_MINUTES * 60 * 1000) {
+        console.log(`Resuming stalled broadcast ${b.id} (no activity for >${STALL_MINUTES}m)`);
+        stalled.push(b);
+      }
+    }
+
+    // Only one broadcast per invocation — chunked and resumable
+    const queue = [...(scheduledBroadcasts || []), ...stalled].slice(0, 1);
+
     const resendKey = Deno.env.get("RESEND_API_KEY");
 
     let processed = 0;
 
-    if (!fetchError && broadcasts && broadcasts.length > 0 && resendKey) {
+    if (!fetchError && queue.length > 0 && resendKey) {
       const resend = new Resend(resendKey);
 
-      for (const broadcast of broadcasts) {
+      for (const broadcast of queue) {
         await adminClient
           .from("broadcasts")
           .update({ status: "sending" })
@@ -197,11 +252,43 @@ serve(async (req: Request) => {
           continue;
         }
 
+        // ── Dedup: drop anyone already recorded in zazi_outbound_sends for this broadcast ──
+        const alreadySent = await fetchAlreadySent(broadcast.id);
+        const seenInRun = new Set<string>();
+        const pending = subscribers.filter((s: any) => {
+          const email = String(s.email || "").toLowerCase();
+          if (!email) return false;
+          if (alreadySent.has(email)) return false;
+          if (seenInRun.has(email)) return false; // de-dupe within the segment itself
+          seenInRun.add(email);
+          return true;
+        });
+
+        const totalEligible = alreadySent.size + pending.length;
+        console.log(`Broadcast ${broadcast.id}: ${totalEligible} eligible, ${alreadySent.size} already sent, ${pending.length} remaining`);
+
+        if (pending.length === 0) {
+          await adminClient
+            .from("broadcasts")
+            .update({
+              status: "sent",
+              sent_at: new Date().toISOString(),
+              total_recipients: totalEligible,
+              total_sent: alreadySent.size,
+            })
+            .eq("id", broadcast.id);
+          processed++;
+          continue;
+        }
+
+        const chunk = pending.slice(0, CHUNK_SIZE);
+        const remainingAfterChunk = pending.length - chunk.length;
+
         let sent = 0;
         let failed = 0;
 
-        for (let i = 0; i < subscribers.length; i += 3) {
-          const batch = subscribers.slice(i, i + 3);
+        for (let i = 0; i < chunk.length; i += 3) {
+          const batch = chunk.slice(i, i + 3);
           const promises = batch.map(async (sub) => {
             try {
               const unsubscribeUrl = `${APP_URL}/unsubscribe?token=${sub.unsubscribe_token || ""}`;
@@ -250,23 +337,43 @@ serve(async (req: Request) => {
             }
           });
           await Promise.all(promises);
-          if (i + 3 < subscribers.length) await throttle(1000);
+          if (i + 3 < chunk.length) await throttle(1000);
         }
 
-        await adminClient
-          .from("broadcasts")
-          .update({
-            status: "sent",
-            sent_at: new Date().toISOString(),
-            total_recipients: subscribers.length,
-            total_sent: sent,
-            total_failed: failed,
-          })
-          .eq("id", broadcast.id);
+        if (remainingAfterChunk > 0) {
+          // Hand back to the cron: same recovery path for manual and scheduled sends
+          await adminClient
+            .from("broadcasts")
+            .update({
+              status: "scheduled",
+              scheduled_at: new Date().toISOString(),
+              total_recipients: totalEligible,
+              total_sent: alreadySent.size + sent,
+              total_failed: failed,
+            })
+            .eq("id", broadcast.id);
+          console.log(`Broadcast ${broadcast.id}: chunk done (${sent} sent), ${remainingAfterChunk} queued for next run`);
+        } else {
+          // Confirm exhaustion against the send log before marking sent
+          const finalSentSet = await fetchAlreadySent(broadcast.id);
+          const stillPending = pending.filter((s: any) => !finalSentSet.has(String(s.email).toLowerCase())).length;
+          await adminClient
+            .from("broadcasts")
+            .update({
+              status: stillPending > 0 ? "scheduled" : "sent",
+              scheduled_at: stillPending > 0 ? new Date().toISOString() : broadcast.scheduled_at,
+              sent_at: stillPending > 0 ? broadcast.sent_at : new Date().toISOString(),
+              total_recipients: totalEligible,
+              total_sent: finalSentSet.size,
+              total_failed: failed,
+            })
+            .eq("id", broadcast.id);
+        }
 
         processed++;
       }
     }
+
 
     // --- Process automation queue (limited to 5 per run) ---
     let queueProcessed = 0;

@@ -1,0 +1,2 @@
+UPDATE public.email_sequences SET status='active', updated_at=now() WHERE id='3ec86933-6923-4470-8277-a303c3f32010';
+UPDATE public.prospects SET first_name='Sinazo' WHERE id='ed574bbd-be8e-4f35-ba16-23904df9e096' AND first_name IS NULL;

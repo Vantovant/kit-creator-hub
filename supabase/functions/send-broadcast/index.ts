@@ -234,19 +234,51 @@ serve(async (req: Request) => {
       });
     }
 
-    const { data: broadcast, error: broadcastError } = await adminClient
+    // ATOMIC CLAIM (fix for 2026-08-26 duplicate-send incident):
+    // The previous version did a plain SELECT to check broadcast.status,
+    // THEN a separate UPDATE to set status='sending'. Those two steps are
+    // NOT atomic — two concurrent invocations (e.g. a double-click, a
+    // frontend retry racing an in-flight send, or a stalled first attempt
+    // plus a manual retry) could both pass the SELECT-based check before
+    // either one committed the status change, so both went on to loop over
+    // the full recipient list independently. Anyone caught in both passes
+    // received the broadcast twice — 227 recipients, confirmed via
+    // zazi_outbound_sends, on the August Spotlight Savings send.
+    //
+    // Fix: fold the check-and-claim into a single UPDATE ... WHERE. Postgres
+    // guarantees only one concurrent request can match this row and flip its
+    // status out of a non-terminal state; any other concurrent request's
+    // UPDATE matches zero rows (because by the time it runs, status is
+    // already 'sending' or 'sent'), so .maybeSingle() returns null below and
+    // that request is cleanly rejected before it ever fetches subscribers or
+    // sends a single email — instead of silently starting a second full loop.
+    const { data: broadcast, error: claimError } = await adminClient
       .from("broadcasts")
-      .select("*")
+      .update({ status: "sending" })
       .eq("id", broadcast_id)
-      .single();
+      .neq("status", "sending")
+      .neq("status", "sent")
+      .select("*")
+      .maybeSingle();
 
-    if (broadcastError || !broadcast) {
-      return new Response(JSON.stringify({ error: "Broadcast not found" }), {
-        status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    if (claimError) throw claimError;
 
-    if (broadcast.status === "sent" || broadcast.status === "sending") {
+    if (!broadcast) {
+      // Either the id doesn't exist, or it's already sending/sent — a quick
+      // read-only follow-up disambiguates which, so the error stays accurate
+      // without weakening the atomic claim above (that check MUST stay a
+      // single UPDATE with no separate SELECT in front of it).
+      const { data: existing } = await adminClient
+        .from("broadcasts")
+        .select("id")
+        .eq("id", broadcast_id)
+        .maybeSingle();
+
+      if (!existing) {
+        return new Response(JSON.stringify({ error: "Broadcast not found" }), {
+          status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
       return new Response(JSON.stringify({ error: "Broadcast already sent or sending" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -265,8 +297,6 @@ serve(async (req: Request) => {
     }
     const accountId = replyAccount.id;
     const replyToEmail = replyAccount.email;
-
-    await adminClient.from("broadcasts").update({ status: "sending" }).eq("id", broadcast_id);
 
     // Get active subscribers
     let subscribers: any[] | null = null;

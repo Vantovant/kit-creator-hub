@@ -10,6 +10,11 @@ const corsHeaders = {
 
 const APP_URL = "https://kit-clone-dashboard.lovable.app";
 
+// How often (in sends) to persist progress to the broadcasts row. Small
+// enough that a platform-level kill mid-run only loses a handful of already-
+// tracked sends' worth of "official" progress, not the whole batch.
+const PROGRESS_FLUSH_EVERY = 20;
+
 // Retry with exponential backoff for 429 errors
 async function sendWithRetry(resend: any, emailPayload: any, maxRetries = 3): Promise<any> {
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -155,6 +160,122 @@ async function trackOutboundSend(adminClient: any, params: {
   }
 }
 
+/**
+ * Runs the actual send loop. Designed to be handed to EdgeRuntime.waitUntil
+ * so it keeps running after the HTTP response has already gone back to the
+ * caller — a single broadcast to a segment of ~1,000 at a ~0.9s/recipient
+ * throttle takes ~15 minutes, far past both the platform's request wall-
+ * clock limit and any sane frontend fetch timeout. Returning early and
+ * finishing in the background is the standard fix for that mismatch.
+ *
+ * Progress (total_sent/total_failed) is flushed to the broadcasts row every
+ * PROGRESS_FLUSH_EVERY sends, not just once at the very end. If the function
+ * still gets killed by a hard platform ceiling before finishing, the row
+ * reflects real partial progress instead of freezing at 0 — and a resume
+ * call with exclude_emails set to the already-sent addresses (queryable from
+ * zazi_outbound_sends by broadcast_id) picks up cleanly with no duplicates.
+ */
+async function runBroadcastSend(params: {
+  adminClient: any;
+  broadcast: any;
+  subscribers: any[];
+  brand: string;
+  header: string;
+  signature: string;
+  unsubText: string;
+  userId: string;
+  accountId: string;
+  replyToEmail: string;
+  resend: any;
+  broadcastId: string;
+  alreadySent: number;
+  alreadyFailed: number;
+}) {
+  const {
+    adminClient, broadcast, subscribers, header, signature, unsubText,
+    userId, accountId, replyToEmail, resend, broadcastId, brand,
+  } = params;
+
+  let sent = params.alreadySent;
+  let failed = params.alreadyFailed;
+  let sinceFlush = 0;
+
+  for (let i = 0; i < subscribers.length; i++) {
+    const sub = subscribers[i];
+    try {
+      const unsubscribeUrl = `${APP_URL}/unsubscribe?token=${sub.unsubscribe_token || ""}`;
+      const personalizedContent = broadcast.content
+        .replace(/\{\{first_name\}\}/g, `Leader ${sub.first_name || "Friend"}`);
+
+      const sendResult = await sendWithRetry(resend, {
+        from: `${broadcast.from_name} <${replyToEmail}>`,
+        reply_to: replyToEmail,
+        to: [sub.email],
+        subject: broadcast.subject,
+        html: `${header}${personalizedContent}${signature}<p style="font-size: 11px; color: #999; margin-top: 16px;">${unsubText}<br/><a href="${unsubscribeUrl}" style="color:#999; text-decoration: underline;">Unsubscribe</a></p>`,
+      });
+
+      await trackOutboundSend(adminClient, {
+        user_id: userId,
+        account_id: accountId,
+        recipient_email: sub.email,
+        subject: broadcast.subject,
+        brand,
+        broadcast_id: broadcastId,
+        prospect_id: sub.id || null,
+        provider_message_id: sendResult?.data?.id || null,
+      });
+
+      try {
+        await adminClient.from("contact_activities").insert({
+          user_id: userId,
+          prospect_id: sub.id || null,
+          activity_type: "email",
+          notes: `Email Sent: ${broadcast.subject}`,
+          outcome: "sent",
+        });
+      } catch (actErr) {
+        console.error("Failed to log email activity:", actErr);
+      }
+
+      sent++;
+      sinceFlush++;
+      console.log(`Sent ${sent}/${subscribers.length + params.alreadySent}: ${sub.email}`);
+    } catch (e) {
+      console.error(`Failed to send to ${sub.email}:`, e);
+      failed++;
+      sinceFlush++;
+    }
+
+    if (sinceFlush >= PROGRESS_FLUSH_EVERY) {
+      sinceFlush = 0;
+      try {
+        await adminClient
+          .from("broadcasts")
+          .update({ total_sent: sent, total_failed: failed })
+          .eq("id", broadcastId);
+      } catch (flushErr) {
+        console.error("Failed to flush progress:", flushErr);
+      }
+    }
+
+    if (i < subscribers.length - 1) await throttle(600);
+  }
+
+  await adminClient
+    .from("broadcasts")
+    .update({
+      status: "sent",
+      sent_at: new Date().toISOString(),
+      total_recipients: sent + failed,
+      total_sent: sent,
+      total_failed: failed,
+    })
+    .eq("id", broadcastId);
+
+  console.log(`Broadcast complete: ${sent} sent, ${failed} failed`);
+}
+
 serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -234,24 +355,9 @@ serve(async (req: Request) => {
       });
     }
 
-    // ATOMIC CLAIM (fix for 2026-08-26 duplicate-send incident):
-    // The previous version did a plain SELECT to check broadcast.status,
-    // THEN a separate UPDATE to set status='sending'. Those two steps are
-    // NOT atomic — two concurrent invocations (e.g. a double-click, a
-    // frontend retry racing an in-flight send, or a stalled first attempt
-    // plus a manual retry) could both pass the SELECT-based check before
-    // either one committed the status change, so both went on to loop over
-    // the full recipient list independently. Anyone caught in both passes
-    // received the broadcast twice — 227 recipients, confirmed via
-    // zazi_outbound_sends, on the August Spotlight Savings send.
-    //
-    // Fix: fold the check-and-claim into a single UPDATE ... WHERE. Postgres
-    // guarantees only one concurrent request can match this row and flip its
-    // status out of a non-terminal state; any other concurrent request's
-    // UPDATE matches zero rows (because by the time it runs, status is
-    // already 'sending' or 'sent'), so .maybeSingle() returns null below and
-    // that request is cleanly rejected before it ever fetches subscribers or
-    // sends a single email — instead of silently starting a second full loop.
+    // ATOMIC CLAIM (fix for 2026-08-26 duplicate-send incident) — unchanged.
+    // Fold the check-and-claim into a single UPDATE ... WHERE so only one
+    // concurrent request can ever pass.
     const { data: broadcast, error: claimError } = await adminClient
       .from("broadcasts")
       .update({ status: "sending" })
@@ -264,10 +370,6 @@ serve(async (req: Request) => {
     if (claimError) throw claimError;
 
     if (!broadcast) {
-      // Either the id doesn't exist, or it's already sending/sent — a quick
-      // read-only follow-up disambiguates which, so the error stays accurate
-      // without weakening the atomic claim above (that check MUST stay a
-      // single UPDATE with no separate SELECT in front of it).
       const { data: existing } = await adminClient
         .from("broadcasts")
         .select("id")
@@ -287,7 +389,6 @@ serve(async (req: Request) => {
     const brand = broadcast.brand || "aplgo";
     const { header, signature, unsubText } = getBranding(brand);
 
-    // Resolve reply account for this user+brand — required for tracked sends
     const replyAccount = await resolveReplyAccount(adminClient, userId, brand);
     if (!replyAccount) {
       await adminClient.from("broadcasts").update({ status: "failed" }).eq("id", broadcast_id);
@@ -339,11 +440,24 @@ serve(async (req: Request) => {
       });
     }
 
-    // Support resuming: exclude emails that were already sent
+    // Support resuming: exclude emails that were already sent (either passed
+    // explicitly by the caller, or auto-detected from zazi_outbound_sends for
+    // this broadcast_id — covers the case where a previous run was killed by
+    // the platform before it could report back which addresses to exclude).
+    let excludeSet: Set<string>;
     if (body.exclude_emails && Array.isArray(body.exclude_emails)) {
-      const excludeSet = new Set(body.exclude_emails.map((e: string) => e.toLowerCase()));
-      subscribers = subscribers.filter((s: any) => !excludeSet.has(s.email?.toLowerCase()));
-      console.log(`Filtered out ${body.exclude_emails.length} already-sent emails, ${subscribers.length} remaining`);
+      excludeSet = new Set(body.exclude_emails.map((e: string) => e.toLowerCase()));
+    } else {
+      const { data: priorSends } = await adminClient
+        .from("zazi_outbound_sends")
+        .select("recipient_email")
+        .eq("broadcast_id", broadcast_id);
+      excludeSet = new Set((priorSends || []).map((r: any) => (r.recipient_email || "").toLowerCase()));
+    }
+    const alreadySent = excludeSet.size;
+    if (alreadySent > 0) {
+      subscribers = subscribers.filter((s: any) => !excludeSet.has((s.email || "").toLowerCase()));
+      console.log(`Excluding ${alreadySent} already-sent recipients, ${subscribers.length} remaining`);
     }
 
     const resendKey = Deno.env.get("RESEND_API_KEY");
@@ -355,73 +469,40 @@ serve(async (req: Request) => {
     }
 
     const resend = new Resend(resendKey);
-    let sent = 0;
-    let failed = 0;
 
-    for (let i = 0; i < subscribers.length; i++) {
-      const sub = subscribers[i];
-      try {
-        const unsubscribeUrl = `${APP_URL}/unsubscribe?token=${sub.unsubscribe_token || ""}`;
-        const personalizedContent = broadcast.content
-          .replace(/\{\{first_name\}\}/g, `Leader ${sub.first_name || "Friend"}`);
-
-        const sendResult = await sendWithRetry(resend, {
-          from: `${broadcast.from_name} <${replyToEmail}>`,
-          reply_to: replyToEmail,
-          to: [sub.email],
-          subject: broadcast.subject,
-          html: `${header}${personalizedContent}${signature}<p style="font-size: 11px; color: #999; margin-top: 16px;">${unsubText}<br/><a href="${unsubscribeUrl}" style="color:#999; text-decoration: underline;">Unsubscribe</a></p>`,
-        });
-
-        await trackOutboundSend(adminClient, {
-          user_id: userId,
-          account_id: accountId,
-          recipient_email: sub.email,
-          subject: broadcast.subject,
-          brand,
-          broadcast_id: broadcast.id,
-          prospect_id: sub.id || null,
-          provider_message_id: sendResult?.data?.id || null,
-        });
-
-        // Log CRM activity for outbound email
-        try {
-          await adminClient.from("contact_activities").insert({
-            user_id: userId,
-            prospect_id: sub.id || null,
-            activity_type: "email",
-            notes: `Email Sent: ${broadcast.subject}`,
-            outcome: "sent",
-          });
-        } catch (actErr) {
-          console.error("Failed to log email activity:", actErr);
-        }
-
-        sent++;
-        console.log(`Sent ${sent}/${subscribers.length}: ${sub.email}`);
-      } catch (e) {
-        console.error(`Failed to send to ${sub.email}:`, e);
-        failed++;
-      }
-
-      if (i < subscribers.length - 1) await throttle(600);
-    }
-
+    // Record the starting point immediately so the row is never stuck
+    // reporting 0 while a background run is actually in progress.
     await adminClient
       .from("broadcasts")
-      .update({
-        status: "sent",
-        sent_at: new Date().toISOString(),
-        total_recipients: subscribers.length,
-        total_sent: sent,
-        total_failed: failed,
-      })
+      .update({ total_sent: alreadySent, total_recipients: alreadySent + subscribers.length })
       .eq("id", broadcast_id);
 
-    console.log(`Broadcast complete: ${sent} sent, ${failed} failed out of ${subscribers.length}`);
+    const sendPromise = runBroadcastSend({
+      adminClient, broadcast, subscribers, brand, header, signature, unsubText,
+      userId, accountId, replyToEmail, resend, broadcastId: broadcast_id,
+      alreadySent, alreadyFailed: 0,
+    });
 
+    // @ts-ignore — EdgeRuntime is a Deno Deploy / Supabase Edge Functions global
+    if (typeof EdgeRuntime !== "undefined" && EdgeRuntime.waitUntil) {
+      // @ts-ignore
+      EdgeRuntime.waitUntil(sendPromise);
+    } else {
+      // Local/dev fallback where EdgeRuntime isn't available — still fire
+      // the work but don't block the response on it.
+      sendPromise.catch((e) => console.error("Background send failed:", e));
+    }
+
+    // Respond immediately: the claim succeeded and sending has started in
+    // the background. The frontend should poll broadcasts.total_sent /
+    // .status instead of waiting on this request to resolve.
     return new Response(
-      JSON.stringify({ success: true, sent, failed, total: subscribers.length }),
+      JSON.stringify({
+        success: true,
+        started: true,
+        already_sent_excluded: alreadySent,
+        queued: subscribers.length,
+      }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err: any) {

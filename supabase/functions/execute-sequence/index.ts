@@ -266,7 +266,7 @@ serve(async (req: Request) => {
               to: [email],
               subject: personalizedSubject,
               html: `${header}${personalizedContent}${signature}<p style="font-size: 11px; color: #999; margin-top: 16px;">${unsubText}<br/><a href="${unsubUrl}" style="color:#999; text-decoration: underline;">Unsubscribe</a></p>`,
-            }, "automation", seq.name || "sequence"));
+            }, "automation", "sequence"));
 
             await trackOutboundSend(adminClient, {
               user_id: sequenceOwnerId,

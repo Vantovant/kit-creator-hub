@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { Resend } from "npm:resend@^2.0.0";
+import { tagEmailPayload } from "../_shared/utm.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -207,13 +208,13 @@ async function runBroadcastSend(params: {
       const personalizedContent = broadcast.content
         .replace(/\{\{first_name\}\}/g, `Leader ${sub.first_name || "Friend"}`);
 
-      const sendResult = await sendWithRetry(resend, {
+      const sendResult = await sendWithRetry(resend, tagEmailPayload({
         from: `${broadcast.from_name} <${replyToEmail}>`,
         reply_to: replyToEmail,
         to: [sub.email],
         subject: broadcast.subject,
         html: `${header}${personalizedContent}${signature}<p style="font-size: 11px; color: #999; margin-top: 16px;">${unsubText}<br/><a href="${unsubscribeUrl}" style="color:#999; text-decoration: underline;">Unsubscribe</a></p>`,
-      });
+      }, "newsletter", broadcast.name || broadcast.subject));
 
       await trackOutboundSend(adminClient, {
         user_id: userId,
@@ -334,12 +335,12 @@ serve(async (req: Request) => {
       const { header, signature } = getBranding(body.brand || "aplgo");
       const personalizedContent = (body.content || "").replace(/\{\{first_name\}\}/g, "Leader Test User");
 
-      await resend.emails.send({
+      await resend.emails.send(tagEmailPayload({
         from: `${body.from_name || "Vanto Zazi"} <vanto@onlinecourseformlm.com>`,
         to: [body.test_email],
         subject: `[TEST] ${body.subject || "(no subject)"}`,
         html: `${header}${personalizedContent}${signature}<p style="font-size: 11px; color: #999; margin-top: 16px;">This is a test email.</p>`,
-      });
+      }, "newsletter", body.name || body.subject || "test"));
 
       return new Response(
         JSON.stringify({ success: true, sent: 1 }),

@@ -17,6 +17,7 @@
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
+import { tagSiteLinks } from "../_shared/utm.ts";
 
 const GATEWAY_URL = "https://connector-gateway.lovable.dev/google_mail/gmail/v1";
 
@@ -185,8 +186,8 @@ Deno.serve(async (req) => {
     from: account.email_address,
     to, cc, bcc,
     subject: replySubject,
-    text: body_text,
-    html: body_html,
+    text: tagSiteLinks(body_text, { source: "email", medium: "reply", campaign: "inbox_reply" }),
+    html: body_html ? tagSiteLinks(body_html, { source: "email", medium: "reply", campaign: "inbox_reply" }) : body_html,
     inReplyTo,
     references,
   });

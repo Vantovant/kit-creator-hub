@@ -1,5 +1,6 @@
 import { createClient } from 'npm:@supabase/supabase-js@2'
 import { Resend } from 'npm:resend@^2.0.0'
+import { tagEmailPayload, tagSiteLinks } from '../_shared/utm.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -930,7 +931,7 @@ Deno.serve(async (req) => {
           from: account.email_address,
           to: parent.sender,
           subject: replySubject,
-          text: bodyText,
+          text: tagSiteLinks(bodyText, { source: 'email', medium: 'reply', campaign: 'inbox_reply' }),
           inReplyTo,
           references,
         })
@@ -1041,13 +1042,13 @@ Deno.serve(async (req) => {
         const resend = new Resend(resendKey)
         let sendResult: any
         try {
-          sendResult = await resend.emails.send({
+          sendResult = await resend.emails.send(tagEmailPayload({
             from: `${fromName} <${replyAccount.email}>`,
             reply_to: replyAccount.email,
             to: [prospect.email],
             subject,
             html,
-          })
+          }, 'direct', 'one_to_one'))
         } catch (e) {
           console.error('send_prospect_email resend error', e)
           return json({ error: 'send_failed', message: (e as Error).message }, 502)

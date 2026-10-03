@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { Resend } from "npm:resend@^2.0.0";
+import { tagEmailPayload } from "../_shared/utm.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -47,7 +48,7 @@ function throttle(ms = 700): Promise<void> {
 async function sendWithRetry(resend: any, payload: any, maxRetries = 3): Promise<boolean> {
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
-      await resend.emails.send(payload);
+      await resend.emails.send(tagEmailPayload(payload, "automation", "sequence"));
       return true;
     } catch (e: any) {
       const is429 = e?.statusCode === 429 || e?.message?.includes("429");

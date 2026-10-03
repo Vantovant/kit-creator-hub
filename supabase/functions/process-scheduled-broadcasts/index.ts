@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { Resend } from "npm:resend@^2.0.0";
+import { tagEmailPayload } from "../_shared/utm.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -321,13 +322,13 @@ serve(async (req: Request) => {
               const personalizedContent = broadcast.content
                 .replace(/\{\{first_name\}\}/g, `Leader ${sub.first_name || "Friend"}`);
 
-              const sendResult = await sendWithRetry(resend, {
+              const sendResult = await sendWithRetry(resend, tagEmailPayload({
                 from: `${broadcast.from_name} <${replyToEmail}>`,
                 reply_to: replyToEmail,
                 to: [sub.email],
                 subject: broadcast.subject,
                 html: `${EMAIL_HEADER}${personalizedContent}${EMAIL_SIGNATURE}<p style="font-size: 11px; color: #999; margin-top: 16px;">You're receiving this email because you signed up.<br/><a href="${unsubscribeUrl}" style="color:#999; text-decoration: underline;">Unsubscribe</a></p>`,
-              });
+              }, "newsletter", broadcast.name || broadcast.subject));
 
               await trackOutboundSend(adminClient, {
                 user_id: broadcast.user_id,
@@ -473,13 +474,13 @@ serve(async (req: Request) => {
             const personalizedSubject = (step.subject || "")
               .replace(/\{\{first_name\}\}/g, firstName);
 
-            const sendResult = await sendWithRetry(resendForQueue, {
+            const sendResult = await sendWithRetry(resendForQueue, tagEmailPayload({
               from: `${step.from_name || "Vanto Zazi"} <${queueReplyToEmail}>`,
               reply_to: queueReplyToEmail,
               to: [email],
               subject: personalizedSubject,
               html: `${EMAIL_HEADER}${personalizedContent}${EMAIL_SIGNATURE}<p style="font-size: 11px; color: #999; margin-top: 16px;">You're receiving this email because you signed up.<br/><a href="${unsubUrl}" style="color:#999; text-decoration: underline;">Unsubscribe</a></p>`,
-            });
+            }, "automation", "email_queue"));
 
             // Track with real owner, not placeholder
             if (realOwnerId) {

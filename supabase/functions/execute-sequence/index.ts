@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { Resend } from "npm:resend@^2.0.0";
+import { tagEmailPayload } from "../_shared/utm.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -259,13 +260,13 @@ serve(async (req: Request) => {
             .replace(/\{\{ref_code\}\}/g, safeRefCode);
 
           try {
-            const sendResult = await resend.emails.send({
+            const sendResult = await resend.emails.send(tagEmailPayload({
               from: `${step.from_name || "Vanto Zazi"} <${replyToEmail}>`,
               reply_to: replyToEmail,
               to: [email],
               subject: personalizedSubject,
               html: `${header}${personalizedContent}${signature}<p style="font-size: 11px; color: #999; margin-top: 16px;">${unsubText}<br/><a href="${unsubUrl}" style="color:#999; text-decoration: underline;">Unsubscribe</a></p>`,
-            });
+            }, "automation", "sequence"));
 
             await trackOutboundSend(adminClient, {
               user_id: sequenceOwnerId,

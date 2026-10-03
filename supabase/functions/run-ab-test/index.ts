@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { Resend } from "npm:resend@^2.0.0";
+import { tagEmailPayload } from "../_shared/utm.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -172,12 +173,12 @@ async function startABTest(body: any, adminClient: any, userId: string) {
         try {
           const unsubUrl = `${appUrl}/unsubscribe?token=${sub.unsubscribe_token || ""}`;
           const content = (broadcast_content || "").replace(/\{\{first_name\}\}/g, `Leader ${sub.first_name || "Friend"}`);
-          await resend.emails.send({
+          await resend.emails.send(tagEmailPayload({
             from: `${from_name || "Vanto Zazi"} <vanto@onlinecourseformlm.com>`,
             to: [sub.email],
             subject: variant.subject,
             html: `${content}<hr style="margin:24px 0;border:none;border-top:1px solid #eee;"/><p style="font-size:12px;color:#999;"><a href="${unsubUrl}" style="color:#999;">Unsubscribe</a></p>`,
-          });
+          }, "newsletter", "ab_test"));
           sent++;
         } catch {
           failed++;

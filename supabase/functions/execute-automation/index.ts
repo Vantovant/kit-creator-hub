@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { Resend } from "npm:resend@^2.0.0";
+import { tagEmailPayload } from "../_shared/utm.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -90,12 +91,12 @@ async function executeStep(
     const personalizedSubject = (step.subject || "")
       .replace(/\{\{first_name\}\}/g, firstName);
 
-    await sendWithRetry(resend, {
+    await sendWithRetry(resend, tagEmailPayload({
       from: `${step.from_name || "Vanto Zazi"} <vanto@onlinecourseformlm.com>`,
       to: [email],
       subject: personalizedSubject,
       html: `${EMAIL_HEADER}${personalizedContent}${EMAIL_SIGNATURE}<p style="font-size: 11px; color: #999; margin-top: 16px;">You're receiving this email because you registered in APLGO.<br/><a href="${unsubUrl}" style="color:#999; text-decoration: underline;">Unsubscribe</a></p>`,
-    });
+    }, "automation", "automation"));
     console.log(`Automation email sent to ${email}: ${personalizedSubject}`);
   } else if (step.type === "add_tag") {
     if (!step.tag_name) return;

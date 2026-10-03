@@ -8,6 +8,7 @@
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { Resend } from "npm:resend@^2.0.0";
+import { tagEmailPayload } from "../_shared/utm.ts";
 
 const HUB_APP_KEY = "vantoos_hub";          // identity the hub uses when calling this spoke
 const SPOKE_APP_KEY = "getwell_africa_email"; // identity this spoke uses when calling back to the hub
@@ -296,13 +297,13 @@ Deno.serve(async (req) => {
   let sendId: string | null = null;
   let sendError: string | null = null;
   try {
-    const result = await resend.emails.send({
+    const result = await resend.emails.send(tagEmailPayload({
       from: "GetWell Africa <vanto@onlinecourseformlm.com>",
       to: [recipient],
       subject,
       html,
       headers: { "X-Idempotency-Key": idempotencyKey },
-    });
+    }, "automation", templateHint || "hub_email"));
     sendId = (result as any)?.data?.id ?? (result as any)?.id ?? null;
     if ((result as any)?.error) sendError = JSON.stringify((result as any).error);
   } catch (e) {

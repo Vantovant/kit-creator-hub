@@ -58,8 +58,13 @@ serve(async (req: Request) => {
       // Elite bridges
       "bty_elite_bridge_section", "air_elite_bridge_section", "hpy_elite_bridge_section",
       "brn_elite_bridge_section", "pft_elite_bridge_section", "terra_elite_bridge_section",
+      // Google Ads product-enquiry leads — manual WhatsApp follow-up, no automatic email
+      "google_ads_lead",
     ];
     const sanitizedSource = allowedSources.includes(source) ? source : "welcome_form";
+    // Google Ads product-enquiry leads are followed up manually on WhatsApp: no automation,
+    // no sequence enrolment, no automatic emails — only the prospect upsert and source tag.
+    const isManualFollowUpSource = sanitizedSource === "google_ads_lead";
 
     // Cluster source → sequence_id mapping (final routing 2026-05-01).
     // SLD is NOT detox; SLD + STP go to the Comfort & Mobility bridge.

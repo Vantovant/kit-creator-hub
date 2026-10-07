@@ -141,7 +141,9 @@ serve(async (req: Request) => {
     // Trigger 'subscribe' automations — ONLY for genuinely new prospects
     // that are NOT being enrolled in a specific sequence. This stops
     // re-submissions of the same email from re-firing the Welcome Series.
-    if (!resolvedSequenceId && isNewProspect && !existingProspect?.unsubscribed) {
+    if (isManualFollowUpSource) {
+      console.log(`Skipping 'subscribe' automation and sequence enrolment for ${trimmedEmail} — manual WhatsApp follow-up source (${sanitizedSource}).`);
+    } else if (!resolvedSequenceId && isNewProspect && !existingProspect?.unsubscribed) {
       try {
         await fetch(`${supabaseUrl}/functions/v1/execute-automation`, {
           method: "POST",
@@ -161,7 +163,7 @@ serve(async (req: Request) => {
     }
 
     // If a sequence_id was resolved (explicit or via cluster source map), enroll into it.
-    if (resolvedSequenceId) {
+    if (resolvedSequenceId && !isManualFollowUpSource) {
       try {
         const { data: seq } = await supabase
           .from("email_sequences")

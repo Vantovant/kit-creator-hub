@@ -4,7 +4,7 @@ import { tagEmailPayload, tagSiteLinks } from '../_shared/utm.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-mcp-token',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-mcp-token, x-mcp-client',
 }
 
 const json = (body: unknown, status = 200) =>
@@ -227,6 +227,12 @@ Deno.serve(async (req) => {
   if (!expected || !provided || !timingSafeEqual(provided, expected)) {
     return json({ error: 'unauthorized' }, 401)
   }
+
+  // Which AI app made this call, as reported by the MCP server. Allow-listed so
+  // nothing arbitrary lands in audit text. Used ONLY for log labels.
+  const rawClient = req.headers.get('x-mcp-client') ?? ''
+  const mcpClient = rawClient === 'Claude' || rawClient === 'ChatGPT' ? rawClient : 'unknown'
+  const viaLabel = mcpClient === 'unknown' ? 'MCP (unknown client)' : `${mcpClient} MCP`
 
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL')!,
@@ -960,7 +966,7 @@ Deno.serve(async (req) => {
           user_id: ownerId,
           message_id: parent.id,
           action_type: 'reply_sent',
-          action_data: { to: parent.sender, subject: replySubject, thread_id: parent.thread_id ?? null, via: 'mcp' },
+          action_data: { to: parent.sender, subject: replySubject, thread_id: parent.thread_id ?? null, via: 'mcp', mcp_client: mcpClient },
         })
 
         return json({ ok: true, to: parent.sender, subject: replySubject })
@@ -1069,7 +1075,7 @@ Deno.serve(async (req) => {
           user_id: ownerId,
           prospect_id: prospect.id,
           activity_type: 'email_sent',
-          notes: `Sent via Claude MCP: "${subject}"`,
+          notes: `Sent via ${viaLabel}: "${subject}"`,
           outcome: null,
         })
 

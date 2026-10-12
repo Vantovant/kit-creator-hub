@@ -53,12 +53,13 @@ if (!MCP_API_KEY) {
   process.exit(1);
 }
 
-async function callBridge(action, payload = {}) {
+async function bridgeRequest(action, payload = {}, clientLabel = "unknown") {
   const res = await fetch(BRIDGE_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       "x-mcp-token": BRIDGE_TOKEN,
+      "x-mcp-client": clientLabel, // which AI app made this call (Claude / ChatGPT / unknown) — used only for audit labels
     },
     body: JSON.stringify({ action, ...payload }),
   });
@@ -91,8 +92,27 @@ function b64url(input) {
 function sign(payload, secret) {
   return crypto.createHmac("sha256", secret).update(payload).digest("base64url");
 }
-function issueAccessToken(clientId) {
-  const payload = { cid: clientId, exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 365 };
+// Work out which AI app is connecting from the OAuth redirect_uri it uses.
+// Claude's callback lives on claude.ai / claude.com; ChatGPT's on chatgpt.com
+// / openai.com. Used ONLY to label audit logs — never for authorization.
+function clientLabelFromRedirect(redirectUri) {
+  try {
+    const host = new URL(redirectUri).hostname.toLowerCase();
+    const is = (d) => host === d || host.endsWith(`.${d}`);
+    if (is("claude.ai") || is("claude.com") || is("anthropic.com")) return "Claude";
+    if (is("chatgpt.com") || is("openai.com")) return "ChatGPT";
+  } catch {}
+  return "unknown";
+}
+// Fallback for tokens issued before the label existed: guess from User-Agent.
+function clientLabelFromUserAgent(ua) {
+  const s = String(ua || "").toLowerCase();
+  if (s.includes("openai") || s.includes("chatgpt")) return "ChatGPT";
+  if (s.includes("claude") || s.includes("anthropic")) return "Claude";
+  return "unknown";
+}
+function issueAccessToken(clientId, clientLabel = "unknown") {
+  const payload = { cid: clientId, cl: clientLabel, exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 365 };
   const body = b64url(JSON.stringify(payload));
   return `${body}.${sign(body, MCP_API_KEY)}`;
 }
@@ -156,7 +176,9 @@ function pkceVerify(codeVerifier, codeChallenge) {
 //     plan_tasks/plan_reminders/plan_meetings has a deleted_at column in
 //     this app.
 // ---------------------------------------------------------------------------
-function buildServer() {
+function buildServer(clientLabel = "unknown") {
+  // Every tool call in this request is tagged with the connecting app.
+  const callBridge = (action, payload = {}) => bridgeRequest(action, payload, clientLabel);
   const server = new McpServer({
     name: "vanto-zazi-mail-mcp",
     version: "1.6.0",
@@ -783,6 +805,7 @@ app.post("/authorize", (req, res) => {
     redirectUri: redirect_uri,
     codeChallenge: code_challenge,
     codeChallengeMethod: code_challenge_method || "S256",
+    clientLabel: clientLabelFromRedirect(redirect_uri),
     expiresAt: Date.now() + 5 * 60 * 1000,
   });
   const url = new URL(redirect_uri);
@@ -809,7 +832,7 @@ app.post("/token", (req, res) => {
   }
   codeStore.delete(code);
   res.json({
-    access_token: issueAccessToken(entry.clientId),
+    access_token: issueAccessToken(entry.clientId, entry.clientLabel),
     token_type: "Bearer",
     expires_in: 60 * 60 * 24 * 365,
   });
@@ -822,16 +845,20 @@ app.post("/mcp", async (req, res) => {
   const queryKey = req.query.key;
 
   let authorized = auth === `Bearer ${MCP_API_KEY}` || queryKey === MCP_API_KEY;
+  let clientLabel = "unknown";
   if (!authorized && auth?.startsWith("Bearer ")) {
-    authorized = !!verifyAccessToken(auth.slice(7));
+    const tokenPayload = verifyAccessToken(auth.slice(7));
+    authorized = !!tokenPayload;
+    if (tokenPayload?.cl && tokenPayload.cl !== "unknown") clientLabel = tokenPayload.cl;
   }
+  if (clientLabel === "unknown") clientLabel = clientLabelFromUserAgent(req.headers["user-agent"]);
   if (!authorized) {
     res.set("WWW-Authenticate", `Bearer resource_metadata="${getBaseUrl(req)}/.well-known/oauth-protected-resource"`);
     return res.status(401).json({ error: "Unauthorized" });
   }
 
   try {
-    const server = buildServer();
+    const server = buildServer(clientLabel);
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined, // stateless mode
     });
